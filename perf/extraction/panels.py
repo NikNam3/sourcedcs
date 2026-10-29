@@ -3,6 +3,7 @@
 Each function takes (page, spec, panel_spec, axes), where `axes` maps an axis name to its fit
 {'a', 'b', 'resid'}, runs the panel's asserts and returns the panel as the Data contract has it
 (numbers already rounded). Add a type by writing its function and registering it in TYPES."""
+import math
 import re
 
 import geom
@@ -27,9 +28,18 @@ def quantity(spec, name):
     return {'name': name, 'unit': spec['axes'][name]['unit']}
 
 
+def unscaled(ax_spec):
+    """An axis the chart prints no scale for (the line a pilot carries from one panel into the
+    next): its values are page points, a = 1, b = 0, and it has no labels, ticks or title."""
+    return ax_spec.get('unscaled') is True
+
+
 def transform(spec, axes, name):
     ax = axes[name]
-    return {'page': spec['axes'][name]['page'], 'a': rt(ax['a']), 'b': rt(ax['b'])}
+    out = {'page': spec['axes'][name]['page'], 'a': rt(ax['a']), 'b': rt(ax['b'])}
+    if unscaled(spec['axes'][name]):
+        out['unscaled'] = True
+    return out
 
 
 def chart_point(spec, axes, inp, out, x, y):
@@ -133,8 +143,14 @@ def curve_family(page, spec, panel_spec, axes):
     direction = order['output']
     assert direction in ('rises', 'falls'), f"order.output must be rises or falls, not {direction!r}"
     check_at = order['check_at']
-    tick_span = abs(spec['axes'][inp]['ticks'][-1] - spec['axes'][inp]['ticks'][0])
-    tol = 0.005 * tick_span
+    ax_in = spec['axes'][inp]
+    if unscaled(ax_in):
+        # No ticks on an unscaled axis: its drawn extent is the panel frame along its page direction.
+        frame = panel_spec['frame'][ax_in['page']]
+        span = max(frame) - min(frame)
+    else:
+        span = abs(ax_in['ticks'][-1] - ax_in['ticks'][0])
+    tol = 0.005 * span
     for v, c in zip(values, curves):
         lo, hi = c[0][0], c[-1][0]
         for t in check_at:
@@ -193,6 +209,8 @@ def scale_pair(page, spec, panel_spec, axes):
     """Two scales printed against each other: to = a * from + b, from the two axis fits, and the
     drawn `to` scale's range, measured from its scale line (ruling R2)."""
     frm, to = panel_spec['from'], panel_spec['to']
+    for name in (frm, to):
+        assert not unscaled(spec['axes'][name]), f"scale {name} is unscaled: a scale pair needs two printed scales"
     pf, pt = spec['axes'][frm]['page'], spec['axes'][to]['page']
     assert pf == pt, f"scales {frm} ({pf}) and {to} ({pt}) are not along the same page direction"
     fa, ta = axes[frm], axes[to]
@@ -232,10 +250,31 @@ def mono_pieces(chain, k):
     return [pc[::-1] if pc[0][k] > pc[-1][k] else pc for pc in pieces]
 
 
-def join_dashes(pieces, k, max_gap=9.0, tol=1.6):
+def direction_deg(a, b, k):
+    """The page direction from a to b, in degrees from page coordinate k (a before b along k)."""
+    return math.degrees(math.atan2(b[1 - k] - a[1 - k], b[k] - a[k]))
+
+
+def split_kinks(piece, k, max_turn_deg):
+    """Split a piece monotonic in page coordinate k where its direction turns by more than
+    max_turn_deg: a straight dash with a crossing curve's segment chained onto its end becomes
+    the dash and the curve's stub."""
+    out, cur = [], [piece[0], piece[1]]
+    for p in piece[2:]:
+        if abs(direction_deg(cur[-1], p, k) - direction_deg(cur[-2], cur[-1], k)) > max_turn_deg:
+            out.append(cur)
+            cur = [cur[-1], p]
+        else:
+            cur.append(p)
+    out.append(cur)
+    return out
+
+
+def join_dashes(pieces, k, max_gap=9.0, tol=1.6, max_turn_deg=None):
     """Join pieces monotonic in page coordinate k (see mono_pieces) whose ends line up across a
     gap of at most max_gap pt along k: a dashed line drawn as separate segments becomes one line.
-    The next piece must start within tol pt of the line's direction extended across the gap.
+    The next piece must start within tol pt of the line's direction extended across the gap and,
+    with max_turn_deg, run within that many degrees of the line's direction itself.
     From the planning prototype (removed in b3fb1202; `git show b3fb1202^:perf/prototype/extraction/extract.py`),
     generalised to either page direction."""
     o = 1 - k
@@ -260,6 +299,9 @@ def join_dashes(pieces, k, max_gap=9.0, tol=1.6):
                     continue
                 pred = end[o] + (do / dk * gap if dk > 1e-6 else 0)
                 err = abs(q[0][o] - pred)
+                if max_turn_deg is not None and \
+                        abs(direction_deg(q[0], q[-1], k) - direction_deg(first, end, k)) > max_turn_deg:
+                    continue
                 if err < tol and (best is None or err < best[0]):
                     best = (err, j)
             if best is None:
@@ -279,6 +321,19 @@ def join_dashes(pieces, k, max_gap=9.0, tol=1.6):
     return lines
 
 
+def joined_lines(segs, k, min_span, max_turn_deg=None):
+    """Segments chained, split into pieces monotonic in page coordinate k (with max_turn_deg, also
+    where they turn by more than that, and joined only where the next piece runs within it), dashes
+    joined, lines shorter than min_span pt along k dropped."""
+    pieces = []
+    for c in geom.chains(segs):
+        for pc in mono_pieces(c, k):
+            straight = [pc] if max_turn_deg is None else split_kinks(pc, k, max_turn_deg)
+            pieces += [sp for sp in straight if sp[-1][k] - sp[0][k] > 0.5]
+    lines = join_dashes(pieces, k, max_turn_deg=max_turn_deg)
+    return [ln for ln in lines if ln[-1][k] - ln[0][k] >= min_span]
+
+
 def guide_lines(page, spec, panel_spec, axes):
     """The panel's guide lines as page polylines: segments inside the clip (frame lines and the
     baseline's own line dropped), chained, split into pieces monotonic along the input axis,
@@ -291,11 +346,7 @@ def guide_lines(page, spec, panel_spec, axes):
     frame = {a: list(v) for a, v in panel_spec['frame'].items()}
     frame[page_dir] = frame[page_dir] + [geom.to_page(axes[inp], panel_spec['baseline'])]
     segs = geom.panel_segments(page, panel_spec['clip'], frame, width)
-    pieces = []
-    for c in geom.chains(segs):
-        pieces += [pc for pc in mono_pieces(c, k) if pc[-1][k] - pc[0][k] > 0.5]
-    min_span = flt.get('min_span_pt', GUIDE_MIN_SPAN_PT)
-    lines = [ln for ln in join_dashes(pieces, k) if ln[-1][k] - ln[0][k] >= min_span]
+    lines = joined_lines(segs, k, flt.get('min_span_pt', GUIDE_MIN_SPAN_PT))
     return [ln for ln in lines if len(ln) >= flt.get('min_points', 2)]
 
 
@@ -356,6 +407,52 @@ def guideline_panel(page, spec, panel_spec, axes):
         'input': quantity(spec, inp), 'output': quantity(spec, out),
         'baseline': base,
         'families': families,
+        'axes': {inp: transform(spec, axes, inp), out: transform(spec, axes, out)},
+    }
+
+
+LIMIT_BEYOND = ('above', 'below')
+LIMIT_MAX_TURN_DEG = 5.0    # a limit line is straight dashes: pieces split, and joined, within this turn
+FRAME_TOL_PT = 0.4          # as geom.panel_segments' frame-line tolerance
+
+
+def limit_line(page, spec, ps, axes):
+    """A printed limit drawn as one dashed line over another panel's axes (B7-2's brake energy and
+    tire speed limits). Only segments no longer than max_dash_pt are kept (the dashes, and the
+    short segments of the curves the line crosses), frame lines dropped; they are chained, split
+    into pieces monotonic along the input and straight within LIMIT_MAX_TURN_DEG (so a curve's
+    stub chained onto a dash end at a crossing comes off), joined across the dash gaps where the
+    next piece continues the line's direction, and lines shorter than the filter's min_span_pt
+    (default 5 pt) along the input dropped (set it above the longest curve stub in the clip).
+    Exactly one line must remain, run one way along the input and lie inside the frame. `beyond`
+    says on which side of it, in output terms, the limit is exceeded."""
+    inp, out = ps['input'], ps['output']
+    label, beyond, max_dash = ps['label'], ps['beyond'], ps['max_dash_pt']
+    assert isinstance(label, str) and label.strip(), f"label must be a non-empty string, not {label!r}"
+    assert beyond in LIMIT_BEYOND, f"beyond must be one of {LIMIT_BEYOND}, not {beyond!r}"
+    assert isinstance(max_dash, (int, float)) and not isinstance(max_dash, bool) and max_dash > 0, \
+        f"max_dash_pt must be a positive number, not {max_dash!r}"
+    flt = ps.get('filter', {})
+    assert 'min_points' not in flt, "filter.min_points does not apply to a limit line (min_span_pt, stroke_width)"
+    width = tuple(flt.get('stroke_width', DEFAULT_WIDTH))
+    k = 0 if spec['axes'][inp]['page'] == 'x' else 1
+    segs = [s for s in geom.panel_segments(page, ps['clip'], ps['frame'], width)
+            if ((s[0][0] - s[1][0]) ** 2 + (s[0][1] - s[1][1]) ** 2) ** 0.5 <= max_dash]
+    lines = joined_lines(segs, k, flt.get('min_span_pt', GUIDE_MIN_SPAN_PT), LIMIT_MAX_TURN_DEG)
+    starts = ', '.join(f"({ln[0][0]:.1f}, {ln[0][1]:.1f})" for ln in lines)
+    assert len(lines) == 1, f"{len(lines)} limit lines found, expected 1 (starting at page {starts or 'none'})"
+    line = lines[0]
+    fx0, fx1 = min(ps['frame']['x']), max(ps['frame']['x'])
+    fy0, fy1 = min(ps['frame']['y']), max(ps['frame']['y'])
+    for x, y in line:
+        assert fx0 - FRAME_TOL_PT <= x <= fx1 + FRAME_TOL_PT and fy0 - FRAME_TOL_PT <= y <= fy1 + FRAME_TOL_PT, \
+            f"limit line point at page ({x:.1f}, {y:.1f}) lies outside the frame x [{fx0}, {fx1}], y [{fy0}, {fy1}]"
+    pts = to_points(spec, axes, inp, out, line, 'limit line')
+    return {
+        'id': ps['id'], 'type': 'limit_line', 'label': label,
+        'input': quantity(spec, inp), 'output': quantity(spec, out),
+        'beyond': beyond,
+        'points': round_points(pts),
         'axes': {inp: transform(spec, axes, inp), out: transform(spec, axes, out)},
     }
 
@@ -572,6 +669,7 @@ TYPES = {
     'scale_pair': scale_pair,
     'guideline_panel': guideline_panel,
     'table': table,
+    'limit_line': limit_line,
 }
 
 # Spec keys per panel type: (required, optional). A new type registers its keys here too.
@@ -586,6 +684,9 @@ KEYS = {
                         {'filter'}),
     'table': ({'id', 'type', 'clip', 'row_band', 'rows', 'key', 'columns'},
               {'row_end', 'group', 'fill_down', 'attach_up', 'drop_words'}),  # columns, group: _table_spec
+    # beyond: above | below, in output terms; max_dash_pt: the longest segment kept as a dash
+    'limit_line': ({'id', 'type', 'clip', 'frame', 'input', 'output', 'label', 'beyond', 'max_dash_pt'},
+                   {'filter'}),
 }
 
 # Keys of the mapping-valued panel keys, wherever they appear: (required, optional).
