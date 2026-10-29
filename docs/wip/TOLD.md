@@ -324,6 +324,8 @@ Steps:
 
 Each output is computed with its own worst chain; two outputs sharing an intermediate (takeoff factor feeds distance, acceleration check and refusal speed) may use different rounded values of it. The rule is the project's own and is stated on the Limitations page.
 
+**An input with two values (decided 29 Oct 2026):** the drag index can have an exact and a conservative value of its own, before any rounding. Removing the wingtip AIM-9s subtracts 4 per missile in the exact value (Fig. B1-1 sheet 3, note *) and nothing in the conservative one (the manual: zero "gives slightly conservative results"). The exact pass reads the exact drag index; the conservative pass starts from the conservative drag index and rounds it like any other input.
+
 ### 5.3 Inputs derived before the charts
 
 - **Pressure altitude** is the pilot's hand calculation: field elevation plus the altimeter-setting correction from the standard-atmosphere relation (inHg). It is not a model of the DCS altimeter: DCS (`crc-sync/src/altimetry.js`, reference temperature 288.97 K, temperature error) reads about 150 ft different on a 40 °C day at 2,000 ft. A parity test pins only the ISA constants the two share: P0 (`ISA_P0` 101,325 Pa = 29.921 inHg) and the exponent (`ISA_INV` = 0.190263); the hot-day difference is stated on the Limitations page.
@@ -476,7 +478,8 @@ The look is a printed tech-order page: black on white, white on black in dark mo
 
 - **Colours:** ink, paper, one grey for secondary text and rules, red for problems. Nothing else, ever.
 - **Type:** Times New Roman, one type scale, tabular figures.
-- **Components:** section heading (small caps, Roman numeral), underlined input field, data table with exact/cons. column pairs, italic subheading row, red problem marking, figure view (MIL solid, MAX AB dashed, circled letters Ⓐ to Ⓖ), link to a subpage.
+- **Components:** section heading (small caps, Roman numeral), underlined input field, data table with exact/cons. column pairs, italic subheading row, red problem marking, figure view (MIL solid, MAX AB dashed, circled letters Ⓐ to Ⓖ), link to a subpage. Step 1 adds (approved board, 29 Oct 2026): the figure column, the drag index builder's pickers and store menu, the refused-link note under the title, and the boxed problem value in print.
+- **Bold and underlined means typed.** A value the pilot picks (store, suspension, count) is plain text, underlined only on hover or focus.
 - **Layout:** fixed paper width, scaled to the window like a PDF viewer; works on half of a 14-inch laptop screen; prints on A4 or Letter, always black on white.
 - **Notes and caveats** live on the Limitations subpage, never on the working page.
 
@@ -570,6 +573,45 @@ None for now: every question was answered on 27 Oct 2026. Validation details are
 ### My own follow-up (no answer needed)
 
 - Done 27 Oct 2026: AFMAN 11-2F-16V3 para. 2.5.1, 3.6.3, 3.6.6 and 3.18 checked word for word; the field list and runway rules match, and 3.18's RCR-below-10 rule was added.
+
+## Decisions of 29 Oct 2026 (step 1 mockup)
+
+The step 1 board (`docs/mockups/perf-told.html`, `perf-limitations.html`) was approved by the human. The boards link
+`perf/web/css/` directly; the CSS in the TOLD board's own `<style>` block, marked "proposed", moves into `perf.css` and
+`print.css` in step 1. The board's script is a stand-in for the drag index builder, not its implementation.
+
+- **Figure references:** a grey "Fig." column names each row's figure and links to the figure view, which draws the
+  row's paths. The numbers themselves are not links (one link per row; a number link added nothing). The refusal rows
+  link B2-5 (MIL) and B2-6 (MAX AB) separately.
+- **Rule lines:** a red value gets one grey line under its table citing the rule, for example "MIL roll 97.5 % of
+  runway: over 50 %, afterburner takeoff required (para. 3.6.6)", next to the reason lines for rejected cells.
+- **Print:** a problem value is also boxed (1 px ink outline), so it survives a mono printer. Empty stations, pickers'
+  underlines, focus rings and the split/join links do not print; the picked stores print as their values.
+- **Acceleration check:** when the MIL and AB rolls fall on both sides of 2,500 ft, the row label names both distances
+  ("at 2,000 / 1,000 ft").
+- **RCR below 10 at the landing field** (para. 3.18) marks the RCR input itself red, with a rule line.
+- **Wind** is entered with its gust as "230 / 08 G15"; the derived line shows the gust.
+- **Drag index builder** (ADR 0150), on the B1-1 data:
+  - One row per station pair (1/9, 2/8, 3/7, 4/6), then 5, 5L, 5R, as in the manual's worked example (p. B1-2/B1-3).
+  - The store line opens a menu of only the B1-1 stores allowed on that station, grouped under the manual's headings,
+    each with its rack and its drag index as printed, filtered by typing, chosen with the arrow keys and Enter.
+    Store names are shown as printed (capitals); the display drops the line-break hyphen ("LAUNCHER- WITH").
+  - A suspension line lists only the sheet 2 items that fit the store's rack. Untouched, it is the smallest one that
+    carries the count.
+  - The count is limited by the suspension's capacity: three per station on a TER or LAU-88, one otherwise. Fig. B1-1
+    gives no capacities; the limit is the project's own (Limitations II.4).
+  - A tank's variant is picked from the store inboard of it (4 from 3, 6 from 7; the centreline tank from 4 and 6).
+  - Asymmetric loads: a grey "split" beside a loaded pair's station label splits it into two single-station rows;
+    "join" on the first of them joins it again.
+  - Where B1-1 gives two values (subsonic/supersonic, confirmed by the column heading on sheet 1), the subsonic one is
+    used (Limitations II.3).
+  - A tip AIM-9 adds 0 (it is in the basic aircraft, note *); a tip pod is 2 less than the missile (note **); no tip
+    missile is −4 each exact and 0 conservative (section 5.2), and the total then shows both values.
+  - Golden test: the manual's worked example gives 146 on the board.
+- **Limitations page:** dark mode, per-point rounding wording (ADR 0149), the conservative step leaving the chart, the
+  B2-3 under-1,000 ft cases (R11), the hot-day pressure altitude note, RCR below 10, data and app versions, and the
+  drag index notes II.3 to II.5.
+- **Still to update:** the figure board (`perf-figure.html`) is on inline styles and shows only the exact MIL key.
 
 ## Decisions of 28 Oct 2026
 
