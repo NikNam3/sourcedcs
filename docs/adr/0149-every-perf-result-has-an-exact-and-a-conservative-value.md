@@ -1,6 +1,8 @@
 # 0149: Every perf result has an exact and a conservative value
 
-**Status.** Accepted (TOLD step 0 design review, 2026-10-28). Spec: `docs/wip/TOLD.md`, "Goal and principles" 2 and
+**Status.** Accepted (TOLD step 0 design review, 2026-10-28; the single-point test chosen by the human that day). The per-point
+definition of the conservative value (Decision 2) was decided by the supervisor after the Task 4 review on 29 Oct 2026; the
+human was told and may reverse it. Spec: `docs/wip/TOLD.md`, "Goal and principles" 2 and
 sections 5.1 and 5.2.
 
 ## Context

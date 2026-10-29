@@ -114,7 +114,7 @@ Step 0 turns the prototype's throwaway scripts into a repeatable pipeline: one c
 
 ### 0.1 Repository and tooling
 
-- [x] Create perf/ (layout above) following the repo's conventions; add it to the root CLAUDE.md (Dockerfile and later-step folders: steps 1 and 3).
+- [x] Create perf/ (layout above; its Dockerfile and later-step folders come with steps 1 and 3) following the repo's conventions; add it to the root CLAUDE.md.
 - [x] TypeScript toolchain as in "Language and toolchain": `tsconfig.json` (strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `erasableSyntaxOnly`), `eslint.config.js` (typescript-eslint `strictTypeChecked` with `strict-boolean-expressions`, `switch-exhaustiveness-check`, `no-unnecessary-condition`), Prettier. npm scripts: `build`, `test`, `lint`, `typecheck`, `format:check`, `data:check`.
 - [x] `perf/schema/charts.schema.json`, and `src/core/data/types.ts` generated from it with `json-schema-to-typescript` (a script, committed output; CI fails if regenerating changes it).
 - [x] `data:check`: validates every file in `data/<aircraft-engine>/` against the schema and its SHA-256 against `manifest.json`. The manifest holds the data version, the PDF's SHA-256, the extractor's git commit and one hash per data file and page image. The Python side does not validate on write; `data:check` is the only gate.
