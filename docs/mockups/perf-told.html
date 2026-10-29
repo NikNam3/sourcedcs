@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>perf mockup: TOLD page</title>
+<style>
+:root{--paper:#ffffff;--ink:#000000;--grey:#555555;--rule:#bbbbbb;--alert:#b00000;color-scheme:light}
+@media (prefers-color-scheme: dark){:root{--paper:#000000;--ink:#ffffff;--grey:#a8a8a8;--rule:#444444;--alert:#ff6b6b;color-scheme:dark}}
+body{margin:0;background:var(--paper)}
+
+body{margin:0}
+a{color:inherit}a:hover{opacity:.7}
+.f input{font:inherit;font-weight:bold;color:inherit;background:transparent;border:0;border-bottom:1px solid currentColor;padding:2px 0;width:100%;text-align:right;font-variant-numeric:tabular-nums}
+.f input:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;text-align:left;vertical-align:baseline}
+.r{text-align:right}
+
+</style>
+</head>
+<body>
+<div style="width: 1280px; height: 1700px; box-sizing: border-box; background: var(--paper); color: var(--ink); font-family: 'Times New Roman', Times, 'Liberation Serif', serif; font-size: 17px; line-height: 1.4; padding: 56px 80px; display: flex; flex-direction: column; gap: 30px">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; border-bottom: 1px solid var(--ink); padding-bottom: 6px">
+    <span>T.O. GR1F-16CJ-1-1 · Appendix B · F110-GE-129</span>
+    <span>F-16C Block 50</span>
+  </div>
+
+  <div style="text-align: center">
+    <h1 style="margin: 0; font-size: 30px; font-weight: bold; letter-spacing: 0.04em; font-variant: small-caps">Takeoff and Landing Data</h1>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px; align-items: start">
+    <section style="display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 18px; font-weight: bold; font-variant: small-caps; letter-spacing: 0.05em; border-bottom: 1px solid var(--ink); padding-bottom: 3px">I. Aircraft</h2>
+      <div class="f" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px">
+        <label style="display: flex; flex-direction: column; gap: 2px">Takeoff GW, lb<input id="gw" value="37,240"></label>
+        <label style="display: flex; flex-direction: column; gap: 2px">Landing GW, lb<input id="lgw" value="28,000"></label>
+        <label style="display: flex; flex-direction: column; gap: 2px">CG, % MAC<input id="cg" value="35.0"></label>
+      </div>
+      <table style="margin-top: 6px; font-size: 16px">
+        <thead><tr style="border-bottom: 1px solid var(--ink)"><th style="width: 64px">Sta.</th><th>Store</th><th class="r" style="width: 56px">Each</th><th class="r" style="width: 56px">DI</th></tr></thead>
+        <tbody>
+          <tr><td>—</td><td>Basic aircraft (incl. tip AIM-9)</td><td class="r">4</td><td class="r">4</td></tr>
+          <tr><td>1, 9</td><td>AIM-120B on LAU-129</td><td class="r">−3</td><td class="r">−6</td></tr>
+          <tr><td>2, 8</td><td>AIM-9M on LAU-129 + adapter</td><td class="r">11</td><td class="r">22</td></tr>
+          <tr><td>3, 7</td><td>GBU-12 on weapon pylon</td><td class="r">22</td><td class="r">44</td></tr>
+          <tr><td>4, 6</td><td>370-gal tank, single stores at 3/7</td><td class="r">35</td><td class="r">70</td></tr>
+          <tr><td>5R</td><td>LANTIRN targeting pod on pylon</td><td class="r">22</td><td class="r">22</td></tr>
+          <tr><td>—</td><td>Additional (stores not in Fig. B1-1)</td><td class="r"></td><td class="r">0</td></tr>
+          <tr style="border-top: 1px solid var(--ink); font-weight: bold"><td></td><td>Drag index</td><td></td><td class="r">156</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 18px; font-weight: bold; font-variant: small-caps; letter-spacing: 0.05em; border-bottom: 1px solid var(--ink); padding-bottom: 3px">II. Field</h2>
+      <div class="f" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px">
+        <label style="display: flex; flex-direction: column; gap: 2px">Runway<input id="rwy" value="21"></label>
+        <label style="display: flex; flex-direction: column; gap: 2px">Heading, °<input id="hdg" value="210"></label>
+        <label style="display: flex; flex-direction: column; gap: 2px">Length avail., ft<input id="len" value="5,900"></label>
+        <label style="display: flex; flex-direction: column; gap: 2px">Threshold elev., ft<input id="e1" value="1,980"></label>
+        <label style="display: flex; flex-direction: column; gap: 2px">Far-end elev., ft<input id="e2" value="2,027"></label>
+        <label style="display: flex; flex-direction: column; gap: 2px">Altimeter, in. Hg<input id="qnh" value="29.86"></label>
+        <label style="display: flex; flex-direction: column; gap: 2px">Temperature, °C<input id="oat" value="38.4"></label>
+        <label style="display: flex; flex-direction: column; gap: 2px">Wind, ° / kt<input id="wind" value="230 / 08"></label>
+        <label style="display: flex; flex-direction: column; gap: 2px">RCR dry / wet<input id="rcr" value="23 / 18"></label>
+      </div>
+      <div style="font-size: 15px; color: var(--grey); display: flex; flex-direction: column; gap: 2px">
+        <span>Pressure altitude 2,036 ft · slope 0.8 % uphill</span>
+        <span>Headwind 7.5 kt · crosswind 2.7 kt from the right</span>
+      </div>
+    </section>
+  </div>
+
+  <section style="display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-size: 18px; font-weight: bold; font-variant: small-caps; letter-spacing: 0.05em; border-bottom: 1px solid var(--ink); padding-bottom: 3px">III. TOLD</h2>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px; align-items: start">
+
+      <table style="font-size: 17px">
+        <thead>
+          <tr><th style="font-variant: small-caps; letter-spacing: 0.05em; font-size: 18px">Takeoff</th><th colspan="2" class="r" style="border-bottom: 1px solid var(--ink)">MIL</th><th colspan="2" class="r" style="border-bottom: 1px solid var(--ink)">MAX AB</th></tr>
+          <tr style="border-bottom: 1px solid var(--ink); font-size: 14px; color: var(--grey)"><th></th><th class="r" style="font-weight: normal">exact</th><th class="r">cons.</th><th class="r" style="font-weight: normal">exact</th><th class="r">cons.</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Rotation, KIAS</td><td class="r">172.5</td><td class="r" style="font-weight: bold">174</td><td class="r">167.5</td><td class="r" style="font-weight: bold">169</td></tr>
+          <tr><td>Takeoff speed, KIAS</td><td class="r">182.5</td><td class="r" style="font-weight: bold">184</td><td class="r">182.5</td><td class="r" style="font-weight: bold">184</td></tr>
+          <tr style="border-top: 1px solid var(--rule)"><td>Takeoff distance, ft</td><td class="r" style="color: var(--alert)">5,752</td><td class="r" style="font-weight: bold; color: var(--alert)">5,960</td><td class="r">3,227</td><td class="r" style="font-weight: bold">3,350</td></tr>
+          <tr><td>Runway used, %</td><td class="r" style="color: var(--alert)">97.5</td><td class="r" style="font-weight: bold; color: var(--alert)">101.0</td><td class="r">54.7</td><td class="r" style="font-weight: bold">56.8</td></tr>
+          <tr style="border-top: 1px solid var(--rule)"><td>Accel. check at 2,000 ft, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+          <tr><td>Refusal speed, dry, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+          <tr><td>Refusal speed, wet, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+        </tbody>
+      </table>
+
+      <table style="font-size: 17px">
+        <thead>
+          <tr><th style="font-variant: small-caps; letter-spacing: 0.05em; font-size: 18px">Landing</th><th colspan="2" class="r" style="border-bottom: 1px solid var(--ink)">Dry</th><th colspan="2" class="r" style="border-bottom: 1px solid var(--ink)">Wet</th></tr>
+          <tr style="border-bottom: 1px solid var(--ink); font-size: 14px; color: var(--grey)"><th></th><th class="r" style="font-weight: normal">exact</th><th class="r">cons.</th><th class="r" style="font-weight: normal">exact</th><th class="r">cons.</th></tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="5" style="font-style: italic; padding-top: 8px">Normal · 28,000 lb</td></tr>
+          <tr><td>Final approach, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+          <tr><td>Touchdown, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+          <tr><td>Landing distance, ft</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+          <tr><td>Runway used, %</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+          <tr style="border-top: 1px solid var(--rule)"><td colspan="5" style="font-style: italic; padding-top: 8px">Heavyweight · 37,240 lb</td></tr>
+          <tr><td>Final approach, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+          <tr><td>Touchdown, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+          <tr><td>Landing distance, ft</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+          <tr><td>Runway used, %</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div style="margin-top: auto; display: flex; justify-content: space-between; font-size: 14px; border-top: 1px solid var(--ink); padding-top: 6px">
+    <span>Computed 27 Oct 2026</span>
+    <a href="perf-limitations.html">Limitations</a>
+  </div>
+</div>
+</body>
+</html>

@@ -2,3 +2,6 @@
 * text=auto
 *.terrain binary
 *.terrain.gz binary
+# perf data and test fixtures are hashed byte for byte (perf/data manifest, data:check fixtures): never convert line endings
+perf/data/** -text
+perf/tests/fixtures/** -text

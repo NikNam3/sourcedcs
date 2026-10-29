@@ -1,0 +1,27 @@
+/*
+ * The five colours of the design system (TOLD.md 10.1): ink, paper, one grey, the rule between table groups, and
+ * red for a problem with a cited rule. Nothing else, ever: no other stylesheet may write a colour literal
+ * (tests/design-tokens.test.ts).
+ *
+ * The dark values apply on screen only, so a print is always black on white without print.css restating them.
+ */
+
+:root {
+  --paper: #ffffff;
+  --ink: #000000;
+  --grey: #555555;
+  --rule: #bbbbbb;
+  --alert: #b00000;
+  color-scheme: light;
+}
+
+@media screen and (prefers-color-scheme: dark) {
+  :root {
+    --paper: #000000;
+    --ink: #ffffff;
+    --grey: #a8a8a8;
+    --rule: #444444;
+    --alert: #ff6b6b;
+    color-scheme: dark;
+  }
+}

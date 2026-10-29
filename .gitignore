@@ -27,6 +27,12 @@ share/python-wheels/
 .installed.cfg
 *.egg
 *.yaml
+# perf chart specs and the manual errata list are hand-written source, not miztoyaml output (docs/wip/TOLD.md 0.2)
+!perf/extraction/**/*.yaml
+# perf test fixtures: chart specs and errata files for the loader tests
+!perf/tests/fixtures/**/*.yaml
+# the F-16 manual PDF is distribution-restricted and never committed (TOLD.md section 3)
+perf/**/*.pdf
 *.miz
 .env
 infra/mediawiki/LocalSettings.php
@@ -210,3 +216,8 @@ infra/*.sql
 
 # crc-desktop SRS bridge runtime state (written to cwd by lxsrs_v2)
 lxsrs_v2_state.json
+
+# perf (docs/wip/TOLD.md): extraction overlays, tsc output, dependencies
+perf/extraction/out/
+perf/web/js/
+perf/node_modules/
