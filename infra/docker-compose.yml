@@ -98,6 +98,42 @@ services:
       - internal
       - web
 
+  # MediaWiki job runner. LocalSettings.php sets $wgJobRunRate = 0 (no jobs
+  # on page views, scraper incident), so without this nothing runs the job
+  # queue: CasdoorSync role/name sync, cache updates, notifications. Also
+  # queues the daily full Casdoor sync (CasdoorSync/maintenance/QueueFullSync.php).
+  # Same build as mediawiki; needs `web` to reach Casdoor at its public URL.
+  mediawiki-jobs:
+    build: ./mediawiki
+    container_name: mediawiki-jobs
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - mediawiki-images:/var/www/html/images
+      - ./mediawiki/LocalSettings.php:/var/www/html/LocalSettings.php:ro
+      - ./mediawiki/LocalSettings.perf.php:/var/www/html/LocalSettings.perf.php:ro
+      - ./mediawiki/extensions/CasdoorSync:/var/www/html/extensions/CasdoorSync:ro
+    working_dir: /var/www/html
+    user: www-data
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        last_full=0
+        while true; do
+          now=$$(date +%s)
+          if [ $$((now - last_full)) -ge 86400 ]; then
+            php maintenance/run.php /var/www/html/extensions/CasdoorSync/maintenance/QueueFullSync.php && last_full=$$now
+          fi
+          nice -n 10 php maintenance/run.php runJobs --maxtime=60 --memory-limit=256M
+          sleep 30
+        done
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - internal
+      - web
+
   # ─────────────────────────────────────────
   # CASDOOR - Auth (SSO)
   # ─────────────────────────────────────────

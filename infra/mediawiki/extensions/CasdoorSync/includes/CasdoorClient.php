@@ -14,7 +14,11 @@ class CasdoorClient {
         $this->org          = $cfg->get( 'CasdoorSyncOrg' );
     }
 
+    private ?string $token = null;
+
+    // One token per client: a full sync calls get-user once per linked account.
     private function getToken(): ?string {
+        if ( $this->token !== null ) return $this->token;
         $ch = curl_init();
         curl_setopt_array( $ch, [
             CURLOPT_URL => "{$this->baseUrl}/api/login/oauth/access_token",
@@ -29,7 +33,8 @@ class CasdoorClient {
         ] );
         $data = json_decode( curl_exec( $ch ), true );
         curl_close( $ch );
-        return $data['access_token'] ?? null;
+        $this->token = $data['access_token'] ?? null;
+        return $this->token;
     }
 
     public function getUserBySubject( string $subject ): ?array {
@@ -46,21 +51,5 @@ class CasdoorClient {
         $resp = json_decode( curl_exec( $ch ), true );
         curl_close( $ch );
         return $resp['data'] ?? null;
-    }
-
-    public function getAllUsers(): array {
-        $token = $this->getToken();
-        if ( !$token ) return [];
-
-        $ch = curl_init();
-        curl_setopt_array( $ch, [
-            CURLOPT_URL => "{$this->baseUrl}/api/get-users?owner={$this->org}",
-            CURLOPT_HTTPHEADER => [ "Authorization: Bearer {$token}" ],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30,
-        ] );
-        $resp = json_decode( curl_exec( $ch ), true );
-        curl_close( $ch );
-        return $resp['data'] ?? [];
     }
 }

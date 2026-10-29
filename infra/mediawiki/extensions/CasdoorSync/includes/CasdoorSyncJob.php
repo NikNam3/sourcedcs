@@ -26,23 +26,21 @@ class CasdoorSyncJob extends Job {
             return true;
         }
 
-        // mode === 'full': reconcile every linked wiki account against Casdoor's roster
+        // mode === 'full': reconcile every linked wiki account against Casdoor.
+        // Each account is fetched with get-user: Casdoor's get-users list returns
+        // users without their roles, and syncing from it strips every group.
         $dbr = wfGetDB( DB_REPLICA );
         $userFactory = MediaWikiServices::getInstance()->getUserFactory();
 
-        foreach ( $client->getAllUsers() as $cu ) {
-            $subject = $cu['id'] ?? null;
-            if ( !$subject ) continue;
-
-            $row = $dbr->selectRow(
-                'openid_connect', ['oidc_user'],
-                ['oidc_subject' => $subject], __METHOD__
-            );
-            if ( !$row ) continue; // never logged in; nothing to sync yet
+        $rows = $dbr->select( 'openid_connect', ['oidc_user', 'oidc_subject'], [], __METHOD__ );
+        foreach ( $rows as $row ) {
+            if ( !$row->oidc_subject ) continue;
+            $casdoorUser = $client->getUserBySubject( $row->oidc_subject );
+            if ( !$casdoorUser ) continue; // unknown to Casdoor, or Casdoor unreachable: leave as is
 
             $user = $userFactory->newFromId( $row->oidc_user );
             $user->load();
-            $this->syncOne( $user, $cu );
+            $this->syncOne( $user, $casdoorUser );
         }
         return true;
     }
