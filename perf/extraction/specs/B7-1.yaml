@@ -1,0 +1,47 @@
+# Figure B7-1, Landing Speed. Coordinates are PDF points, read off PyMuPDF's vector and text data and
+# checked by overlay (questioner evidence, .superpowers/sdd/TOLD-STEP1-P1/evidence.md "B7-1").
+# The two curves run in parallel across the whole frame (GW 17 to 48), 47 pt apart at least, so no
+# rectangle holds one without the other: each panel clips both and takes its curve by an anchor,
+# a point on the curve below the curve's printed label (ruling P3), with count_in_clip 2.
+id: B7-1
+figure: B7-1
+sheet: null
+dataset: f16c-f110-129
+title: Landing Speed
+# The page prints no engine (ruling P13): the figure is in the F110-GE-129 supplement and holds
+# for all engines, so engine is not in must_contain.
+engine: F110-GE-129
+page_index: 389                 # 0-based
+printed_page: B7-3
+must_contain: ["Landing Speed", "Figure B7-1", "13 DEGREES AOA (INDEXER ON SPEED)", "ALL TEMPERATURES", "ALL ALTITUDES"]
+image_clip: [55, 245, 560, 605]
+axes:
+  gross_weight: {unit: 1000 lb, page: x, label_band: [570, 581], range: [100, 545], ticks: [20, 25, 30, 35, 40, 45], title: GW 1000 POUNDS, edge: bottom}
+  airspeed:     {unit: KIAS, page: y, label_band: [80, 99], range: [250, 570], ticks: [120, 140, 160, 180, 200, 220], title: AIRSPEED KIAS, edge: left}
+panels:
+  # The upper curve; its label FINAL APPROACH sits above it at x 365-400.
+  - id: final_approach
+    type: single_curve
+    clip: [102.5, 253.5, 543.5, 567]
+    frame: {x: [103.1, 542.7], y: [254.3, 566.4]}    # frame lines dropped
+    input: gross_weight
+    output: airspeed
+    monotonic: rises
+    anchor: [380.0, 355.6]
+    count_in_clip: 2
+  # The lower curve; its label TOUCHDOWN sits above it at x 370-410.
+  - id: touchdown
+    type: single_curve
+    clip: [102.5, 253.5, 543.5, 567]
+    frame: {x: [103.1, 542.7], y: [254.3, 566.4]}
+    input: gross_weight
+    output: airspeed
+    monotonic: rises
+    anchor: [395.0, 390.7]
+    count_in_clip: 2
+# The page's note (the baseline is the basic operating weight plus full ammo; the actual approach
+# speed may differ by +/-5 kt with CG) is not a correction rule: it belongs on the Limitations page.
+corrections: []
+sample_problems:
+  - inputs: {gross_weight_lb: 20000}
+    expected: {final_approach_kias: 136, touchdown_kias: 125}

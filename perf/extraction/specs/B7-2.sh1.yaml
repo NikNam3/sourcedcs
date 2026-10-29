@@ -1,0 +1,103 @@
+# Figure B7-2 sheet 1, Short Field Landing Distance (Uncorrected). Coordinates are PDF points, read
+# off PyMuPDF's vector and text data and checked by overlay (questioner evidence,
+# .superpowers/sdd/TOLD-STEP1-P1/evidence.md "B7-2 sheet 1", rulings P1, P7, P16).
+# The pilot enters with altitude, goes right to the temperature line, then down a line the chart
+# prints no scale for (the unscaled `carry` axis: page x in points) to the GW curve, then right to
+# the uncorrected ground roll. One outer frame holds both panels; there is no frame line between
+# them (the 0 ft line at y 405.9 is a 0.34 grid line).
+id: B7-2.sh1
+figure: B7-2
+sheet: 1
+dataset: f16c-f110-129
+title: Short Field Landing Distance (Uncorrected)
+engine: F110-GE-129
+page_index: 390                 # 0-based
+printed_page: B7-4
+# "MAXIMUM BRAKE ENERGY LIMIT LINE" is vector glyphs only, and the text layer has no em dash in
+# "(225 KTS — NO WIND)", so neither can be checked here. The SEC note is text.
+must_contain: ["Short Field Landing Distance (Uncorrected)", "F110-GE-129", "Figure B7-2. (Sheet 1)",
+               "MLG TIRE LIMIT SPEED", "NLG TIRE LIMIT SPEED", "DRY CONCRETE RUNWAY",
+               "DISTANCE BY 4/5 PERCENT WHEN BELOW/ABOVE"]
+image_clip: [55, 170, 560, 700]
+axes:
+  altitude:    {unit: ft, page: y, label_band: [72, 96], range: [170, 412], ticks: [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000], title: ALTITUDE FEET, edge: left}
+  carry:       {unit: pt, page: x, unscaled: true}
+  # The 12 and 14 labels sit beside the temperature panel; the GW panel's top (y 405.9) is 10.99.
+  ground_roll: {unit: 1000 ft, page: y, label_band: [528, 542], range: [310, 670], ticks: [2, 4, 6, 8, 10, 12, 14], title: UNCORRECTED GROUND ROLL 1000 FEET, edge: right}
+panels:
+  # Ten straight lines from 0 ft (y 405.9) to the top frame at 8000 ft. The GW 48 curve climbs into
+  # this clip (to y 387.0); min_span_pt 100 drops its stub (the temperature lines span 227 pt in y).
+  - id: temp
+    type: curve_family
+    clip: [99.5, 178.5, 526, 406.5]
+    frame: {x: [100.0, 525.4], y: [179.0, 405.9]}    # frame lines dropped
+    input: altitude
+    output: carry
+    param: {name: temperature, unit: "°C", values: [-40, -30, -20, -10, 0, 10, 20, 30, 40, 50]}
+    # labels: the point on each line nearest its printed label (the label sits above-left of its
+    # line), label centres read off a 6x render, in values order
+    labels: [[219.7, 234.7], [239.9, 240.3], [259.8, 245.9], [279.3, 251.6], [298.0, 257.8], [317.1, 263.0], [336.1, 268.2], [354.0, 274.3], [372.3, 279.6], [390.1, 285.0]]
+    order: {output: rises, check_at: [1000, 4000, 7000]}   # the carried line moves right with temperature
+    monotonic: rises            # and right with altitude along every line
+    filter: {min_span_pt: 100}
+  # Eleven curves from the left frame to x 497.1 (not the right frame). The clip reaches up to
+  # y 386 because GW 48 rises above the 0 ft line; the temperature lines' segments end above it
+  # and so are not in the clip. GW 48 is cut in three by the MLG and NLG label leaders (gaps of
+  # 2.5-2.6 pt): joined across 3 pt (ruling P1), so the limit lines' dashes (gaps of 4.2-4.4 pt)
+  # stay apart and min_span_pt 30 drops them.
+  - id: gw
+    type: curve_family
+    clip: [99.5, 386, 526, 690]
+    frame: {x: [100.0, 525.4], y: [405.9, 689.6]}
+    input: carry
+    output: ground_roll
+    param: {name: gross_weight, unit: 1000 lb, values: [20, 24, 28, 32, 34, 36, 38, 40, 42, 44, 48]}
+    # labels: the point on each curve straight below its printed GW label (the label sits 4-5 pt
+    # above its curve near the right end), label centres read off a 6x render, in values order
+    labels: [[457.2, 616.3], [458.7, 598.6], [460.0, 580.5], [460.8, 562.6], [461.3, 551.3], [462.2, 538.9], [462.5, 526.4], [464.5, 510.0], [466.2, 483.1], [466.7, 455.8], [471.7, 400.8]]
+    order: {output: rises, check_at: [150, 300, 450]}   # roll rises with gross weight
+    monotonic: rises            # and with the carried line moving right
+    filter: {join: true, max_gap_pt: 3, min_span_pt: 30}
+  # The three limit lines, in the GW panel's axes (Task 1b: frame y [405.9, 689.6]). Dashes are
+  # 12.2-13.0 pt with 4.2-4.4 pt gaps, so max_dash_pt 14; the GW 48 middle piece crossing the MLG
+  # line spans 19.6 pt, so min_span_pt 40 (ruling P16). Above every line a longer roll at the same
+  # carry means a heavier aircraft: more brake energy, a higher touchdown speed (beyond: above;
+  # the SEC note's BELOW/ABOVE agrees).
+  - id: brake_energy
+    type: limit_line
+    clip: [99.5, 505, 505, 545]
+    frame: {x: [100.0, 525.4], y: [405.9, 689.6]}
+    input: carry
+    output: ground_roll
+    label: MAXIMUM BRAKE ENERGY LIMIT LINE
+    beyond: above
+    max_dash_pt: 14
+    filter: {min_span_pt: 40}
+  # Starts on the GW 48 curve, just above it, and runs past the GW curves' end (x 497.1) to 502.9.
+  - id: mlg_tire
+    type: limit_line
+    clip: [403, 428, 505, 455]
+    frame: {x: [100.0, 525.4], y: [405.9, 689.6]}
+    input: carry
+    output: ground_roll
+    label: MLG TIRE LIMIT SPEED (225 KTS — NO WIND)
+    beyond: above
+    max_dash_pt: 14
+    filter: {min_span_pt: 40}
+  # Starts on the GW 48 curve too, and runs to 502.3.
+  - id: nlg_tire
+    type: limit_line
+    clip: [347, 455, 505, 498]
+    frame: {x: [100.0, 525.4], y: [405.9, 689.6]}
+    input: carry
+    output: ground_roll
+    label: NLG TIRE LIMIT SPEED (217 KTS — NO WIND)
+    beyond: above
+    max_dash_pt: 14
+    filter: {min_span_pt: 40}
+# The SEC note (uncorrected roll +4 % below, +5 % above the maximum brake energy limit line) is
+# sheet 3's configuration option, deferred past step 1 (TOLD.md 1.1); no correction applies here.
+corrections: []
+sample_problems:
+  - inputs: {pa_ft: 2000, temp_c: 40, gross_weight_lb: 28000}
+    expected: {ground_roll_ft: 3902}
