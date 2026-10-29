@@ -37,8 +37,8 @@
 
 ## Questioner rulings (2026-10-29)
 
-The questioner read every plan 1 page (evidence: `.superpowers/sdd/TOLD-STEP1-P1/evidence.md`, copied to
-`docs/wip/TOLD-STEP1-P1-EVIDENCE.md` at close-out). The supervisor took every recommended default. They override the
+The questioner read every plan 1 page (evidence: `docs/wip/TOLD-STEP1-P1-EVIDENCE.md`, copied there from the
+session's scratch at close-out). The supervisor took every recommended default. They override the
 task text where they differ.
 
 - **P1 curve joining (Q1; Task 1b).** `curve_family` gains optional `filter` keys, opt-in so step 0 data stays
@@ -86,6 +86,33 @@ task text where they differ.
 - **P16 page facts (Q16; Task 6)** as in the evidence: B7-2 sh1 `gw` clip to y ≈ 386, `temp` `min_span_pt` 100,
   limit lines `max_dash_pt` ≈ 14 and `min_span_pt` 40; B7-2 sh2 `check_at` dry [2, 4], wet [2, 4, 5], anchors for
   23 and 16 below 9.0.
+
+## Supervisor rulings during execution (2026-10-29 and 30)
+
+Taken while the lanes ran, recorded in the session ledger and copied here at close-out (Task 7).
+
+- **Task 1b** (extractor robustness, P1 and P3 to P6) ran alone before wave B, since Tasks 3, 4 and 6 all needed it.
+- **Order check on an unscaled input axis:** tolerance 0.005 × the panel frame's extent along that axis's page
+  direction (an unscaled axis has no ticks; the frame is its span).
+- **Monotonic checks** (P4 ii): `MONO_TOL_PT` is measured from the extreme so far, not per step, so a slow drift
+  fails; assert only, data unchanged.
+- **Checkpoints reuse `SAMPLE_RUNNERS`**: one runner per spec serves samples and checkpoints.
+- **Icy GW panels keep the required `order` key**, with `check_at` only where the curves are visibly apart.
+- **`data:check` and negative guideline params:** a negative param is a problem only beyond `EDGE_TOLERANCE` × the
+  panel's param span (caf22f5a). The extractor's rounding of the baseline gives first points of −0.0001 to −0.0067;
+  no extractor snap.
+- **B2-4's check distance `OutOfChart`** names the panel param `check_distance` (Review Focus 5's `distance` was
+  loose wording).
+- **B7-2 limits stay in `groundRollUncorrected`** (the contract); TOLD.md 1.6 was reworded to match.
+- **The carried-line `OutOfChart` on `gross_weight`** keeps its value in chart units (1000 lb), as B2-3's GW panel
+  does; plan 3's UI converts by the quantity's unit.
+- **Limitations wording:** B2-5's takeoff factor range is the measured [2.10, 6.78]; B2-6's is stated inward-rounded
+  1.20 to 3.86 (measured [1.196, 3.866]); a general note covers a refusal entry outside the drawn wind or slope lines.
+- **B2-6 sheet 1 `gw` `label_tol_pt: 1.0`**, the same evidence class as P6 (leader tips 2.1 and 2.7 pt from the next
+  curve).
+- **Manifest conflicts in a merge:** take perf-told's own pre-merge manifest (`--ours`), commit the merge, then re-run
+  the extractor on the clean merged tree and commit the manifest separately. Re-running before the merge commit stamps
+  `-dirty`; starting from the lane's manifest can leave `dataVersion` unchanged although the data changed.
 
 ---
 

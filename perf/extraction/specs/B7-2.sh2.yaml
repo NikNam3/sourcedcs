@@ -1,6 +1,6 @@
 # Figure B7-2 sheet 2, Short Field Landing Distance (Corrected). Coordinates are PDF points, read off
 # PyMuPDF's vector and text data and checked by overlay (questioner evidence,
-# .superpowers/sdd/TOLD-STEP1-P1/evidence.md "B7-2 sheet 2", rulings P1, P2, P8, P16).
+# docs/wip/TOLD-STEP1-P1-EVIDENCE.md "B7-2 sheet 2", rulings P1, P2, P8, P16).
 # Enter with sheet 1's uncorrected roll, go right to the RCR curve, down to the wind panel's
 # baseline, along the wind lines, down to the slope panel's baseline, along the slope lines, and
 # down to the corrected roll.
@@ -23,7 +23,8 @@ axes:
   slope:            {unit: "%", page: y, label_band: [128, 138], range: [614, 668], ticks: [0, 1, 2, 3], title: SLOPE, edge: left}
 panels:
   # Two RCR families, as Part 7 interpolates them (ruling P2): wet and dry curves cross, so one
-  # family ordered by RCR is monotone nowhere. All seven run from the origin.
+  # family ordered by RCR is monotone nowhere. The four dry curves run from the origin; the three
+  # wet ones start just off it, at uncorrected 0.15 to 0.19 (1000 ft).
   # Dry (solid): 4 (ICY), 8 (SNOW), 16 (DRY), 23 (DRY CONCRETE). 23 is the identity line; 16 merges
   # into it at uncorrected 9.0 and they coincide to the corner (12, 12), so the two are one closed
   # chain that doubles back: the join splits it into its two monotonic pieces. min_chain_pt 30

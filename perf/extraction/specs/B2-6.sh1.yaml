@@ -1,5 +1,5 @@
 # Figure B2-6 sheet 1, Refusal Speed (AB), dry concrete (RCR 23). Coordinates are PDF points, read
-# from the page drawings and 3x-6x renders (.superpowers/sdd/TOLD-STEP1-P1/evidence.md "B2-6").
+# from the page drawings and 3x-6x renders (docs/wip/TOLD-STEP1-P1-EVIDENCE.md "B2-6").
 # The chart turns a corner: takeoff factor -> GW curves -> a line carried up with no printed scale (`carry`,
 # page x) -> runway length lines -> wind and slope guide lines -> refusal speed on the right-hand scale.
 # The sample problem's path breaks the runway frame (x 268.8 at y 294-302, y 473.2 at x 166-169): no harm,

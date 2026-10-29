@@ -1,6 +1,6 @@
 # Figure B1-1 sheet 5, Drag Indexes and Weights - Individual Stores. Coordinates are PDF points:
 # column x ranges are the printed table's vertical rules, the row band lies between the header
-# rule and the bottom rule (read from the page drawings, .superpowers/sdd/TOLD-STEP0/t8-scratch/).
+# rule and the bottom rule (read from the page drawings with a scratch script, not kept).
 # Four rocket launcher groups, each header two lines (LAU-3/A ... ROCKET / LAUNCHER WITH:); the
 # group text is the two lines joined by one space, as printed (LAUNCHER- WITH:). The sub-rows
 # repeat across groups with different weights and drag indexes, so the group is part of the key.

@@ -1,6 +1,6 @@
 # Figure B1-1 sheet 7, Drag Indexes and Weights - Individual Stores. Coordinates are PDF points:
 # column x ranges are the printed table's vertical rules, the row band lies between the header
-# rule and the bottom rule (read from the page drawings, .superpowers/sdd/TOLD-STEP0/t8-scratch/).
+# rule and the bottom rule (read from the page drawings with a scratch script, not kept).
 # TGM-65A, B and TGM-65D, G run over two lines with their values on the second (row_end). Groups
 # 300-, 370- and 600-GALLON TANK (EMPTY/FULL): hold condition rows; NO STORES AT 3 OR 7 appears
 # under 370 and 600 with different drag indexes, so the group is part of the key. Tank weights

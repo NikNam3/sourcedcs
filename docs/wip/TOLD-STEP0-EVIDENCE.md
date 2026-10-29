@@ -3,7 +3,7 @@
 # TOLD step 0: questions for the implementer lanes (questioner, 2026-10-28)
 
 Each question has a recommended default, so a lane can proceed without live chat. Page indices are 0-based.
-Evidence scripts and renders: `.superpowers/sdd/TOLD-STEP0/questioner-scratch/` (`words.py`, `spans.py`, `p258.png` … `p264.png`).
+The evidence scripts and renders (`words.py`, `spans.py`, `p258.png` … `p264.png`) were scratch files and are not kept.
 
 ## Q1 (Task 3): Extracted curves end a hair inside the frame, so Review Focus 1 fails on real data under Task 3's `interp` rule ("undefined outside [first input, last input]"). Does a building block get an edge tolerance?
 
