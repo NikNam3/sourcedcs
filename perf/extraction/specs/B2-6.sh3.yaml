@@ -1,5 +1,5 @@
 # Figure B2-6 sheet 3, Refusal Speed (AB), snow (RCR 8) and icy (RCR 4). Coordinates are PDF points, read
-# from the page drawings and 3x renders (.superpowers/sdd/TOLD-STEP1-P1/evidence.md "B2-6").
+# from the page drawings and 3x renders (docs/wip/TOLD-STEP1-P1-EVIDENCE.md "B2-6").
 # Two charts side by side, each takeoff factor -> GW curves -> a line carried up with no printed scale
 # (`carry_snow`, `carry_icy`, page x) -> runway length lines; both then share the wind and slope guide lines and the
 # refusal speed scale. Part 2 (p280): "Certain heavy GW/low RCR combinations can result in the refusal speed for

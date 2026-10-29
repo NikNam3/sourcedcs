@@ -1,6 +1,6 @@
 # Figure B7-2 sheet 1, Short Field Landing Distance (Uncorrected). Coordinates are PDF points, read
 # off PyMuPDF's vector and text data and checked by overlay (questioner evidence,
-# .superpowers/sdd/TOLD-STEP1-P1/evidence.md "B7-2 sheet 1", rulings P1, P7, P16).
+# docs/wip/TOLD-STEP1-P1-EVIDENCE.md "B7-2 sheet 1", rulings P1, P7, P16).
 # The pilot enters with altitude, goes right to the temperature line, then down a line the chart
 # prints no scale for (the unscaled `carry` axis: page x in points) to the GW curve, then right to
 # the uncorrected ground roll. One outer frame holds both panels; there is no frame line between

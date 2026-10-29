@@ -1,6 +1,6 @@
 # Figure B7-2 sheet 2, Short Field Landing Distance (Corrected). Coordinates are PDF points, read off
 # PyMuPDF's vector and text data and checked by overlay (questioner evidence,
-# .superpowers/sdd/TOLD-STEP1-P1/evidence.md "B7-2 sheet 2", rulings P1, P2, P8, P16).
+# docs/wip/TOLD-STEP1-P1-EVIDENCE.md "B7-2 sheet 2", rulings P1, P2, P8, P16).
 # Enter with sheet 1's uncorrected roll, go right to the RCR curve, down to the wind panel's
 # baseline, along the wind lines, down to the slope panel's baseline, along the slope lines, and
 # down to the corrected roll.

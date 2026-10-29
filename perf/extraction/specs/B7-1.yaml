@@ -1,5 +1,5 @@
 # Figure B7-1, Landing Speed. Coordinates are PDF points, read off PyMuPDF's vector and text data and
-# checked by overlay (questioner evidence, .superpowers/sdd/TOLD-STEP1-P1/evidence.md "B7-1").
+# checked by overlay (questioner evidence, docs/wip/TOLD-STEP1-P1-EVIDENCE.md "B7-1").
 # The two curves run in parallel across the whole frame (GW 17 to 48), 28 to 47 pt apart along the
 # airspeed axis and 23 pt apart at their nearest (GW 17), so no rectangle holds one without the
 # other: each panel clips both and takes its curve by an anchor,

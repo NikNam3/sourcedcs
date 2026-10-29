@@ -1,6 +1,6 @@
 # Figure B2-4, Acceleration Check Speed. Coordinates are PDF points, read off renders of page
 # index 286 (the distance labels off a 6x render) and the plan 1 page evidence
-# (.superpowers/sdd/TOLD-STEP1-P1/evidence.md, "B2-4"), checked by overlay.
+# (docs/wip/TOLD-STEP1-P1-EVIDENCE.md, "B2-4"), checked by overlay.
 id: B2-4
 figure: B2-4
 sheet: null

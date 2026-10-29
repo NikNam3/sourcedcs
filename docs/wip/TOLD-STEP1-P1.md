@@ -37,8 +37,8 @@
 
 ## Questioner rulings (2026-10-29)
 
-The questioner read every plan 1 page (evidence: `.superpowers/sdd/TOLD-STEP1-P1/evidence.md`, copied to
-`docs/wip/TOLD-STEP1-P1-EVIDENCE.md` at close-out). The supervisor took every recommended default. They override the
+The questioner read every plan 1 page (evidence: `docs/wip/TOLD-STEP1-P1-EVIDENCE.md`, copied there from the
+session's scratch at close-out). The supervisor took every recommended default. They override the
 task text where they differ.
 
 - **P1 curve joining (Q1; Task 1b).** `curve_family` gains optional `filter` keys, opt-in so step 0 data stays

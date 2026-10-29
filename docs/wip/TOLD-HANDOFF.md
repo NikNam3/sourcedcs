@@ -78,5 +78,5 @@ How plan 1 ran, for reuse: one lane worktree per task (`../sourcedcs-told-p1-t<N
 `perf-told`), at most 4 agents at once including a questioner, all on Opus, and a task review after each lane. The
 supervisor ran the gates (`nice -n 19`), merged, and resolved manifest conflicts by the procedure in the plan's
 supervisor rulings. The other plan 1 lane worktrees and branches are removed; the close-out lane
-(`../sourcedcs-told-p1-t7`) goes once it is merged into `perf-told`. The `.superpowers/sdd/TOLD-STEP1-P1/` ledger and
-task reports in the perf worktree are scratch; what matters from them is copied into the plan and TOLD.md.
+(`../sourcedcs-told-p1-t7`) goes once it is merged into `perf-told`. The session ledger and task reports are uncommitted
+scratch; what matters from them is copied into the plan, its evidence file and TOLD.md.
