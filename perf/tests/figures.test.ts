@@ -6,12 +6,13 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { evaluate, roundTo, runExact, STEPS } from '../src/core/ctx.ts';
-import type { Chain, Ctx } from '../src/core/ctx.ts';
+import type { Chain } from '../src/core/ctx.ts';
 import { takeoffFactor } from '../src/core/figures/b2-1.ts';
 import { takeoffSpeed } from '../src/core/figures/b2-2.ts';
 import { takeoffDistance } from '../src/core/figures/b2-3.ts';
 import type { Read } from '../src/core/result.ts';
 
+import { planCtx, singlePointBound } from './helpers/bound.ts';
 import { loadFigure } from './helpers/data.ts';
 import { evaluateExhaustive } from './helpers/exhaustive.ts';
 
@@ -37,16 +38,6 @@ function traced(trace: readonly { id: string; value: number }[], id: string): nu
   const point = trace.find((t) => t.id === id);
   assert.ok(point !== undefined, `trace has no ${id}`);
   return point.value;
-}
-
-/** A Ctx that rounds the ids in `plan` their way and reads every other id exact. */
-function planCtx(plan: ReadonlyMap<string, 'down' | 'up'>): Ctx {
-  return {
-    read(id, value, step) {
-      const dir = plan.get(id);
-      return dir === undefined ? value : roundTo(value, step, dir);
-    },
-  };
 }
 
 const tof = (tempC: number, paFt: number) => runExact((ctx) => takeoffFactor(ctx, b21, { tempC, paFt }));
@@ -298,20 +289,6 @@ function distanceChain(set: OracleSet): Chain<'distanceFt'> {
     });
 }
 
-/**
- * The bound of spec 5.2: the sum over the exact pass's rounding points of the point's own one-step effect,
- * |distance(p up) - distance(p down)|, every other point exact.
- */
-function singlePointBound(chain: Chain<'distanceFt'>, ids: readonly string[]): number {
-  let bound = 0;
-  for (const id of ids) {
-    const down = valueOf(chain(planCtx(new Map([[id, 'down']]))).distanceFt);
-    const up = valueOf(chain(planCtx(new Map([[id, 'up']]))).distanceFt);
-    bound += Math.abs(up - down);
-  }
-  return bound;
-}
-
 const SETS = 50;
 const MAX_ATTEMPTS = 2000;
 
@@ -359,6 +336,7 @@ test('B2-3 conservative distance: never shorter than exact, within the single-po
     const gap = Math.abs(exhaustive.value - conservative.value);
     const bound = singlePointBound(
       chain,
+      'distanceFt',
       exact.trace.map((p) => p.id),
     );
     assert.ok(gap <= bound + 1e-9, `gap ${String(gap)} ft over the bound ${String(bound)} ft: ${where}`);

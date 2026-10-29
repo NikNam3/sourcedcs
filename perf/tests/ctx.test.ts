@@ -6,6 +6,7 @@ import { evaluate, MAX_FINAL_ROUNDS, roundTo, runExact, STEPS, WORSE } from '../
 import type { Chain, Ctx, Evaluation, OutputKind } from '../src/core/ctx.ts';
 import { ok, outOfChart } from '../src/core/result.ts';
 import type { Read } from '../src/core/result.ts';
+import { singlePointBound } from './helpers/bound.ts';
 import { evaluateExhaustive } from './helpers/exhaustive.ts';
 
 function valueOf(read: Read<number> | undefined): number {
@@ -499,18 +500,13 @@ function independentSignedChain(rng: () => number): RandomChain {
   return { chain, kinds };
 }
 
-interface BoundedChain extends RandomChain {
-  /** The largest step times the largest absolute coefficient (output weights and feeding coefficients). */
-  readonly bound: number;
-}
-
 /**
  * Signed chains whose reads feed each other, with a branch (the review's shape): read i adds `c * 0.01` of each
  * feeding read j, in step units (`c * 0.01 * step_i * r_j / step_j`), so one step of a feeding read moves read i by
  * at most about a hundredth of its step. Outputs are signed sums of every read. Spec 5.2: here the per-point
- * conservative value and the exhaustive maximum differ, within the bound.
+ * conservative value and the exhaustive maximum can differ; the tests require the gap within `singlePointBound`.
  */
-function signedFeedingChain(rng: () => number): BoundedChain {
+function signedFeedingChain(rng: () => number): RandomChain {
   const count = 3 + Math.floor(rng() * 6);
   const steps = [0.01, 0.1, 1, 10];
   const specs = Array.from({ length: count }, (_, i) => ({
@@ -545,18 +541,13 @@ function signedFeedingChain(rng: () => number): BoundedChain {
 
   const kinds = twoKinds(rng);
   const outputs = Object.keys(kinds).map((name) => ({ name, w: specs.map(() => sign(rng) * (0.1 + rng())) }));
-  const largestCoefficient = Math.max(
-    ...outputs.flatMap(({ w }) => w.map(Math.abs)),
-    ...specs.flatMap(({ terms }) => terms.map(({ c }) => Math.abs(c))),
-  );
-  const largestStep = Math.max(...specs.map((spec) => spec.step));
   const chain: Chain<string> = (ctx) => {
     const values = reads(ctx);
     const result: Record<string, Read<number>> = {};
     for (const { name, w } of outputs) result[name] = ok(values.reduce((sum, x, i) => sum + (w[i] ?? 0) * x, 0));
     return result;
   };
-  return { chain, kinds, bound: largestStep * largestCoefficient };
+  return { chain, kinds };
 }
 
 function assertAgreement(make: (rng: () => number) => RandomChain, seed: number): number {
@@ -597,11 +588,14 @@ describe('oracle bound, elsewhere', () => {
     const rng = mulberry32(0x5e_ed_20_26);
     let outputs = 0;
     let differ = 0;
+    let maxRatio = 0;
     for (let n = 0; n < 200; n++) {
-      const { chain, kinds, bound } = signedFeedingChain(rng);
+      const { chain, kinds } = signedFeedingChain(rng);
       const fast = evaluate(chain, kinds);
       const oracle = evaluateExhaustive(chain, kinds);
       for (const [k, kind] of Object.entries(kinds)) {
+        // Spec 5.2's bound, per chain and output: each exact-pass point's own one-step effect, summed.
+        const bound = singlePointBound(chain, k, fast.roundingPoints);
         outputs++;
         const exact = valueOf(fast.cells[k]?.exact);
         const conservative = valueOf(fast.cells[k]?.conservative);
@@ -613,10 +607,12 @@ describe('oracle bound, elsewhere', () => {
         const gap = Math.abs(conservative - exhaustive);
         assert.ok(gap <= bound + 1e-9, `${label} gap ${String(gap)} > bound ${String(bound)}`);
         if (gap > 1e-9) differ++;
+        if (bound > 0) maxRatio = Math.max(maxRatio, gap / bound);
       }
     }
     t.diagnostic(
       `${String(differ)} of ${String(outputs)} outputs (${((100 * differ) / outputs).toFixed(1)} %) differ from the exhaustive search`,
     );
+    t.diagnostic(`largest ratio of gap to bound ${maxRatio.toFixed(4)}`);
   });
 });
