@@ -5,7 +5,7 @@ main checkout `/home/nklx/dev/personal/sourcedcs` (a crc session works there on 
 
 ## State
 
-- **Step 0 (Foundations) is done** on `perf-told`, ahead of `origin/perf-told` and **not pushed**. Gates on the tip:
+- **Step 0 (Foundations) is done** on `perf-told`, pushed and open as a PR into `main`. Gates on the tip:
   184 tests (100 % lines on `src/core/`), typecheck, lint, format, `types:check`, `data:check` (0 problems), build.
   A full re-extraction is byte-identical. The manual's 13 sample answers for B2-1 to B2-3 pass within 2 % (largest
   0.77 %). A trial merge into `main` was clean; `main` has no ADR above 0147 (perf claims 0148–0153).
@@ -14,16 +14,13 @@ main checkout `/home/nklx/dev/personal/sourcedcs` (a crc session works there on 
 - The manual PDF is at `/home/nklx/dev/other/HAF-F16-Supplement.pdf` (SHA-256 verified against the pin). Export it as
   `PERF_PDF`. Python runs inside `nix develop` from the worktree root.
 
-## Waiting on the human
+## Answered by the human (2026-10-29)
 
-1. **How to land `perf-told`:** merge into `main` locally, push and open a PR, or keep the branch. Not answered yet.
-   Merge with a real merge commit (never squash or rebase): the manifest's `extractorCommit` and the comments naming
-   the prototype's removal commit need those commits reachable.
-2. **B1-1 comparison (Task 8 step 5):** the human compares
-   `perf/extraction/out/B1-1-tables.txt` (gitignored; regenerate with the extraction command if missing) with printed
-   pages B1-6 to B1-12 once. A reviewer already matched all 119 rows against renders. Worth their eye: brace labels on
-   one row only (SUU-30 H/B, JP-8), line-break hyphens in two sheet 5 group names, sheet 7's `A(V)1A` kept as
-   printed. A wrong row is fixed in the spec and re-extracted, never in the data.
+1. **Landing:** `perf-told` lands in `main` through a GitHub PR, merged with a real merge commit (never squash or
+   rebase): the manifest's `extractorCommit` and the comments naming the prototype's removal commit need those
+   commits reachable.
+2. **B1-1 comparison (Task 8 step 5):** the human compared `perf/extraction/out/B1-1-tables.txt` with printed pages
+   B1-6 to B1-12 and found it correct. No change to the spec or the data.
 
 ## Decisions taken in step 0 that the human may want to revisit
 
