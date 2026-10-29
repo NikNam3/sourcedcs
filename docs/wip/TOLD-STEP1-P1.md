@@ -31,9 +31,61 @@
 
 ## Execution notes for the supervisor
 
-- Waves (at most 4 agents at once: implementers plus the questioner; every subagent on Opus 5.5): **A** Tasks 1, 2 · **B** Tasks 3, 4, 6 · **C** Task 5 · **D** Task 7. Task 5 needs Task 4's `refusal-speed.ts`; Tasks 3 to 6 need Task 1; Tasks 4 and 5 need Task 2's checkpoints merged.
+- Waves (at most 4 agents at once: implementers plus the questioner; every subagent on Opus 5.5): **A** Tasks 1, 2 · **A2** Task 1b (after the questioner's rulings) · **B** Tasks 3, 4, 6 · **C** Task 5 · **D** Task 7. Task 5 needs Task 4's `refusal-speed.ts`; Tasks 3 to 6 need Task 1; Tasks 4 and 5 need Task 2's checkpoints merged.
 - `tests/helpers/sample-runners.ts`, `tests/helpers/checkpoints.ts`'s runner map and the pinned id list in `tests/sample-problems.test.ts` take an entry from every figure task: append-only conflicts, resolved by the supervisor keeping both sides.
 - Task 2's reader must not see `perf/data/`, `perf/extraction/out/`, any spec under `perf/extraction/specs/` for B2-5 or B2-6, or PyMuPDF's vector data. Brief it with the page indexes and this plan's checkpoint contract only.
+
+## Questioner rulings (2026-10-29)
+
+The questioner read every plan 1 page (evidence: `.superpowers/sdd/TOLD-STEP1-P1/evidence.md`, copied to
+`docs/wip/TOLD-STEP1-P1-EVIDENCE.md` at close-out). The supervisor took every recommended default. They override the
+task text where they differ.
+
+- **P1 curve joining (Q1; Task 1b).** `curve_family` gains optional `filter` keys, opt-in so step 0 data stays
+  byte-identical: `join: true` builds the panel's lines with the guideline code's monotone pieces and dash joining
+  along the input (`min_span_pt` applied after joining), `max_gap_pt` (default 9.0), and `min_chain_pt` /
+  `max_chain_pt` (keep only chains at least / at most this long before joining, to split a solid from a dashed
+  family). Specs: the knocked-out GW panels of B2-5 sh1, sh2, sh3 snow and B2-6 sh1 `filter: {join: true}`; B7-2 sh1
+  `gw` `{join: true, max_gap_pt: 3, min_span_pt: 30}`; B7-2 sh2 `rcr_dry` `{join: true, min_chain_pt: 30}`, `rcr_wet`
+  `{join: true, max_chain_pt: 14, min_span_pt: 30}`.
+- **P2 B7-2 sheet 2 is two RCR families (Q2; Task 6; contract change).** Panels `rcr_dry` (RCR 4, 8, 16, 23) and
+  `rcr_wet` (10, 12, 18), as Part 7 interpolates them. `groundRollCorrected(ctx, fig, i: {uncorrectedFt, rcr, wet:
+  boolean, headwindKt, slopePct})`; runner input flag `wet` (like `pitch_8deg`); an RCR outside the chosen family's
+  drawn range is `OutOfChart` on `rcr`; the rounding id stays `b7-2.sh2.rcr`. Plan 2's inputs carry `wet`.
+- **P3 `single_curve` anchor (Q3; Task 1b).** Optional `anchor: [x, y]`: the chain within the label tolerance of the
+  anchor, unique, is the curve; others in the clip are ignored, and an optional `count_in_clip` asserts how many there
+  are. B7-1 uses it for `final_approach` and `touchdown`.
+- **P4 guideline robustness (Q4; Task 1b).** (i) `to_points` drops a point whose step along the input is exactly 0 and
+  whose other-axis step is under 0.5 pt; (ii) `check_monotonic` accepts a wrong-way step up to `MONO_TOL_PT = 0.5`
+  page pt, converted per panel (the family is still chosen by the end-to-end rise); (iii) optional `filter.max_gap_pt`
+  (default 9.0) on `guideline_panel`: B2-4 `gw` 12, B2-5 sh2 `wind` 6.
+- **P5 one curve, two values (Q5; Task 1b, Task 4).** Optional `param.shared: [[18, 20]]`: one anchor labels both
+  values, the curve is written once per value, and `order` skips declared pairs (B2-5 sh3 icy).
+- **P6 label tolerance per panel (Q6; Task 1b, Task 4).** Optional `label_tol_pt` (default 3); 1.0 on the GW panels of
+  B2-5 sh2 and sh3 snow, anchors read off a 6x render at the leader arrow tips.
+- **P7 limit-line tests (Q7; Task 6).** The rule stands (outside a line's drawn input range nothing is judged). Tests:
+  the sheet 1 sample gives `{brakeEnergy: false, mlgTire: null, nlgTire: null}`; 8,000 ft / 40 °C / 46,000 lb is beyond
+  all three; 6,000 ft / 40 °C / 44,000 lb is beyond the brake energy line only; 8,000 ft / 50 °C / 46,000 lb is the
+  carried-line `OutOfChart` naming `temperature`. Task 7 rewords TOLD.md 1.6 Validation 4 to match.
+- **P8 second B7-2 sh2 sample (Q8; Task 6).** `{uncorrected_ft: 3902, rcr: 4, wet: false, headwind_kt: 10,
+  slope_pct: 1} → {ground_roll_ft: 8000}` (p388), plus its TOLD.md 0.6 row.
+- **P9 B2-4 DI panel starts at 60 kt (Q9; Task 3).** Strict, as R11: a check speed under 60 KIAS with DI > 0 is
+  `OutOfChart`; Limitations note "acceleration check speeds under 60 KIAS with a drag index are not computed".
+- **P10 order checks where GW curves cross (Q10; Tasks 4, 5).** B2-5 sh3 icy `{output: falls, check_at: [2.5, 3.5]}`;
+  B2-6 sh3 snow `{falls, [1.5, 2.5, 3.0]}`; B2-6 sh3 icy `{rises, [1.5, 2.5, 3.5]}`; B2-6 sh1 `check_at` from 1.5;
+  B2-5 sh3 snow at TOF 5 or below. Each spec comments its crossing TOF; the figure tests pin one point above a crossing
+  where 48,000 lb reads higher than 18,000 lb.
+- **P11 drawn takeoff factor ranges (Q11; Tasks 3 to 5).** Strict `OutOfChart` outside B2-5's TOF [2.11, 6.79],
+  B2-6's [1.20, 3.87] and B2-4's [1.09, 6.0]; one test and one Limitations note each.
+- **P12 corrections wording (Q12; Tasks 4, 5).** `"RCR 16 (dry): refusal speed -4 KIAS, all GW"`, `"RCR 12 (wet):
+  refusal speed -9 KIAS, all GW"` (B2-6: -5, -10); the printed note in `must_contain`; sheet 3 `corrections: []`.
+- **P13 B7-1 engine (Q13; Task 6).** `engine: F110-GE-129` with a comment; no engine in `must_contain`.
+- **P14 erratum (Q14; Task 4).** B2-5 sheet 3's note names "FIGURE B2-10" for the maximum brake application speed;
+  correct "FIGURE B2-12"; `affects: null`, committed with the B2-5 specs.
+- **P15 entry outside the wind or slope lines (Q15; Tasks 4, 5).** Named `refusal_speed`, as R11's `distance`.
+- **P16 page facts (Q16; Task 6)** as in the evidence: B7-2 sh1 `gw` clip to y ≈ 386, `temp` `min_span_pt` 100,
+  limit lines `max_dash_pt` ≈ 14 and `min_span_pt` 40; B7-2 sh2 `check_at` dry [2, 4], wet [2, 4, 5], anchors for
+  23 and 16 below 9.0.
 
 ---
 
@@ -102,6 +154,19 @@ The printed decrements are constants in the sheet functions: B2-5 RCR 16 −4, R
 - [ ] **Step 7: Extractor.** In `extract.py` an axis with `unscaled: true` takes `{unit, page, unscaled}` only and gets `{'a': 1.0, 'b': 0.0, 'resid': 0.0}` without `fit_axis`; `check_titles` skips it; `output.figure_json`'s transforms carry `unscaled: true`. In `panels.py` register `limit_line` in `TYPES` and `KEYS` (contract keys; `NESTED` unchanged): keep only segments of length ≤ `max_dash_pt` inside the clip, chain, `mono_pieces` along the input, `join_dashes`, drop lines shorter than `min_span_pt` (default `GUIDE_MIN_SPAN_PT`); assert exactly one line, one way along the input, inside the frame. `output.overlay_png` draws a limit line in red.
 - [ ] **Step 8: Regression check.** Run the extractor with no ids. Expected: exit 0 and `git status --short perf/data` empty (step 0 data byte-identical).
 - [ ] **Step 9: Commit** `feat(perf): unscaled axis, limit_line panel type and hand-read checkpoint loader`.
+
+### Task 1b: Extractor robustness for the plan 1 pages (rulings P1, P3 to P6)
+
+**Files:**
+- Modify: `perf/extraction/panels.py`, `perf/extraction/geom.py` (only if the joining helpers move there), `perf/README.md` (the new spec keys)
+
+**Interfaces:**
+- Produces: the spec keys of P1, P3, P4 (iii), P5, P6; the behaviour of P4 (i), (ii). All opt-in except P4 (i) and (ii), which only relax asserts that fail today.
+
+- [ ] **Step 1: Implement** P1, P3, P4, P5, P6 in `panels.py`, reusing `mono_pieces` and `join_dashes`; register the new keys in `KEYS` / `NESTED`.
+- [ ] **Step 2: Prove each on its real page** with uncommitted scratch specs (the evidence's what-if settings): B2-5 sh1 `gw` 9 curves; B7-2 sh1 `gw` 11 curves; B7-2 sh2 `rcr_dry` 4 and `rcr_wet` 3; B7-1 two anchored single curves; B2-5 sh3 icy with `shared`; B2-5 sh2 `gw` with `label_tol_pt: 1.0`; B2-4 `gw` with `max_gap_pt: 12`; B2-5 sh2 `wind` with `max_gap_pt: 6`. Record counts in the report.
+- [ ] **Step 3: Regression.** No-id extraction: exit 0, `git status --short perf/data` empty.
+- [ ] **Step 4: Commit** `feat(perf): curve joining, anchored single curves, shared labels and per-panel tolerances in the extractor`.
 
 ### Task 2: Hand-read checkpoints
 
