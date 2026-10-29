@@ -18,7 +18,7 @@ const errata = loadErrata();
 test('the specs with sample problems are pinned', () => {
   assert.deepEqual(
     specs.map((spec) => spec.id),
-    ['B2-1', 'B2-2', 'B2-3', 'B2-4', 'B7-1', 'B7-2.sh1', 'B7-2.sh2'],
+    ['B2-1', 'B2-2', 'B2-3', 'B2-4', 'B2-6.sh1', 'B7-1', 'B7-2.sh1', 'B7-2.sh2'],
   );
 });
 

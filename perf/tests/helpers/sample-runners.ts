@@ -9,6 +9,7 @@ import { takeoffSpeed } from '../../src/core/figures/b2-2.ts';
 import { takeoffDistance } from '../../src/core/figures/b2-3.ts';
 import { accelCheckSpeed } from '../../src/core/figures/b2-4.ts';
 import { refusalNonAbDry, refusalNonAbSnowIcy, refusalNonAbWet } from '../../src/core/figures/b2-5.ts';
+import { refusalAbDry, refusalAbSnowIcy, refusalAbWet } from '../../src/core/figures/b2-6.ts';
 import { landingSpeed } from '../../src/core/figures/b7-1.ts';
 import { groundRollCorrected, groundRollUncorrected } from '../../src/core/figures/b7-2.ts';
 import type { RefusalInputs } from '../../src/core/figures/refusal-speed.ts';
@@ -167,6 +168,24 @@ export const SAMPLE_RUNNERS: Readonly<Record<string, Runner>> = Object.freeze({
     const i = refusalInputs('B2-5.sh3', inputs);
     const fig = loadFigure('B2-5.sh3');
     const { outputs } = runExact((ctx) => refusalNonAbSnowIcy(ctx, fig, i));
+    return { refusal_rcr8_kias: outputs.rcr8Kias, refusal_rcr4_kias: outputs.rcr4Kias };
+  },
+  'B2-6.sh1': (inputs: Inputs) => {
+    const i = refusalInputs('B2-6.sh1', inputs);
+    const fig = loadFigure('B2-6.sh1');
+    const { outputs } = runExact((ctx) => refusalAbDry(ctx, fig, i));
+    return { refusal_rcr23_kias: outputs.rcr23Kias, refusal_rcr16_kias: outputs.rcr16Kias };
+  },
+  'B2-6.sh2': (inputs: Inputs) => {
+    const i = refusalInputs('B2-6.sh2', inputs);
+    const fig = loadFigure('B2-6.sh2');
+    const { outputs } = runExact((ctx) => refusalAbWet(ctx, fig, i));
+    return { refusal_rcr18_kias: outputs.rcr18Kias, refusal_rcr12_kias: outputs.rcr12Kias };
+  },
+  'B2-6.sh3': (inputs: Inputs) => {
+    const i = refusalInputs('B2-6.sh3', inputs);
+    const fig = loadFigure('B2-6.sh3');
+    const { outputs } = runExact((ctx) => refusalAbSnowIcy(ctx, fig, i));
     return { refusal_rcr8_kias: outputs.rcr8Kias, refusal_rcr4_kias: outputs.rcr4Kias };
   },
 });
