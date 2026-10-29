@@ -166,6 +166,38 @@ Ship crc-desktop and the crc-sync image together, as always. Strict state again 
 6. Release in the order of "Wire protocol and the deploy gate" above (this tree carries protocol 2; the last release shipped 1),
    then deploy by re-running the Deploy workflow.
 
+## 2026-10-29 — wiki: PHP2Shell attempt, and the job queue nobody ran
+
+**PHP2Shell (CVE-2026-109618/-109619, unauthenticated RCE, CISA KEV).** The wiki ran PHP 8.3.30
+(`mod_php`, `session.upload_progress.enabled` on); fixed is 8.3.36. On 2026-10-29 06:14–07:48 UTC
+`2.59.133.151` (no user agent) probed `/nope.php` and `/wp-includes/version.php`, then sent POST bursts:
+44 empty `/tmp/sess_*` files appeared in that window and 10 Apache children died with `Abort (6)`.
+No dropped files, extra processes or outbound connections were found. The fix is a rebuild:
+`mediawiki:1.43` carries PHP 8.3.36 and MediaWiki 1.43.11 since 2026-10-28. The image is built
+here (`build: ./mediawiki`), so it never updates by itself: rebuild with `--pull` after every PHP or
+MediaWiki security release.
+
+**The job queue.** `LocalSettings.php` sets `$wgJobRunRate = 0` (no jobs on page views), and nothing
+ran `runJobs`, so from 2026-08-28 no CasdoorSync role sync ran (a login only queues one). The
+`mediawiki-jobs` service now runs the queue every 30 s and queues a full sync
+(`CasdoorSync/maintenance/QueueFullSync.php`) at start and daily. The full sync fetches each linked
+account with Casdoor's `get-user`: the old code read roles from `get-users`, which returns none, and
+would have removed every wiki group. Casdoor is the truth: an account with no role there loses its
+wiki group, and one deleted there is blocked.
+
+On the server, from `/opt/sourcedcs/infra` (after `git pull --ff-only`):
+
+```bash
+docker compose build --pull mediawiki mediawiki-jobs
+docker compose up -d --no-deps mediawiki mediawiki-jobs
+docker exec mediawiki php maintenance/run.php update --quick
+docker exec mediawiki php -r 'echo PHP_VERSION, "\n";'          # 8.3.36 or later
+docker logs -f mediawiki-jobs                                     # casdoorSync jobs: "good"
+```
+
+Rollback: `infra-mediawiki:pre-20261029` is the old image. Backup of pages, user tables and
+`LocalSettings.php`: `/root/backups/wiki-20261029/` on the droplet.
+
 ## 2026-08-29 — wiki scraper incident: what's blocked and why
 
 The droplet hit a load average of ~145 (1 vCPU) with 811 MB swap in use. Root cause,
