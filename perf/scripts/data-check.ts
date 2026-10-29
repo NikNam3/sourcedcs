@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 
 import type { FigureFile, Manifest, Panel, Pt } from '../src/core/data/types.ts';
+import { drawnRange, edgeTolerance, unionRange } from '../src/core/read/interp.ts';
 
 const schemaPath = fileURLToPath(new URL('../schema/charts.schema.json', import.meta.url));
 const dataDir = fileURLToPath(new URL('../data/', import.meta.url));
@@ -100,20 +101,27 @@ function panelProblems(panel: Panel): string[] {
       if (panel.points.length === 0) problems.push(`${name} has no points`);
       if (!isAscending(inputs(panel.points))) problems.push(`${name} points are not in ascending input order`);
       break;
-    case 'guideline_panel':
+    case 'guideline_panel': {
       needAxes(panel.axes, [panel.input.name, panel.output.name]);
       if (Object.keys(panel.families).length === 0) problems.push(`${name} has no families`);
+      // Params are magnitudes (R8): a signed quantity (slope, wind) picks its family by sign. A line that starts a hair
+      // below 0, within the readers' edge tolerance of the panel's param span (R1), is calibration noise, not a sign.
+      const drawn = Object.values(panel.families)
+        .flat()
+        .filter((line) => line.length > 0)
+        .map((line) => drawnRange(line));
+      const signTolerance = drawn.length > 0 ? edgeTolerance(unionRange(drawn)) : 0;
       for (const [family, lines] of Object.entries(panel.families)) {
         if (lines.length === 0) problems.push(`${name} family "${family}" has no lines`);
         lines.forEach((line, i) => {
           const where = `${name} family "${family}" line ${String(i)}`;
           if (line.length === 0) problems.push(`${where} has no points`);
           if (!isAscending(inputs(line))) problems.push(`${where} is not in ascending param order`);
-          // Params are magnitudes (R8): a signed quantity (slope, wind) picks its family by sign.
-          if (inputs(line).some((param) => param < 0)) problems.push(`${where} has a negative param`);
+          if (inputs(line).some((param) => param < -signTolerance)) problems.push(`${where} has a negative param`);
         });
       }
       break;
+    }
     case 'scale_pair':
       needAxes(panel.axes, [panel.from.name, panel.to.name]);
       if (!(panel.range[0] < panel.range[1])) {

@@ -398,6 +398,25 @@ describe('checkDataset: the PDF pin and empty or malformed panels', () => {
     );
   });
 
+  test('a guideline param below 0 within the edge tolerance is calibration noise, not a sign (R1)', () => {
+    const problems = checkDataset(
+      editedDataset('guideline-noise', (figure) => {
+        figure['panels'] = [
+          guidelinePanel({
+            uphill: [line(1)],
+            downhill: [
+              [
+                [-0.0002, 1.2],
+                [2, 1],
+              ],
+            ],
+          }),
+        ];
+      }),
+    );
+    assert.deepEqual(problems, []);
+  });
+
   test('a guideline panel with no families is a problem', () => {
     only(
       'guideline-no-families',
