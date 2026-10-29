@@ -1,0 +1,93 @@
+# Figure B2-5 sheet 3, Refusal Speed (Non-AB), snow (RCR 8) and icy (RCR 4). Coordinates are PDF points, read
+# from the page drawings and 6x renders (.superpowers/sdd/TOLD-STEP1-P1/evidence.md "B2-5").
+# Two charts side by side, each takeoff factor -> GW curves -> a line carried up with no printed scale
+# (`carry_snow`, `carry_icy`, page x) -> runway length lines; both then share the wind and slope guide lines and the
+# refusal speed scale. The sheet's note says "REFER TO FIGURE B2-10", a misprint for B2-12 (manual-errata.yaml).
+id: B2-5.sh3
+figure: B2-5
+sheet: 3
+dataset: f16c-f110-129
+title: Refusal Speed (Non-AB)
+engine: F110-GE-129
+page_index: 289                 # 0-based
+printed_page: B2-13
+must_contain: ["Refusal Speed (Non-AB)", "F110-GE-129", "Figure B2-5. (Sheet 3)", "SNOW (RCR=8)", "ICY (RCR=4)"]
+image_clip: [25, 120, 575, 720]
+axes:
+  takeoff_factor: {unit: "", page: y, label_band: [345, 355], range: [510, 705], ticks: [2, 3, 4, 5, 6, 7], title: NON-AB TAKEOFF FACTOR, edge: right}
+  refusal_speed:  {unit: kt, page: y, label_band: [529, 549], range: [190, 495], ticks: [40, 60, 80, 100, 120, 140, 160, 180, 200], title: REFUSAL SPEED KIAS, edge: right}
+  wind:           {unit: kt, page: x, label_band: [492, 502], range: [367, 450], ticks: [0, 20, 40], title: WIND KNOTS, edge: bottom}
+  slope:          {unit: "%", page: x, label_band: [491, 501], range: [466, 531], ticks: [0, 1, 2, 3], title: SLOPE, edge: bottom}
+  carry_snow:     {unit: pt, page: x, unscaled: true}   # the line carried up from the snow GW curves to its runway lines
+  carry_icy:      {unit: pt, page: x, unscaled: true}   # the same on the icy chart
+panels:
+  - id: gw_snow
+    type: curve_family
+    clip: [56.3, 516.2, 201.4, 697.3]
+    frame: {x: [56.8, 200.9], y: [516.7, 696.8]}    # frame lines dropped
+    input: takeoff_factor
+    output: carry_snow
+    param: {name: gross_weight, unit: 1000 lb, values: [18, 20, 24, 28, 32, 36, 40, 44, 48]}
+    # labels: the leader arrow tips, from the page drawing, checked on a 6x render, in values order
+    labels: [[105.62, 590.91], [106.87, 600.27], [106.24, 610.07], [105.9, 619.88], [105.75, 629.17], [106.07, 638.59], [106.98, 647.49], [108.58, 655.88], [111.29, 664.55]]
+    # heavier is further left; the curves are 2.1 pt apart at the top, so the order is checked at 5 or below (P10)
+    order: {output: falls, check_at: [3, 4, 5]}
+    monotonic: falls            # the carried line moves left as takeoff factor rises
+    filter: {join: true}        # label leaders knock the curves out (ruling P1)
+    label_tol_pt: 1.0           # best clearances 2.5-2.9 pt; anchors are the leader arrow tips (ruling P6)
+  - id: runway_snow
+    type: curve_family
+    clip: [56.3, 198.9, 201.4, 488.1]
+    frame: {x: [56.8, 200.9], y: [199.4, 487.6]}
+    input: carry_snow
+    output: refusal_speed
+    param: {name: runway_length, unit: ft, values: [2000, 3000, 4000, 5000, 6000, 7000, 8000, 10000, 12000, 15000, 18000, 20000]}
+    # labels: the point on each line nearest its printed length, read off a 4x render, in values order
+    labels: [[181.39, 464.64], [182.23, 424.04], [183.25, 389.86], [183.62, 356.91], [184.63, 323.73], [184.66, 293.75], [184.72, 267.12], [171.55, 240.02], [153.75, 230.73], [125.38, 238.96], [120.77, 212.25], [108.9, 220.12]]
+    order: {output: rises, check_at: [80, 95, 110]}    # every line draws carry [72.8, 117.8]
+    monotonic: rises
+  - id: gw_icy
+    type: curve_family
+    clip: [233.2, 516.2, 342.3, 697.3]
+    frame: {x: [233.7, 341.8], y: [516.7, 696.8]}
+    input: takeoff_factor
+    output: carry_icy
+    # one curve printed "18/20" (ruling P5): one anchor, written once per value, no order between 18 and 20
+    param: {name: gross_weight, unit: 1000 lb, values: [18, 20, 48], shared: [[18, 20]]}
+    # labels: the leader arrow tips (18/20, then 48), checked on a 6x render
+    labels: [[295.36, 669.55], [297.35, 680.99]]
+    # The 18/20 and 48 curves cross at takeoff factor 4.38: below it 48 is left (falls), above it right. The order
+    # is checked only below the crossing (ruling P10; the manual: refusal speed can rise with GW at low RCR).
+    order: {output: falls, check_at: [2.5, 3.5]}
+    monotonic: falls
+    filter: {join: true}        # a leader arrowhead knocks out the 48 curve near (291, 671)
+  - id: runway_icy
+    type: curve_family
+    clip: [233.2, 198.9, 342.3, 488.1]
+    frame: {x: [233.7, 341.8], y: [199.4, 487.6]}
+    input: carry_icy
+    output: refusal_speed
+    param: {name: runway_length, unit: ft, values: [3000, 4000, 5000, 6000, 7000, 8000, 10000, 12000, 15000, 18000]}
+    # labels: the point on each line nearest its printed length, read off a 4x render, in values order
+    labels: [[321.12, 471.29], [322.46, 446.08], [322.11, 422.03], [322.96, 398.41], [323.14, 375.87], [322.88, 354.59], [322.66, 321.02], [322.68, 294.36], [318.83, 264.01], [313.05, 242.18]]
+    order: {output: rises, check_at: [275, 300, 325]}  # every line draws carry [267.0, 334.3]
+    monotonic: rises
+  - id: wind
+    type: guideline_panel
+    clip: [372.0, 198.9, 445.0, 488.1]
+    frame: {x: [372.5, 444.5], y: [199.4, 487.6]}
+    input: wind
+    output: refusal_speed
+    baseline: 0
+    families: {headwind: rises, tailwind: falls}
+    count: {headwind: 8, tailwind: 8}
+  - id: slope
+    type: guideline_panel
+    clip: [471.1, 198.9, 526.2, 488.1]
+    frame: {x: [471.6, 525.7], y: [199.4, 487.6]}
+    input: slope
+    output: refusal_speed
+    baseline: 0
+    families: {uphill: rises, downhill: falls}
+    count: {uphill: 8, downhill: 8}
+corrections: []

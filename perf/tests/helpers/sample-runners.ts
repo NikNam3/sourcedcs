@@ -8,8 +8,10 @@ import { takeoffFactor } from '../../src/core/figures/b2-1.ts';
 import { takeoffSpeed } from '../../src/core/figures/b2-2.ts';
 import { takeoffDistance } from '../../src/core/figures/b2-3.ts';
 import { accelCheckSpeed } from '../../src/core/figures/b2-4.ts';
+import { refusalNonAbDry, refusalNonAbSnowIcy, refusalNonAbWet } from '../../src/core/figures/b2-5.ts';
 import { landingSpeed } from '../../src/core/figures/b7-1.ts';
 import { groundRollCorrected, groundRollUncorrected } from '../../src/core/figures/b7-2.ts';
+import type { RefusalInputs } from '../../src/core/figures/refusal-speed.ts';
 import type { Read } from '../../src/core/result.ts';
 
 import { loadFigure } from './data.ts';
@@ -17,6 +19,20 @@ import type { SampleProblem } from './specs.ts';
 
 type Inputs = SampleProblem['inputs'];
 type Runner = (inputs: Inputs) => Record<string, Read<number>>;
+
+const REFUSAL_INPUTS = ['takeoff_factor', 'gross_weight_lb', 'runway_ft', 'headwind_kt', 'slope_pct'] as const;
+
+/** The refusal speed charts' inputs (B2-5, B2-6). */
+function refusalInputs(spec: string, inputs: Inputs): RefusalInputs {
+  const i = inputsOf(spec, inputs, REFUSAL_INPUTS);
+  return {
+    takeoffFactor: i.takeoff_factor,
+    grossWeightLb: i.gross_weight_lb,
+    runwayFt: i.runway_ft,
+    headwindKt: i.headwind_kt,
+    slopePct: i.slope_pct,
+  };
+}
 
 /** Reads the sample's inputs: `numbers` required, `flags` optional (false when absent); any other key throws. */
 function inputsOf<N extends string, F extends string>(
@@ -134,5 +150,23 @@ export const SAMPLE_RUNNERS: Readonly<Record<string, Runner>> = Object.freeze({
       }),
     );
     return { ground_roll_ft: outputs.rollFt };
+  },
+  'B2-5.sh1': (inputs: Inputs) => {
+    const i = refusalInputs('B2-5.sh1', inputs);
+    const fig = loadFigure('B2-5.sh1');
+    const { outputs } = runExact((ctx) => refusalNonAbDry(ctx, fig, i));
+    return { refusal_rcr23_kias: outputs.rcr23Kias, refusal_rcr16_kias: outputs.rcr16Kias };
+  },
+  'B2-5.sh2': (inputs: Inputs) => {
+    const i = refusalInputs('B2-5.sh2', inputs);
+    const fig = loadFigure('B2-5.sh2');
+    const { outputs } = runExact((ctx) => refusalNonAbWet(ctx, fig, i));
+    return { refusal_rcr18_kias: outputs.rcr18Kias, refusal_rcr12_kias: outputs.rcr12Kias };
+  },
+  'B2-5.sh3': (inputs: Inputs) => {
+    const i = refusalInputs('B2-5.sh3', inputs);
+    const fig = loadFigure('B2-5.sh3');
+    const { outputs } = runExact((ctx) => refusalNonAbSnowIcy(ctx, fig, i));
+    return { refusal_rcr8_kias: outputs.rcr8Kias, refusal_rcr4_kias: outputs.rcr4Kias };
   },
 });
