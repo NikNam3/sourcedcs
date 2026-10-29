@@ -143,8 +143,14 @@ def curve_family(page, spec, panel_spec, axes):
     direction = order['output']
     assert direction in ('rises', 'falls'), f"order.output must be rises or falls, not {direction!r}"
     check_at = order['check_at']
-    tick_span = abs(spec['axes'][inp]['ticks'][-1] - spec['axes'][inp]['ticks'][0])
-    tol = 0.005 * tick_span
+    ax_in = spec['axes'][inp]
+    if unscaled(ax_in):
+        # No ticks on an unscaled axis: its drawn extent is the panel frame along its page direction.
+        frame = panel_spec['frame'][ax_in['page']]
+        span = max(frame) - min(frame)
+    else:
+        span = abs(ax_in['ticks'][-1] - ax_in['ticks'][0])
+    tol = 0.005 * span
     for v, c in zip(values, curves):
         lo, hi = c[0][0], c[-1][0]
         for t in check_at:
@@ -203,6 +209,8 @@ def scale_pair(page, spec, panel_spec, axes):
     """Two scales printed against each other: to = a * from + b, from the two axis fits, and the
     drawn `to` scale's range, measured from its scale line (ruling R2)."""
     frm, to = panel_spec['from'], panel_spec['to']
+    for name in (frm, to):
+        assert not unscaled(spec['axes'][name]), f"scale {name} is unscaled: a scale pair needs two printed scales"
     pf, pt = spec['axes'][frm]['page'], spec['axes'][to]['page']
     assert pf == pt, f"scales {frm} ({pf}) and {to} ({pt}) are not along the same page direction"
     fa, ta = axes[frm], axes[to]
