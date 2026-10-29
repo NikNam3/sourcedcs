@@ -261,11 +261,13 @@ From the Appendix B text. Prototype values show the accuracy reached so far. Tol
 | B2-1 | 40 °C, 2,000 ft | MIL 3.16, AB 1.85 | 3.162, 1.847 |
 | B2-2 | 33,000 lb, CG 37 % | 170 KIAS at 35 %, 168 at 37 %; rotation 158 non-AB, 153 AB; 181 at 8° pitch, rotation 171 non-AB, 166 AB | 170.4, 168.8; 158.8, 153.8; 182.3 |
 | B2-3 | TOF 3.16, 33,000 lb, CG 37 %, DI 150, 1 % uphill, 10 kt headwind | 4,243 ft; 2,384 ft with AB TOF 1.85; 5,007 ft at 8°; 2,813 ft AB at 8° | 4,224; 2,382; 4,985 |
+| B2-4 | AB TOF 1.85, 1,500 ft from brake release, 33,000 lb, DI 150, 10 kt headwind, 1 % uphill | 129 KIAS | not yet extracted |
+| B2-6 sh. 1 | AB TOF 1.85, 33,000 lb, 6,000 ft runway, 10 kt headwind, 1 % uphill | 153 KIAS (RCR 23) | not yet extracted |
 | B7-1 | 20,000 lb | Touchdown 125 KIAS, final approach 136 KIAS | not yet extracted |
 | B7-2 sh. 1 | 2,000 ft, 40 °C, 28,000 lb | 3,902 ft PRI; SEC 4,058 ft (×1.04) | not yet extracted |
 | B7-2 sh. 2 | from 3,902 ft, RCR 16, 10 kt headwind, 1 % uphill | 3,375 ft | not yet extracted |
 
-B7-2 sh. 2's text labels its 3,902 ft entry "SEC" although 3,902 ft is the PRI value: the first entry for `manual-errata.yaml`. Samples for B2-4 to B2-6 are read from the Part 2 text when those figures are specified.
+B7-2 sh. 2's text labels its 3,902 ft entry "SEC" although 3,902 ft is the PRI value: the first entry for `manual-errata.yaml`. The Part 2 text has no sample for B2-5 (any sheet) or for B2-6 sheets 2 and 3; those sheets get hand-read checkpoints instead (1.6).
 
 ## Calculation core and conservative rounding
 
@@ -347,7 +349,7 @@ Step 1 delivers every MDC TOLD field required by AFMAN 11-2F-16V3 para. 2.5.1 fo
 
 | Figure | Content | Used for | Status |
 | --- | --- | --- | --- |
-| B1-1 sh. 1 to 7 | Drag indexes and weights | Drag index builder | Extracted as tables; a person's comparison against the page pending |
+| B1-1 sh. 1 to 7 | Drag indexes and weights | Drag index builder | Extracted as tables; compared against the page by the human (29 Oct 2026) |
 | B2-1 | Takeoff factor | All takeoff charts | Extracted, sample passes |
 | B2-2 | Takeoff speed | Rotation, takeoff speed | Extracted, sample passes |
 | B2-3 | Takeoff distance | Takeoff distance, runway used | Extracted, sample passes |
@@ -363,7 +365,7 @@ Deferred to later steps: B2-7/B2-8 and B7-2 sh. 4 to 6 (drag chute), B7-2 SEC sh
 
 1. **Data:** specs and extraction for every figure in 1.1, passing the extractor's asserts; sample problems as tests; B1-1 tables extracted, counts asserted and compared once by a person against the printed-back text. No overlay sign-off.
 2. **Core:** chains for takeoff (factor → speed → distance, acceleration check, refusal speed dry/wet for MIL and MAX AB) and landing (speeds, uncorrected distance → corrected for RCR, wind, slope), each for normal landing weight and heavyweight (takeoff GW), dry and wet. Conservative chains per section 5.
-3. **Rules:** runway criteria as checks with their paragraph: MIL roll over 50 % (afterburner required, 3.6.6), any takeoff roll over 80 % (3.6.3), landing roll over 80 % (3.18), RCR below 10 at the landing field (3.18). The exact and the conservative cell are each checked against the rule and marked red on their own, so a conservative value can be red while the exact one is not.
+3. **Rules:** runway criteria as checks with their paragraph: MIL roll over 50 % (afterburner required, 3.6.6), any takeoff roll over 80 % (3.6.3), landing roll over 80 % (3.18), RCR below 10 at the landing field (3.18), and a landing beyond one of Fig. B7-2 sheet 1's limit lines (maximum brake energy, MLG tire limit speed 225 kt, NLG tire limit speed 217 kt, both "no wind"), cited to the figure (decided 29 Oct 2026; with a headwind the tire lines warn more than needed, on the safe side). The exact and the conservative cell are each checked against the rule and marked red on their own, so a conservative value can be red while the exact one is not.
 4. **UI:** three pages, no framework: `/f16/` (the TOLD page as in the approved mockup: inputs I and II, TOLD tables in MDC order with exact and conservative columns), `/f16/figure.html#…` (figure view with the computed path for every value, over the committed page image) and the Limitations page (notes, data version, app version, the hot-day pressure altitude note). One `Inputs` object; every change recomputes everything. An input that does not parse gets a grey dotted underline and its dependent cells show "—". A rejected cell shows "—", and one grey reason line under its table per distinct reason names the figure and input (for example "B2-3: gross weight 52,000 lb outside the drawn range 20,000–48,000 lb"). Red only for cited rules. Page 1280 px wide, scaled to the window; dark mode via `prefers-color-scheme`; a print stylesheet for a paper copy through the browser's print dialog: exactly one A4 or Letter page, always black on white, inputs as plain values, no controls, data version, app version and date in the footer. No PDF library.
 5. **State:** the inputs live in the URL **hash** (`#v=1&…`), so a computed TOLD can be shared and the inputs never reach a server's access log; `v` is the format version, and a hash with any other `v` (older or unknown) is refused with a grey note, and loading continues as if there were no hash. The last inputs are kept in localStorage. Precedence on load: URL hash, then storage, then defaults (CG 35 % MAC, RCR dry 23, RCR wet 18).
 6. **Deployment:** static Docker image behind the nginx reverse proxy (see Deployment and operations).
@@ -401,6 +403,96 @@ Notes carried from step 0 (questioner, 28 Oct 2026):
 - [ ] Mockup approved; page matches it in light and dark.
 - [ ] Playwright smoke spec green, including print to PDF giving exactly one page on A4 and on Letter.
 - [ ] Deployed; data version visible; perf/README.md current.
+
+### 1.6 Plan 1: data and figure functions (design of 29 Oct 2026)
+
+Step 1 is cut into four plans, each with its own implementation plan and review, in this order: **1 data and figure
+functions**, 2 core (chains, rules, drag index builder, input parsing; may start on B2-1 to B2-3 while plan 1 runs),
+3 UI and state (the figure board first, then the three pages, URL hash, localStorage, the Playwright smoke spec), 4
+deployment (waits on the domain and certificate). This section is plan 1's spec.
+
+**Scope.** One spec per data file; sheet ids as for B1-1.
+
+| Spec | Page index (0-based) | Content | Check |
+| --- | --- | --- | --- |
+| `B2-4` | 286 | Takeoff factor → distance-from-brake-release curves → GW, DI, wind, slope guideline panels → acceleration check speed | Sample 129 KIAS |
+| `B2-5.sh1` | 287 | Non-AB refusal speed, RCR 23; correction text "RCR 16: −4 KIAS" | 3 hand reads |
+| `B2-5.sh2` | 288 | Non-AB, RCR 18; "RCR 12: −9 KIAS" | 3 hand reads |
+| `B2-5.sh3` | 289 | Non-AB, snow RCR 8 and icy RCR 4: two chart pairs, shared wind and slope panels | 2 + 1 hand reads |
+| `B2-6.sh1` | 290 | AB refusal speed, RCR 23; "RCR 16: −5 KIAS" | Sample 153 KIAS |
+| `B2-6.sh2` | 291 | AB, RCR 18; "RCR 12: −10 KIAS" | 3 hand reads |
+| `B2-6.sh3` | 292 | AB, snow and icy | 2 + 1 hand reads |
+| `B7-1` | 389 | Landing speed: final approach and touchdown over GW | Sample 136 / 125 KIAS |
+| `B7-2.sh1` | 390 | Uncorrected roll: altitude → temperature → carried line → GW → roll; the three limit lines | Sample 3,902 ft |
+| `B7-2.sh2` | 391 | Corrected roll: RCR curves, wind and slope panels | Sample 3,375 ft (erratum on file) |
+
+Out of plan 1, as in 1.1: B7-2 sheets 3 to 6 (SEC, drag chute), B2-7 to B2-13. The RCR rule for values between the
+sheets ("For wet runways, interpolate between wet concrete (RCR = 18) and wet (RCR = 12). For runways with no liquid
+water present, interpolate between dry concrete (RCR = 23), dry (RCR = 16), snow (RCR = 8), and icy (RCR = 4)",
+Part 2) is plan 2's.
+
+**Extractor and schema.**
+
+1. **Unscaled axis.** B2-5, B2-6 (every sheet) and B7-2 sheet 1 carry an unlabelled line from one panel into the
+   next. A spec axis may say `unscaled: true` (unit `pt`): no ticks and no label band (the extractor refuses either),
+   the identity transform, so its value is the page position in PDF points. The schema carries the flag. The panels
+   on either side are ordinary curve families or guideline panels. Rejected: a combined "turn" panel type (a new
+   reader with its own edge rules, and a different shape on B7-2), and giving the carried line a scale (a number the
+   manual does not print, ADR 0148).
+2. **`limit_line` panel type:** id, the printed label, input and output quantities in the panel's own axes, one
+   polyline, and `beyond: above | below`. The extractor finds the (dashed) line in the declared clip, joins its dashes
+   (the guideline code) and asserts exactly one line, one way along the input, inside the frame. Core judges a point
+   only inside the line's drawn input range; outside it nothing is judged.
+3. **B7-1** is two `single_curve` panels, final approach and touchdown, with an asserted order (final approach above
+   touchdown everywhere).
+4. **Sheet 3 of B2-5 and B2-6** declares two carried axes (`carry_snow`, `carry_icy`); its four snow and icy panels
+   feed the shared wind and slope panels.
+5. **The printed RCR 16 and RCR 12 decrements** are `corrections` strings, as B2-3's 8° pitch correction. The figure
+   functions apply them, as `b2-3.ts` applies its correction: sheet 1 returns the refusal speed at RCR 23 and at
+   RCR 16, sheet 2 at RCR 18 and at 12, sheet 3 at 8 and at 4. Plan 2 interpolates between these.
+6. `types:gen` regenerates `src/core/data/types.ts`; `types:check` pins it. Errata already match by exact figure and
+   sheet (the B7-2 question from step 0 is settled: one spec per sheet). A full re-extraction leaves every step 0 file
+   byte-identical: the extractor change's own regression check.
+
+**Validation.**
+
+1. **Figure functions are in plan 1:** `src/core/figures/b2-4.ts`, `b2-5.ts`, `b2-6.ts`, `b7-1.ts`, `b7-2.ts`, like
+   `b2-3.ts`. Every rounding point through `ctx.read` with an id (ids pinned per figure); the carried position is
+   passed on without `ctx.read` (a pilot does not read or round a line carried across); out of chart returns
+   `OutOfChart` naming the figure and the input. The limit lines are a separate function per sheet returning which
+   lines a point is beyond. Plan 2 builds chains on these.
+2. **Golden tests:** the manual's samples within 2 %; the 15 hand-read checkpoints within ±2 kt.
+3. **Hand-read checkpoints** are read off 300 dpi renders of the page by a reviewer agent before that sheet's
+   extraction lane runs; the reader sees no extracted JSON and no overlay. They live in the spec YAML under
+   `checkpoints:` (inputs, value, `source: hand`, reader and date, tolerance), read by the same test helper as
+   `sample_problems`; the data files and the schema do not change. A failing checkpoint is investigated on both sides;
+   neither the reading nor the extraction wins by default. Spread: B2-5 sh. 1, B2-5 sh. 2 and B2-6 sh. 2 three each
+   (the dry and wet defaults), B2-5 sh. 3 and B2-6 sh. 3 two snow and one icy each.
+4. **Limit lines:** per line a point beyond, a point inside, and the B7-2 sample inside all three.
+5. **Out of chart:** per figure, below and above every panel's drawn range gives `OutOfChart` naming that input,
+   including wind and slope panels drawn only to a magnitude.
+6. As in step 0: the extractor's asserts per spec, `data:check`, gitignored overlays without sign-off, 90 % line
+   coverage on `src/core/`.
+
+**Process.** The lanes run the extraction on this machine (`PERF_PDF=/home/nklx/dev/other/HAF-F16-Supplement.pdf`,
+`nix develop`), as in step 0.
+
+| Task | Content | After |
+| --- | --- | --- |
+| 1 | Extractor and schema: unscaled axis, `limit_line`, types, fixture tests; step 0 data byte-identical | — |
+| 2 | The 15 hand-read checkpoints | — |
+| 3 | B2-4 | 1 |
+| 4 | B2-5 sheets 1 to 3 | 1, 2 |
+| 5 | B2-6 sheets 1 to 3 | 1, 2 |
+| 6 | B7-1, B7-2 sheets 1 and 2 with the limit lines | 1 |
+| 7 | Close-out: full re-extraction, all gates, 1.1 status, `perf/README.md`, handoff | 3 to 6 |
+
+One lane worktree per task (`../sourcedcs-told-p1-t<N>` on `lane/told-p1-t<N>` off `perf-told`), at most 4 agents at
+once including a questioner, all on Opus, a task review after each lane, lanes run only their own test file, the
+supervisor runs the gates (`nice -n 19`) and merges. Tasks 1 and 2 run first, together; then 3 to 6, up to three at a
+time. Every extraction rewrites `manifest.json`: a conflict there is resolved by re-running the extractor on the
+merged tree, never by hand; commit order extractor change, re-run, data. Plan 1 lands on `perf-told` as a PR into
+`main` with a merge commit.
 
 ## Step 2: Performance
 
