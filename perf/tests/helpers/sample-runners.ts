@@ -7,6 +7,8 @@ import { runExact } from '../../src/core/ctx.ts';
 import { takeoffFactor } from '../../src/core/figures/b2-1.ts';
 import { takeoffSpeed } from '../../src/core/figures/b2-2.ts';
 import { takeoffDistance } from '../../src/core/figures/b2-3.ts';
+import { landingSpeed } from '../../src/core/figures/b7-1.ts';
+import { groundRollCorrected, groundRollUncorrected } from '../../src/core/figures/b7-2.ts';
 import type { Read } from '../../src/core/result.ts';
 
 import { loadFigure } from './data.ts';
@@ -80,5 +82,34 @@ export const SAMPLE_RUNNERS: Readonly<Record<string, Runner>> = Object.freeze({
       }),
     );
     return { distance_ft: outputs.distanceFt };
+  },
+  'B7-1': (inputs: Inputs) => {
+    const i = inputsOf('B7-1', inputs, ['gross_weight_lb']);
+    const fig = loadFigure('B7-1');
+    const { outputs } = runExact((ctx) => landingSpeed(ctx, fig, { grossWeightLb: i.gross_weight_lb }));
+    return { final_approach_kias: outputs.finalApproachKias, touchdown_kias: outputs.touchdownKias };
+  },
+  'B7-2.sh1': (inputs: Inputs) => {
+    const i = inputsOf('B7-2.sh1', inputs, ['pa_ft', 'temp_c', 'gross_weight_lb']);
+    const fig = loadFigure('B7-2.sh1');
+    const { outputs } = runExact((ctx) => ({
+      rollFt: groundRollUncorrected(ctx, fig, { paFt: i.pa_ft, tempC: i.temp_c, grossWeightLb: i.gross_weight_lb })
+        .rollFt,
+    }));
+    return { ground_roll_ft: outputs.rollFt };
+  },
+  'B7-2.sh2': (inputs: Inputs) => {
+    const i = inputsOf('B7-2.sh2', inputs, ['uncorrected_ft', 'rcr', 'headwind_kt', 'slope_pct'], ['wet']);
+    const fig = loadFigure('B7-2.sh2');
+    const { outputs } = runExact((ctx) =>
+      groundRollCorrected(ctx, fig, {
+        uncorrectedFt: i.uncorrected_ft,
+        rcr: i.rcr,
+        wet: i.wet,
+        headwindKt: i.headwind_kt,
+        slopePct: i.slope_pct,
+      }),
+    );
+    return { ground_roll_ft: outputs.rollFt };
   },
 });
