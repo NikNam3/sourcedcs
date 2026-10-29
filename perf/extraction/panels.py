@@ -51,13 +51,40 @@ def chart_point(spec, axes, inp, out, x, y):
     return (geom.to_val(axes[inp], xy[pin]), geom.to_val(axes[out], xy[pout]))
 
 
+def positive_number(v, what):
+    assert isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0, \
+        f"{what} must be a positive number, not {v!r}"
+    return v
+
+
 def filtered_chains(page, spec, panel_spec, inp):
     """Chains of the panel's segments that pass its filter (min_points, min_span_pt, stroke_width).
-    min_span_pt is the chain's extent along the input axis's page coordinate."""
+    min_span_pt is the chain's extent along the input axis's page coordinate.
+
+    With filter.join (a curve_family whose curves are knocked out by label leaders or dashed,
+    ruling P1), the panel's lines are built as guide lines are (joined_lines along the input):
+    chains kept only if their length is at least min_chain_pt / at most max_chain_pt (to keep a
+    solid or a dashed family), split into monotonic pieces, joined across gaps of at most
+    max_gap_pt; then min_span_pt (default GUIDE_MIN_SPAN_PT) and min_points apply to the joined
+    lines."""
     flt = panel_spec.get('filter', {})
     width = tuple(flt.get('stroke_width', DEFAULT_WIDTH))
     segs = geom.panel_segments(page, panel_spec['clip'], panel_spec['frame'], width)
     k = 0 if spec['axes'][inp]['page'] == 'x' else 1
+    join = flt.get('join', False)
+    assert isinstance(join, bool), f"filter.join must be true or false, not {join!r}"
+    if not join:
+        for key in JOIN_ONLY_KEYS:
+            assert key not in flt, f"filter.{key} applies only with filter.join: true"
+    else:
+        for key in JOIN_ONLY_KEYS:
+            if key in flt:
+                positive_number(flt[key], f"filter.{key}")
+        lo, hi = flt.get('min_chain_pt', 0), flt.get('max_chain_pt', math.inf)
+        assert lo <= hi, f"filter.min_chain_pt {lo} is above filter.max_chain_pt {hi}"
+        lines = joined_lines(segs, k, flt.get('min_span_pt', GUIDE_MIN_SPAN_PT),
+                             max_gap=flt.get('max_gap_pt', JOIN_MAX_GAP_PT), chain_pt=(lo, hi))
+        return [ln for ln in lines if len(ln) >= flt.get('min_points', 2)]
     out = []
     for c in geom.chains(segs):
         if len(c) < flt.get('min_points', 2):
@@ -69,10 +96,22 @@ def filtered_chains(page, spec, panel_spec, inp):
     return out
 
 
+MICRO_STEP_PT = 0.5     # a point exactly level with the last along the input and nearer than this is dropped
+
+
 def to_points(spec, axes, inp, out, chain, what):
     """Chart points of one chain, sorted by input. The chain must run one way along the input axis:
-    a chain that doubles back (a zigzag, or a stray segment chained on) fails."""
+    a chain that doubles back (a zigzag, or a stray segment chained on) fails. A point whose step
+    from the last kept point is exactly 0 along the input and under MICRO_STEP_PT across it is
+    dropped first (a micro-segment on a grid row or column, ruling P4 (i)); such a chain failed
+    before, so no chain that passed changes."""
     k = 0 if spec['axes'][inp]['page'] == 'x' else 1
+    kept = [chain[0]]
+    for p in chain[1:]:
+        if p[k] == kept[-1][k] and abs(p[1 - k] - kept[-1][1 - k]) < MICRO_STEP_PT:
+            continue
+        kept.append(p)
+    chain = kept
     steps = [b[k] - a[k] for a, b in zip(chain, chain[1:])]
     one_way = all(d > 0 for d in steps) or all(d < 0 for d in steps)
     if not one_way:
@@ -84,37 +123,90 @@ def to_points(spec, axes, inp, out, chain, what):
     return pts
 
 
-def check_monotonic(pts, mono, inp, what):
-    """Output along input, non-strict: rises (never falls) or falls (never rises)."""
+MONO_TOL_PT = 0.5   # page pt an output may run against the declared direction (ruling P4 (ii))
+
+
+def mono_tol(axes, out):
+    """MONO_TOL_PT in the output axis's units."""
+    return MONO_TOL_PT / abs(axes[out]['a'])
+
+
+def check_monotonic(pts, mono, inp, what, tol=0.0):
+    """Output along input, non-strict: rises (never falls) or falls (never rises), allowing tol
+    (output units) against the direction: no point may lie more than tol below the highest output
+    before it (rises) or above the lowest (falls), so jitter passes but a drift does not."""
     assert mono in ('rises', 'falls'), f"monotonic must be rises or falls, not {mono!r}"
+    ext = pts[0][1]
     for a, b in zip(pts, pts[1:]):
-        ok = b[1] >= a[1] if mono == 'rises' else b[1] <= a[1]
-        assert ok, f"{what} not monotonic ({mono}) between {inp}={a[0]:.3f} and {b[0]:.3f}"
+        ok = b[1] >= ext - tol if mono == 'rises' else b[1] <= ext + tol
+        assert ok, f"{what} not monotonic ({mono}) between {inp}={a[0]:.3f} and {b[0]:.3f}" + \
+            (f" (more than {MONO_TOL_PT:g} pt against it)" if tol else '')
+        ext = max(ext, b[1]) if mono == 'rises' else min(ext, b[1])
 
 
 LABEL_TOL_PT = 3.0
 
 
+def label_tol(panel_spec):
+    """The panel's label tolerance in page pt: label_tol_pt (ruling P6), default LABEL_TOL_PT."""
+    return positive_number(panel_spec.get('label_tol_pt', LABEL_TOL_PT), 'label_tol_pt')
+
+
+def nearest_chain(pt, chains, tol, what):
+    """Index of the one chain within tol pt of the page point pt: its nearest chain must be within
+    tol and no second chain within tol."""
+    assert isinstance(pt, list) and len(pt) == 2, f"{what} is not a page point [x, y]"
+    dist = sorted((geom.dist_to_polyline(pt, c), i) for i, c in enumerate(chains))
+    assert dist and dist[0][0] <= tol, \
+        f"{what}: nearest curve is {dist[0][0] if dist else float('inf'):.1f} pt away (limit {tol:g} pt)"
+    assert len(dist) < 2 or dist[1][0] > tol, \
+        f"{what}: two curves within {tol:g} pt ({dist[0][0]:.1f} and {dist[1][0]:.1f} pt)"
+    return dist[0][1]
+
+
+def shared_groups(param):
+    """param.shared (ruling P5): groups of param values one printed curve stands for (B2-5 sheet 3
+    icy's "18/20"). Each group has at least two values, all in values and consecutive in it, and no
+    value is in two groups. Returns the drawn curves' value groups in values order: a shared group
+    once, every other value alone."""
+    values, shared = param['values'], param.get('shared', [])
+    assert isinstance(shared, list), f"param.shared must be a list of value groups, not {shared!r}"
+    seen = set()
+    for g in shared:
+        assert isinstance(g, list) and len(g) >= 2, f"param.shared group {g!r} must list at least two values"
+        for v in g:
+            assert v in values, f"param.shared value {v!r} is not in param.values {values}"
+            assert v not in seen, f"param.shared value {v!r} is in two groups"
+            seen.add(v)
+        idx = sorted(values.index(v) for v in g)
+        assert idx == list(range(idx[0], idx[0] + len(g))), \
+            f"param.shared group {g} is not consecutive in param.values {values}"
+    first = {min(g, key=values.index): tuple(sorted(g, key=values.index)) for g in shared}
+    return [first.get(v, (v,)) for v in values if v in first or v not in seen]
+
+
+def value_text(name, vs):
+    return f"{name}=" + '/'.join(str(v) for v in vs)
+
+
 def assign_labels(panel_spec, chains):
-    """Param value per chain, from the spec's label anchors (one page point per value, in values
-    order). Each anchor's nearest chain must be within 3 pt, no second chain within 3 pt, and no
-    chain may get two anchors (else a leftover label); every chain must get one (else unlabelled)."""
+    """Param values per chain, from the spec's label anchors (one page point per drawn curve, in
+    values order; a param.shared group is one curve and takes one anchor). Each anchor's nearest
+    chain must be within the label tolerance (label_tol_pt, default 3 pt), no second chain within
+    it, and no chain may get two anchors (else a leftover label); every chain must get one (else
+    unlabelled). Returns {chain index: tuple of param values}."""
     param = panel_spec['param']
-    name, values, labels = param['name'], param['values'], panel_spec['labels']
-    assert len(labels) == len(values), f"{len(labels)} labels for {len(values)} param values"
+    name, labels = param['name'], panel_spec['labels']
+    groups = shared_groups(param)
+    tol = label_tol(panel_spec)
+    assert len(labels) == len(groups), \
+        f"{len(labels)} labels for {len(groups)} drawn curves ({len(param['values'])} param values)"
     owner = {}
-    for v, lab in zip(values, labels):
-        assert len(lab) == 2, f"label for {name}={v} is not a page point [x, y]: {lab}"
-        dist = sorted((geom.dist_to_polyline(lab, c), i) for i, c in enumerate(chains))
-        assert dist and dist[0][0] <= LABEL_TOL_PT, \
-            f"leftover label {name}={v} at {lab}: nearest curve is " \
-            f"{dist[0][0] if dist else float('inf'):.1f} pt away (limit {LABEL_TOL_PT:g} pt)"
-        assert len(dist) < 2 or dist[1][0] > LABEL_TOL_PT, \
-            f"leftover label {name}={v} at {lab}: two curves within {LABEL_TOL_PT:g} pt " \
-            f"({dist[0][0]:.1f} and {dist[1][0]:.1f} pt)"
-        i = dist[0][1]
-        assert i not in owner, f"leftover label {name}={v} at {lab}: its curve is already labelled {name}={owner[i]}"
-        owner[i] = v
+    for vs, lab in zip(groups, labels):
+        what = f"leftover label {value_text(name, vs)} at {lab}"
+        i = nearest_chain(lab, chains, tol, what)
+        assert i not in owner, f"{what}: its curve is already labelled {value_text(name, owner[i])}"
+        owner[i] = vs
     unlabelled = [c for i, c in enumerate(chains) if i not in owner]
     assert not unlabelled, \
         f"{len(unlabelled)} unlabelled curve(s), first starting at page " \
@@ -134,11 +226,17 @@ def curve_family(page, spec, panel_spec, axes):
         f"param values must be strictly ascending: {values}"
     cs = filtered_chains(page, spec, panel_spec, inp)
     owner = assign_labels(panel_spec, cs)
-    by_value = {v: to_points(spec, axes, inp, out, cs[i], f"curve {param['name']}={v}") for i, v in owner.items()}
-    curves = [by_value[v] for v in values]
+    by_group = {vs: to_points(spec, axes, inp, out, cs[i], f"curve {value_text(param['name'], vs)}")
+                for i, vs in owner.items()}
+    groups = shared_groups(param)
     if 'monotonic' in panel_spec:
-        for v, c in zip(values, curves):
-            check_monotonic(c, panel_spec['monotonic'], inp, f"curve {param['name']}={v}")
+        for vs in groups:
+            check_monotonic(by_group[vs], panel_spec['monotonic'], inp, f"curve {value_text(param['name'], vs)}",
+                            mono_tol(axes, out))
+    # a param.shared group is one drawn curve, written once per value; the order between its
+    # values is not checked
+    group_of = {v: vs for vs in groups for v in vs}
+    curves = [by_group[group_of[v]] for v in values]
     order = panel_spec['order']
     direction = order['output']
     assert direction in ('rises', 'falls'), f"order.output must be rises or falls, not {direction!r}"
@@ -158,8 +256,9 @@ def curve_family(page, spec, panel_spec, axes):
                 f"curve {param['name']}={v} drawn over {inp} [{lo:.3f}, {hi:.3f}], not at check_at {t}"
     for t in check_at:
         vals = [geom.interp1(c, t) for c in curves]
-        ok = all(a < b for a, b in zip(vals, vals[1:])) if direction == 'rises' \
-            else all(a > b for a, b in zip(vals, vals[1:]))
+        pairs = [(a, b) for va, vb, a, b in zip(values, values[1:], vals, vals[1:])
+                 if group_of[va] != group_of[vb]]
+        ok = all(a < b for a, b in pairs) if direction == 'rises' else all(a > b for a, b in pairs)
         assert ok, f"order broken at {inp}={t}: {[round(x, 3) for x in vals]} should {direction[:-1]} with {param['name']}"
     return {
         'id': panel_spec['id'], 'type': 'curve_family',
@@ -171,11 +270,25 @@ def curve_family(page, spec, panel_spec, axes):
 
 
 def single_curve(page, spec, panel_spec, axes):
+    """One curve: the only chain in the clip or, with anchor (ruling P3, for curves no rectangle
+    separates), the one chain within the label tolerance of the anchor, the others in the clip
+    ignored; count_in_clip then asserts how many chains the clip holds."""
     inp, out = panel_spec['input'], panel_spec['output']
     cs = filtered_chains(page, spec, panel_spec, inp)
-    assert len(cs) == 1, f"{len(cs)} curves found, expected 1"
-    pts = to_points(spec, axes, inp, out, cs[0], 'curve')
-    check_monotonic(pts, panel_spec['monotonic'], inp, 'curve')
+    if 'anchor' in panel_spec:
+        n = panel_spec.get('count_in_clip')
+        if n is not None:
+            assert isinstance(n, int) and not isinstance(n, bool) and n >= 1, \
+                f"count_in_clip must be a positive integer, not {n!r}"
+            assert len(cs) == n, f"{len(cs)} curves in the clip, count_in_clip {n}"
+        chain = cs[nearest_chain(panel_spec['anchor'], cs, label_tol(panel_spec), f"anchor {panel_spec['anchor']}")]
+    else:
+        for key in ('count_in_clip', 'label_tol_pt'):
+            assert key not in panel_spec, f"{key} applies only with anchor"
+        assert len(cs) == 1, f"{len(cs)} curves found, expected 1"
+        chain = cs[0]
+    pts = to_points(spec, axes, inp, out, chain, 'curve')
+    check_monotonic(pts, panel_spec['monotonic'], inp, 'curve', mono_tol(axes, out))
     return {
         'id': panel_spec['id'], 'type': 'single_curve',
         'input': quantity(spec, inp), 'output': quantity(spec, out),
@@ -229,6 +342,8 @@ def scale_pair(page, spec, panel_spec, axes):
 EDGE_TOLERANCE = 0.002
 GUIDE_DIRECTIONS = ('rises', 'falls', 'any')
 GUIDE_MIN_SPAN_PT = 5.0
+JOIN_MAX_GAP_PT = 9.0   # filter.max_gap_pt's default: the widest gap along the input a line is joined across
+JOIN_ONLY_KEYS = ('max_gap_pt', 'min_chain_pt', 'max_chain_pt')   # curve_family filter keys that need join
 
 
 def mono_pieces(chain, k):
@@ -270,7 +385,7 @@ def split_kinks(piece, k, max_turn_deg):
     return out
 
 
-def join_dashes(pieces, k, max_gap=9.0, tol=1.6, max_turn_deg=None):
+def join_dashes(pieces, k, max_gap=JOIN_MAX_GAP_PT, tol=1.6, max_turn_deg=None):
     """Join pieces monotonic in page coordinate k (see mono_pieces) whose ends line up across a
     gap of at most max_gap pt along k: a dashed line drawn as separate segments becomes one line.
     The next piece must start within tol pt of the line's direction extended across the gap and,
@@ -321,32 +436,41 @@ def join_dashes(pieces, k, max_gap=9.0, tol=1.6, max_turn_deg=None):
     return lines
 
 
-def joined_lines(segs, k, min_span, max_turn_deg=None):
-    """Segments chained, split into pieces monotonic in page coordinate k (with max_turn_deg, also
-    where they turn by more than that, and joined only where the next piece runs within it), dashes
-    joined, lines shorter than min_span pt along k dropped."""
+def chain_length(c):
+    return sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(c, c[1:]))
+
+
+def joined_lines(segs, k, min_span, max_turn_deg=None, max_gap=JOIN_MAX_GAP_PT, chain_pt=None):
+    """Segments chained (with chain_pt (lo, hi), only chains whose length is in [lo, hi] pt kept),
+    split into pieces monotonic in page coordinate k (with max_turn_deg, also where they turn by
+    more than that, and joined only where the next piece runs within it), dashes joined across gaps
+    of at most max_gap pt along k, lines shorter than min_span pt along k dropped."""
     pieces = []
     for c in geom.chains(segs):
+        if chain_pt is not None and not chain_pt[0] <= chain_length(c) <= chain_pt[1]:
+            continue
         for pc in mono_pieces(c, k):
             straight = [pc] if max_turn_deg is None else split_kinks(pc, k, max_turn_deg)
             pieces += [sp for sp in straight if sp[-1][k] - sp[0][k] > 0.5]
-    lines = join_dashes(pieces, k, max_turn_deg=max_turn_deg)
+    lines = join_dashes(pieces, k, max_gap=max_gap, max_turn_deg=max_turn_deg)
     return [ln for ln in lines if ln[-1][k] - ln[0][k] >= min_span]
 
 
 def guide_lines(page, spec, panel_spec, axes):
     """The panel's guide lines as page polylines: segments inside the clip (frame lines and the
     baseline's own line dropped), chained, split into pieces monotonic along the input axis,
-    dashes joined, lines shorter than the filter's min_span_pt (default 5 pt) along it dropped."""
+    dashes joined across gaps of at most the filter's max_gap_pt (default JOIN_MAX_GAP_PT, ruling
+    P4 (iii)), lines shorter than the filter's min_span_pt (default 5 pt) along it dropped."""
     inp = panel_spec['input']
     flt = panel_spec.get('filter', {})
+    max_gap = positive_number(flt.get('max_gap_pt', JOIN_MAX_GAP_PT), 'filter.max_gap_pt')
     width = tuple(flt.get('stroke_width', DEFAULT_WIDTH))
     page_dir = spec['axes'][inp]['page']
     k = 0 if page_dir == 'x' else 1
     frame = {a: list(v) for a, v in panel_spec['frame'].items()}
     frame[page_dir] = frame[page_dir] + [geom.to_page(axes[inp], panel_spec['baseline'])]
     segs = geom.panel_segments(page, panel_spec['clip'], frame, width)
-    lines = joined_lines(segs, k, flt.get('min_span_pt', GUIDE_MIN_SPAN_PT))
+    lines = joined_lines(segs, k, flt.get('min_span_pt', GUIDE_MIN_SPAN_PT), max_gap=max_gap)
     return [ln for ln in lines if len(ln) >= flt.get('min_points', 2)]
 
 
@@ -391,7 +515,7 @@ def guideline_panel(page, spec, panel_spec, axes):
         d = 'rises' if rise > 0 else 'falls'
         fam = by_dir.get('any', by_dir.get(d))
         assert fam is not None, f"{what} {d[:-1]}s with {inp}, which matches no family {fams}"
-        check_monotonic(pts, d, inp, f"{what} (family {fam})")
+        check_monotonic(pts, d, inp, f"{what} (family {fam})", mono_tol(axes, out))
         at_base = geom.interp1(pts, min(max(base, a), b))
         found[fam].append((at_base, pts))
     families = {}
@@ -433,7 +557,6 @@ def limit_line(page, spec, ps, axes):
     assert isinstance(max_dash, (int, float)) and not isinstance(max_dash, bool) and max_dash > 0, \
         f"max_dash_pt must be a positive number, not {max_dash!r}"
     flt = ps.get('filter', {})
-    assert 'min_points' not in flt, "filter.min_points does not apply to a limit line (min_span_pt, stroke_width)"
     width = tuple(flt.get('stroke_width', DEFAULT_WIDTH))
     k = 0 if spec['axes'][inp]['page'] == 'x' else 1
     segs = [s for s in geom.panel_segments(page, ps['clip'], ps['frame'], width)
@@ -674,9 +797,13 @@ TYPES = {
 
 # Spec keys per panel type: (required, optional). A new type registers its keys here too.
 KEYS = {
+    # label_tol_pt: the label anchors' tolerance, default LABEL_TOL_PT (ruling P6)
     'curve_family': ({'id', 'type', 'clip', 'frame', 'input', 'output', 'param', 'labels', 'order'},
-                     {'monotonic', 'filter'}),
-    'single_curve': ({'id', 'type', 'clip', 'frame', 'input', 'output', 'monotonic'}, {'filter'}),
+                     {'monotonic', 'filter', 'label_tol_pt'}),
+    # anchor: a page point on the curve, when the clip holds others; count_in_clip and label_tol_pt
+    # only with it (ruling P3)
+    'single_curve': ({'id', 'type', 'clip', 'frame', 'input', 'output', 'monotonic'},
+                     {'filter', 'anchor', 'count_in_clip', 'label_tol_pt'}),
     # frame only for the axis-title check; scale_line: a clip holding the drawn `to` scale line
     'scale_pair': ({'id', 'type', 'from', 'to', 'scale_line'}, {'frame'}),
     # families: {name: rises | falls | any}; count: {name: exact line count}
@@ -691,10 +818,19 @@ KEYS = {
 
 # Keys of the mapping-valued panel keys, wherever they appear: (required, optional).
 NESTED = {
-    'param': ({'name', 'unit', 'values'}, set()),
+    'param': ({'name', 'unit', 'values'}, {'shared'}),   # shared: value groups one curve stands for (P5)
     'order': ({'output', 'check_at'}, set()),
     'frame': ({'x', 'y'}, set()),
-    'filter': (set(), {'min_points', 'min_span_pt', 'stroke_width'}),
+}
+
+# filter keys per panel type (all optional). join, max_gap_pt, min_chain_pt, max_chain_pt: ruling
+# P1 (the last three only with join); a guideline panel's max_gap_pt: P4 (iii).
+FILTER_BASE = {'min_points', 'min_span_pt', 'stroke_width'}
+FILTER_KEYS = {
+    'curve_family': FILTER_BASE | {'join', 'max_gap_pt', 'min_chain_pt', 'max_chain_pt'},
+    'single_curve': FILTER_BASE,
+    'guideline_panel': FILTER_BASE | {'max_gap_pt'},
+    'limit_line': {'min_span_pt', 'stroke_width'},
 }
 
 
@@ -714,6 +850,8 @@ def check_panel_keys(panel_spec):
     check_keys(panel_spec, required, optional)
     for k in sorted(set(panel_spec) & set(NESTED)):
         check_keys(panel_spec[k], *NESTED[k], prefix=f'{k}.')
+    if 'filter' in panel_spec:
+        check_keys(panel_spec['filter'], set(), FILTER_KEYS[kind], prefix='filter.')
     if 'frame' in panel_spec:
         for k in ('x', 'y'):
             v = panel_spec['frame'][k]
