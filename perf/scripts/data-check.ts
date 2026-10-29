@@ -20,6 +20,9 @@ const schemaPath = fileURLToPath(new URL('../schema/charts.schema.json', import.
 const dataDir = fileURLToPath(new URL('../data/', import.meta.url));
 const MANIFEST = 'manifest.json';
 
+/** The SHA-256 of the manual PDF every dataset is extracted from (perf/README.md). */
+export const PDF_SHA256 = '7954f2391a66bffc79d77027cdb5063a332ba31a693dba1e42f0a67b276c791b';
+
 interface Validators {
   figure: ValidateFunction<FigureFile>;
   manifest: ValidateFunction<Manifest>;
@@ -80,10 +83,12 @@ function panelProblems(panel: Panel): string[] {
   switch (panel.type) {
     case 'curve_family':
       needAxes(panel.axes, [panel.input.name, panel.output.name]);
+      if (panel.curves.length === 0) problems.push(`${name} has no curves`);
       if (!isAscending(panel.curves.map((curve) => curve.param))) {
         problems.push(`${name} curves are not in ascending param order`);
       }
       for (const curve of panel.curves) {
+        if (curve.points.length === 0) problems.push(`${name} curve ${String(curve.param)} has no points`);
         if (!isAscending(inputs(curve.points))) {
           problems.push(`${name} curve ${String(curve.param)} points are not in ascending input order`);
         }
@@ -91,15 +96,20 @@ function panelProblems(panel: Panel): string[] {
       break;
     case 'single_curve':
       needAxes(panel.axes, [panel.input.name, panel.output.name]);
+      if (panel.points.length === 0) problems.push(`${name} has no points`);
       if (!isAscending(inputs(panel.points))) problems.push(`${name} points are not in ascending input order`);
       break;
     case 'guideline_panel':
       needAxes(panel.axes, [panel.input.name, panel.output.name]);
+      if (Object.keys(panel.families).length === 0) problems.push(`${name} has no families`);
       for (const [family, lines] of Object.entries(panel.families)) {
+        if (lines.length === 0) problems.push(`${name} family "${family}" has no lines`);
         lines.forEach((line, i) => {
-          if (!isAscending(inputs(line))) {
-            problems.push(`${name} family "${family}" line ${String(i)} is not in ascending param order`);
-          }
+          const where = `${name} family "${family}" line ${String(i)}`;
+          if (line.length === 0) problems.push(`${where} has no points`);
+          if (!isAscending(inputs(line))) problems.push(`${where} is not in ascending param order`);
+          // Params are magnitudes (R8): a signed quantity (slope, wind) picks its family by sign.
+          if (inputs(line).some((param) => param < 0)) problems.push(`${where} has a negative param`);
         });
       }
       break;
@@ -109,7 +119,12 @@ function panelProblems(panel: Panel): string[] {
         problems.push(`${name} range [${panel.range.join(', ')}] is not ascending`);
       }
       break;
-    case 'table':
+    case 'table': {
+      if (panel.rows.length === 0) problems.push(`${name} has no rows`);
+      const names = panel.columns.map((column) => column.name);
+      for (const column of new Set(names.filter((n, i) => names.indexOf(n) !== i))) {
+        problems.push(`${name} has column "${column}" more than once`);
+      }
       panel.rows.forEach((row, i) => {
         if (row.length !== panel.columns.length) {
           problems.push(
@@ -118,6 +133,7 @@ function panelProblems(panel: Panel): string[] {
         }
       });
       break;
+    }
   }
   return problems;
 }
@@ -175,6 +191,9 @@ export function checkDataset(dir: string): string[] {
       listed = read.value.files;
       if (read.value.dataset !== dataset) {
         report(MANIFEST, `dataset "${read.value.dataset}" differs from the directory name "${dataset}"`);
+      }
+      if (read.value.pdfSha256 !== PDF_SHA256) {
+        report(MANIFEST, `pdfSha256 "${read.value.pdfSha256}" is not the pinned manual ${PDF_SHA256}`);
       }
     }
   }

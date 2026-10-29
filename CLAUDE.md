@@ -85,7 +85,7 @@ npm run data:check     # perf/data against the schema and the manifest hashes
 npm run types:gen      # src/core/data/types.ts from perf/schema/charts.schema.json (json-schema-to-typescript); types:check fails on drift
 nix develop .. -c python3 -I extraction/extract.py "$PERF_PDF" [id ...]   # in perf/; HUMAN-RUN ONLY (the PDF is on the maintainer's machine), no ids = every spec
 ```
-Extraction: specs in `perf/extraction/specs/<id>.yaml`, data in `perf/data/f16c-f110-129/` (`<id>.json`, `pages/<id>.png`, `manifest.json`), overlays in `perf/extraction/out/` (gitignored), errata in `perf/extraction/manual-errata.yaml`. Commit order: extractor change, then re-run, then data (the manifest records the extractor commit, `-dirty` if `perf/extraction/` has uncommitted changes). CI never extracts, and the PDF is never committed. See `perf/README.md`.
+Extraction: specs in `perf/extraction/specs/<id>.yaml`, data in `perf/data/f16c-f110-129/` (`<id>.json`, `pages/<id>.png`, `manifest.json`), overlays in `perf/extraction/out/` (gitignored), errata in `perf/extraction/manual-errata.yaml`. Commit order: extractor change, then re-run, then data (the manifest records the commit that last produced the data, `-dirty` if `perf/extraction/` had uncommitted changes; a re-run that changes no file keeps it, so it is not simply `git rev-parse HEAD`). CI never extracts, and the PDF is never committed. See `perf/README.md`.
 
 ### miztoyaml (Python 3)
 ```bash

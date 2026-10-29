@@ -31,7 +31,7 @@ Node 22.18 or later. Run them in `perf/` after `npm ci`.
 - `npm run lint`: ESLint, typescript-eslint `strictTypeChecked`.
 - `npm run format:check`: Prettier. `data/`, `web/js/` and `extraction/` are not formatted.
 - `npm test`: `node --test` on `tests/**/*.test.ts`, run directly from TypeScript, with a 90 % line-coverage floor on `src/core/`.
-- `npm run data:check`: every file in `data/<aircraft-engine>/` against the schema, and its SHA-256 against `manifest.json`.
+- `npm run data:check`: every file in `data/<aircraft-engine>/` against the schema, and its SHA-256 against `manifest.json`; the manifest's `pdfSha256` against the pinned manual.
 - `npm run types:gen`: writes `src/core/data/types.ts` from `schema/charts.schema.json` (json-schema-to-typescript).
 - `npm run types:check`: fails if regenerating `types.ts` would change it.
 
@@ -54,7 +54,7 @@ With no ids it extracts every spec in `extraction/specs/`. It stops at the first
 
 ### Commit order
 
-The manifest records the extractor's commit (`git rev-parse --short HEAD`, with `-dirty` when `extraction/` has uncommitted changes). So:
+The manifest records the commit that last produced the data (`git rev-parse --short HEAD` at that run, with `-dirty` when `extraction/` had uncommitted changes). A re-run that changes no file keeps the recorded commit, so it is not simply the current HEAD. So:
 
 1. Commit the extractor or spec change.
 2. Re-run the extractor.
@@ -62,4 +62,4 @@ The manifest records the extractor's commit (`git rev-parse --short HEAD`, with 
 
 ## CI
 
-`.github/workflows/perf-docker.yml` runs on every push touching `perf/**` or `crc-sync/src/altimetry.js`: `npm ci`, then `lint`, `format:check`, `typecheck`, `types:check`, `data:check` and `test`. CI never extracts: it has no PDF, and it checks the committed data instead. Step 1 adds the Docker image build and the Playwright smoke spec.
+`.github/workflows/perf-docker.yml` runs on every push touching `perf/**` or `crc-sync/src/altimetry.js`: `npm ci`, then `lint`, `format:check`, `typecheck`, `build`, `types:check`, `data:check` and `test`. CI never extracts: it has no PDF, and it checks the committed data instead. Step 1 adds the Docker image build and the Playwright smoke spec.

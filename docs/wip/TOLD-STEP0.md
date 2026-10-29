@@ -69,7 +69,7 @@ interface SingleCurve { id: string; type: 'single_curve'; input: Quantity; outpu
 interface GuidelinePanel { id: string; type: 'guideline_panel'; input: Quantity; output: Quantity; baseline: number;
   families: Record<string, Pt[][]>;                // e.g. {all}, {uphill, downhill}, {headwind, tailwind}; each line [param, output], sorted by param
   axes: Record<string, Transform> }
-interface ScalePair { id: string; type: 'scale_pair'; from: Quantity; to: Quantity; a: number; b: number; axes: Record<string, Transform> }  // to = a * from + b
+interface ScalePair { id: string; type: 'scale_pair'; from: Quantity; to: Quantity; a: number; b: number; range: [number, number]; axes: Record<string, Transform> }  // to = a * from + b; range in `to` units (R2)
 interface Table { id: string; type: 'table'; columns: Quantity[]; rows: (number | string | null)[][] }
 ```
 
@@ -310,8 +310,8 @@ The questioner read the manual pages (evidence: `.superpowers/sdd/TOLD-STEP0/que
   - all 10 reads already on their step → `runs === 1`;
   - **direction tests:** an output that falls as its read rises (a distance falling with a headwind read) → conservative rounds that read down; a refusal speed that rises with a weight read → rounds it down; one output with one read raising and another lowering it → each read in its own direction. A direction-blind `evaluate` (one that ignores the down/up comparison) must fail these.
   - **oracle agreement, where the definitions coincide:** 200 seeded random chains (`mulberry32` or similar, seed fixed) whose reads do not feed each other (each read's value is an input constant), with **signed** coefficients and two outputs of different kinds; and 200 chains whose reads feed each other with a branch but whose outputs rise with every read. For every output, `evaluate`'s conservative equals `evaluateExhaustive`'s within 1e-9.
-  - **oracle bound, elsewhere:** 200 seeded signed chains with reads feeding each other and a branch: for every output, the conservative value is never better than the exact one, and differs from `evaluateExhaustive`'s by at most the largest step times the largest absolute coefficient of the chain (spec 5.2). The test prints the share of outputs that differ.
-  - **guards:** `ctx.read` throws `Error` for `step <= 0` or a non-finite value; the final-run loop throws `Error` after more iterations than the number of distinct ids seen. Error order (R9): in each output's loop, its re-tests come before its next final run. The 20 ms check takes the minimum of three runs.
+  - **oracle bound, elsewhere:** 200 seeded signed chains with reads feeding each other and a branch: for every output, the conservative value is never better than the exact one, and differs from `evaluateExhaustive`'s by at most the sum over the exact pass's rounding points p of |o(p up) − o(p down)|, every other point exact (spec 5.2; `singlePointBound` in `tests/helpers/bound.ts`, computed per chain and output). The test prints the share of outputs that differ and the largest ratio of gap to bound.
+  - **guards:** `ctx.read` throws `Error` for `step <= 0` or a non-finite value; the final-run loop throws `Error` after `MAX_FINAL_ROUNDS = 64` re-test rounds of one output. Error order (R9): in each output's loop, its re-tests come before its next final run. The 20 ms check takes the minimum of three runs.
 - [ ] **Step 2:** Run `cd perf && nice -n 19 node --test tests/ctx.test.ts`: FAIL.
 - [ ] **Step 3:** Implement `src/core/ctx.ts` and `tests/helpers/exhaustive.ts`.
 - [ ] **Step 4:** Run: PASS. Commit `feat(perf): read context with the single-point conservative test`.
