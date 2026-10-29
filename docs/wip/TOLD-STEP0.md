@@ -69,7 +69,7 @@ interface SingleCurve { id: string; type: 'single_curve'; input: Quantity; outpu
 interface GuidelinePanel { id: string; type: 'guideline_panel'; input: Quantity; output: Quantity; baseline: number;
   families: Record<string, Pt[][]>;                // e.g. {all}, {uphill, downhill}, {headwind, tailwind}; each line [param, output], sorted by param
   axes: Record<string, Transform> }
-interface ScalePair { id: string; type: 'scale_pair'; from: Quantity; to: Quantity; a: number; b: number; axes: Record<string, Transform> }  // to = a * from + b
+interface ScalePair { id: string; type: 'scale_pair'; from: Quantity; to: Quantity; a: number; b: number; range: [number, number]; axes: Record<string, Transform> }  // to = a * from + b; range in `to` units (R2)
 interface Table { id: string; type: 'table'; columns: Quantity[]; rows: (number | string | null)[][] }
 ```
 

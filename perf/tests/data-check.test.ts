@@ -46,13 +46,20 @@ describe('checkDataset on the fixture datasets', () => {
   });
 });
 
-/** Copies data-ok to a temporary dataset, lets `edit` change the figure, and rewrites its manifest hash. */
+/**
+ * Copies data-ok to a temporary dataset, lets `edit` change the figure, rewrites its manifest hash, then lets
+ * `editManifest` change the manifest.
+ */
 const scratch = mkdtempSync(join(tmpdir(), 'perf-data-check-'));
 after(() => {
   rmSync(scratch, { recursive: true, force: true });
 });
 
-function editedDataset(name: string, edit: (figure: Record<string, unknown>) => void): string {
+function editedDataset(
+  name: string,
+  edit: (figure: Record<string, unknown>) => void,
+  editManifest: (manifest: Record<string, unknown>) => void = () => undefined,
+): string {
   const dir = join(scratch, name);
   cpSync(fixture('data-ok'), dir, { recursive: true });
   const figurePath = join(dir, 'X1-1.json');
@@ -64,6 +71,7 @@ function editedDataset(name: string, edit: (figure: Record<string, unknown>) => 
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { dataset: string; files: Record<string, string> };
   manifest.dataset = name;
   manifest.files['X1-1.json'] = createHash('sha256').update(bytes).digest('hex');
+  editManifest(manifest);
   writeFileSync(manifestPath, JSON.stringify(manifest) + '\n');
   return dir;
 }
@@ -194,6 +202,176 @@ describe('checkDataset beyond the schema', () => {
     );
     assert.equal(problems.length, 1, problems.join('\n'));
     assert.match(problems[0] ?? '', /row 1/);
+  });
+});
+
+describe('checkDataset: the PDF pin and empty or malformed panels', () => {
+  const noChange = (): void => undefined;
+  const only = (name: string, edit: (figure: Record<string, unknown>) => void, pattern: RegExp): void => {
+    const problems = checkDataset(editedDataset(name, edit));
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', pattern);
+  };
+
+  test('a manifest whose pdfSha256 is not the pinned manual is a problem naming the manifest', () => {
+    const problems = checkDataset(
+      editedDataset('pdf-pin', noChange, (manifest) => {
+        manifest['pdfSha256'] = '0'.repeat(64);
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /manifest\.json: pdfSha256 "0{64}" is not the pinned manual/);
+  });
+
+  test('a single curve with no points is a problem', () => {
+    only(
+      'no-points',
+      (figure) => {
+        firstPanel(figure)['points'] = [];
+      },
+      /panel "main" has no points/,
+    );
+  });
+
+  const familyPanel = (curves: unknown[]): Record<string, unknown> => ({
+    id: 'gw',
+    type: 'curve_family',
+    input: { name: 'takeoff_factor', unit: '' },
+    output: { name: 'distance', unit: '1000 ft' },
+    param: { name: 'gross_weight', unit: '1000 lb' },
+    curves,
+    axes: { takeoff_factor: { page: 'y', a: -1, b: 400 }, distance: { page: 'x', a: 40, b: 95 } },
+  });
+
+  test('a curve family with no curves is a problem', () => {
+    only(
+      'no-curves',
+      (figure) => {
+        figure['panels'] = [familyPanel([])];
+      },
+      /panel "gw" has no curves/,
+    );
+  });
+
+  test('a curve with no points is a problem naming the curve', () => {
+    only(
+      'curve-no-points',
+      (figure) => {
+        figure['panels'] = [
+          familyPanel([
+            {
+              param: 20,
+              points: [
+                [1, 2],
+                [2, 3],
+              ],
+            },
+            { param: 22, points: [] },
+          ]),
+        ];
+      },
+      /panel "gw" curve 22 has no points/,
+    );
+  });
+
+  const guidelinePanel = (families: Record<string, unknown>): Record<string, unknown> => ({
+    id: 'slope',
+    type: 'guideline_panel',
+    input: { name: 'slope', unit: '%' },
+    output: { name: 'distance', unit: '1000 ft' },
+    baseline: 0,
+    families,
+    axes: { slope: { page: 'x', a: 20, b: 300 }, distance: { page: 'x', a: 40, b: 95 } },
+  });
+  const line = (output: number): number[][] => [
+    [0, output],
+    [2, output + 0.2],
+  ];
+
+  test('a guideline panel with ascending magnitudes is clean', () => {
+    const problems = checkDataset(
+      editedDataset('guideline-ok', (figure) => {
+        figure['panels'] = [guidelinePanel({ uphill: [line(1), line(2)], downhill: [line(1)] })];
+      }),
+    );
+    assert.deepEqual(problems, []);
+  });
+
+  test('a guideline param below 0 is a problem (params are magnitudes, R8)', () => {
+    only(
+      'guideline-negative',
+      (figure) => {
+        figure['panels'] = [
+          guidelinePanel({
+            uphill: [line(1)],
+            downhill: [
+              [
+                [-2, 1.2],
+                [0, 1],
+              ],
+            ],
+          }),
+        ];
+      },
+      /panel "slope" family "downhill" line 0 has a negative param/,
+    );
+  });
+
+  test('a guideline panel with no families is a problem', () => {
+    only(
+      'guideline-no-families',
+      (figure) => {
+        figure['panels'] = [guidelinePanel({})];
+      },
+      /panel "slope" has no families/,
+    );
+  });
+
+  test('a guideline family with no lines is a problem naming the family', () => {
+    only(
+      'guideline-no-lines',
+      (figure) => {
+        figure['panels'] = [guidelinePanel({ uphill: [line(1)], downhill: [] })];
+      },
+      /panel "slope" family "downhill" has no lines/,
+    );
+  });
+
+  test('a guideline line with no points is a problem naming the line', () => {
+    only(
+      'guideline-empty-line',
+      (figure) => {
+        figure['panels'] = [guidelinePanel({ uphill: [line(1), []] })];
+      },
+      /panel "slope" family "uphill" line 1 has no points/,
+    );
+  });
+
+  const tablePanel = (names: string[], rows: unknown[][]): Record<string, unknown> => ({
+    id: 'stores',
+    type: 'table',
+    columns: names.map((name) => ({ name, unit: '' })),
+    rows,
+  });
+
+  test('a table with no rows is a problem', () => {
+    only(
+      'table-no-rows',
+      (figure) => {
+        figure['panels'] = [tablePanel(['store', 'drag_index'], [])];
+      },
+      /panel "stores" has no rows/,
+    );
+  });
+
+  test('a table with a column name twice is a problem naming the column', () => {
+    only(
+      'table-duplicate-column',
+      (figure) => {
+        figure['panels'] = [tablePanel(['store', 'drag_index', 'store'], [['AIM-9', 0, 'x']])];
+      },
+      /panel "stores" has column "store" more than once/,
+    );
   });
 });
 

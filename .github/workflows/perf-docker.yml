@@ -41,6 +41,10 @@ jobs:
         working-directory: perf
         run: npm run typecheck
 
+      - name: Build
+        working-directory: perf
+        run: npm run build
+
       - name: Generated types up to date
         working-directory: perf
         run: npm run types:check
