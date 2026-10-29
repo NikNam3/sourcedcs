@@ -1,0 +1,67 @@
+# Figure B1-1 sheet 1, Drag Indexes and Weights - Basic Aircraft. Coordinates are PDF points:
+# column x ranges are the printed table's vertical rules, row bands lie between its horizontal
+# rules (read from the page drawings, .superpowers/sdd/TOLD-STEP0/t8-scratch/dump.py).
+# The expendables table is split in two: its JP-8 brace label sits in the fuel rows at x 208-227,
+# where the gun ammo rows have text (AMMO/CASINGS), so the fuel part gets a `note` column.
+id: B1-1.sh1
+figure: B1-1
+sheet: 1
+dataset: f16c-f110-129
+title: Drag Indexes and Weights — Basic Aircraft
+engine: F110-GE-129
+page_index: 258                 # 0-based
+printed_page: B1-6
+must_contain: ["Figure B1-1. (Sheet 1)", "Drag Indexes and Weights", "Basic Aircraft",
+               "AIRCRAFT OPERATING WEIGHT", "DRAG INDEX (SUBSONIC/SUPERSONIC)*", "EXPENDABLES WEIGHT"]
+image_clip: [40, 50, 565, 530]
+axes: {}
+panels:
+  - id: operating_weight
+    type: table
+    clip: [53.8, 132.8, 559.2, 183.6]
+    row_band: [158.9, 182.9]
+    rows: 1
+    key: [item]
+    columns:
+      - {name: item, unit: "", x: [54.5, 402.7]}
+      - {name: f16c, unit: lb, x: [403.4, 480.6], pattern: '^\d{1,3}(,\d{3})+$'}
+      - {name: f16d, unit: lb, x: [481.3, 558.5], pattern: '^\d{1,3}(,\d{3})+$'}
+  - id: drag_index
+    type: table
+    clip: [53.8, 253.4, 559.2, 304.3]
+    row_band: [279.5, 303.6]
+    rows: 1
+    key: [item]
+    columns:
+      - {name: item, unit: "", x: [54.5, 402.7]}
+      - {name: f16c, unit: "", x: [403.4, 480.6], pattern: '^\d+(/\d+)?\*{0,2}$'}
+      - {name: f16d, unit: "", x: [481.3, 558.5], pattern: '^\d+(/\d+)?\*{0,2}$'}
+  - id: fuel
+    type: table
+    clip: [53.8, 350.8, 559.2, 465.0]
+    row_band: [376.9, 465.0]
+    rows: 4
+    key: [group, item]
+    row_end: f16c
+    group: {column: group, header: item}
+    drop_words: ["\0"]          # the list bullet: U+0000 in the manual's symbol font
+    columns:
+      - {name: group, unit: ""}
+      - {name: item, unit: "", x: [54.5, 195.0]}
+      - {name: note, unit: "", x: [195.0, 402.7]}
+      - {name: f16c, unit: lb, x: [403.4, 480.6], pattern: '^\d+$'}
+      - {name: f16d, unit: lb, x: [481.3, 558.5], pattern: '^\d+$'}
+  - id: gun_ammo
+    type: table
+    clip: [53.8, 465.0, 559.2, 520.8]
+    row_band: [465.0, 520.1]
+    rows: 2
+    key: [group, item]
+    row_end: f16c
+    group: {column: group, header: item}
+    drop_words: ["\0"]
+    columns:
+      - {name: group, unit: ""}
+      - {name: item, unit: "", x: [54.5, 402.7]}
+      - {name: f16c, unit: lb, x: [403.4, 480.6], pattern: '^\d+$'}
+      - {name: f16d, unit: lb, x: [481.3, 558.5], pattern: '^\d+$'}

@@ -1,0 +1,42 @@
+# Figure B2-1, Takeoff Factor. Coordinates are PDF points, from the planning prototype (removed in
+# b3fb1202; `git show b3fb1202^:perf/prototype/extraction/extract.py` and `imgs.py`), checked by overlay.
+id: B2-1
+figure: B2-1
+sheet: null
+dataset: f16c-f110-129
+title: Takeoff Factor
+engine: F110-GE-129
+page_index: 283                 # 0-based
+printed_page: B2-7
+must_contain: ["Takeoff Factor", "F110-GE-129", "Figure B2-1"]
+image_clip: [60, 108, 560, 702]
+axes:
+  tof_mil:     {unit: "", page: x, label_band: [645, 652], range: [160, 520], ticks: [1, 2, 3, 4, 5, 6, 7], title: TAKEOFF FACTOR, edge: bottom}
+  tof_ab:      {unit: "", page: x, label_band: [681, 688], range: [140, 470], ticks: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5], snap: false, title: TAKEOFF FACTOR, edge: bottom}
+  temperature: {unit: deg C, page: y, label_band: [148, 160], range: [120, 640], ticks: [-40, -30, -20, -10, 0, 10, 20, 30, 40, 50], title: RUNWAY TEMPERATURE, edge: left}
+panels:
+  - id: pa
+    type: curve_family
+    clip: [170, 120, 508, 640]
+    frame: {x: [167.9, 508.3], y: [125.5, 636.0]}    # frame lines dropped
+    input: temperature
+    output: tof_mil
+    param: {name: pressure_altitude, unit: ft, values: [-2000, 0, 2000, 4000, 6000, 8000, 10000]}
+    # labels: a point on each curve beside its printed altitude label (-2000, SEA LEVEL, 2000, ... 10,000),
+    # read off a 4x render of the label row, in values order
+    labels: [[237.9, 211.3], [258.1, 213.8], [281.5, 217.0], [308.7, 223.8], [341.1, 231.3], [378.1, 243.8], [422.3, 257.5]]
+    order: {output: rises, check_at: [-40, -30, -20, -10, 0, 10, 20, 30, 40, 50]}
+    monotonic: rises            # takeoff factor rises with temperature along every curve
+    filter: {min_span_pt: 300}
+  - id: ab
+    type: scale_pair
+    frame: {x: [153.6, 489.2], y: [636.0, 666.9]}    # between the MIL axis and the MAX AB scale line; for the title check
+    from: tof_mil
+    to: tof_ab
+    scale_line: [140, 664, 500, 670]    # the MAX AB scale line (y 666.9); its drawn ends are the tof_ab range
+    # The measured range starts at 0.5032, not 0.5: the line's left end (x 153.58) read through the
+    # tof_ab fit from unsnapped label centres. It is a measurement; never correct it by hand.
+corrections: []
+sample_problems:
+  - inputs: {temp_c: 40, pa_ft: 2000}
+    expected: {tof_mil: 3.16, tof_ab: 1.85}

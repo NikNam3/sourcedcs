@@ -12,6 +12,7 @@ SOURCE DCS is an open-source monorepo for a virtual aviation squadron. It contai
 - **crc-desktop** — Electron desktop GCI/datalink client ("CRC") that connects to crc-sync. Bundles a local Node server and a Python SRS radio bridge (`lxsrs_v2`).
 - **lxsrs_v2** — Python SRS Standalone client library used by crc-desktop's bundled radio bridge (not a standalone service — see crc-desktop's architecture below).
 - **tools/miztoyaml** — Python CLI that converts DCS `.miz` mission files to ATO brief YAML
+- **perf** — F-16 performance calculator, TOLD first (takeoff and landing data from the flight manual's charts, exact and conservative). Static TypeScript app, all calculation in the browser, public without login. Plan `docs/wip/TOLD.md`, ADRs 0148–0153; step 0 done, no UI yet.
 
 Infrastructure (Nginx, MariaDB, Casdoor OAuth, MediaWiki) lives in `infra/` as a Docker Compose stack.
 
@@ -73,6 +74,18 @@ npm run pack:linux   # electron-builder AppImage, unpublished, into dist/
 npm run pack:win     # electron-builder NSIS installer, unpublished, into dist/
 ```
 `app/` is its own package (its `package.json` declares "crc-server", the bundled local server, plain Node `http`/`https`, no Express) with its own `node_modules` — after `npm install` at the crc-desktop root, also run `npm install` inside `crc-desktop/app` before packaging or the asar will be missing `app/node_modules/dotenv`. See "How to build and release crc-desktop" below before touching packaging config.
+
+### perf (TypeScript, static, Node ≥ 22.18)
+```bash
+cd perf && npm ci
+npm run build          # tsc -p tsconfig.build.json, src/ to web/js/ (gitignored)
+npm run lint && npm run format:check && npm run typecheck   # typecheck covers src/, tests/, scripts/
+npm test               # node --test on the .ts tests, 90 % line-coverage floor on src/core/
+npm run data:check     # perf/data against the schema and the manifest hashes
+npm run types:gen      # src/core/data/types.ts from perf/schema/charts.schema.json (json-schema-to-typescript); types:check fails on drift
+nix develop .. -c python3 -I extraction/extract.py "$PERF_PDF" [id ...]   # in perf/; HUMAN-RUN ONLY (the PDF is on the maintainer's machine), no ids = every spec
+```
+Extraction: specs in `perf/extraction/specs/<id>.yaml`, data in `perf/data/f16c-f110-129/` (`<id>.json`, `pages/<id>.png`, `manifest.json`), overlays in `perf/extraction/out/` (gitignored), errata in `perf/extraction/manual-errata.yaml`. Commit order: extractor change, then re-run, then data (the manifest records the commit that last produced the data, `-dirty` if `perf/extraction/` had uncommitted changes; a re-run that changes no file keeps it, so it is not simply `git rev-parse HEAD`). CI never extracts, and the PDF is never committed. See `perf/README.md`.
 
 ### miztoyaml (Python 3)
 ```bash
@@ -150,6 +163,16 @@ Electron app ("CRC") — the squadron's DCS multiplayer GCI/datalink client. See
 - `python-pkg/` — `lxsrs_v2` itself (pure Python source, pip-installed with `--no-deps` and committed to git), bundled via `electron-builder`'s `build.linux.extraResources`.
 
 Released via `.github/workflows/crc-desktop-release.yml` — see "How to build and release crc-desktop" below.
+
+### perf
+
+F-16 TOLD calculator (`perf/README.md`). Data flows one way: manual PDF → `extraction/` (Python, run by hand, only its asserts, ADR 0153) → `data/f16c-f110-129/` (chart JSON, page images, manifest; written only by the extractor, never by hand) → `src/core/` → `src/web/` (step 1, the only code that fetches data).
+
+- `schema/charts.schema.json` is the one contract between extraction and core; `src/core/data/types.ts` is generated from it and `data:check` (Ajv, plus the manifest's SHA-256 per file) is the only gate on the data. Python does not validate on write.
+- `src/core/` has no DOM, no `fetch`, no `node:` imports, no I/O; chart data is passed in. `read/` building blocks never extrapolate or throw outside a chart: they return `OutOfChart`. Every chart read goes through `ctx.read(id, value, step)`, which gives the exact and the conservative value (ADR 0149). Units in names (`lengthFt`, `windKt`); never test a number for truthiness (0 kt, 0 %, DI 0 are values).
+- The manual's procedure is the spec (ADR 0148); misprints go into `extraction/manual-errata.yaml`, never patched silently. The chart spec format (one YAML per data file, a figure or a sheet: axes, panels, parameters, corrections, sample problems) is `docs/wip/TOLD.md` 0.2, with 0.5 as the worked example.
+- The manual PDF is never committed (`perf/**/*.pdf` is gitignored). Its path is `PERF_PDF`; the extractor refuses any file whose SHA-256 is not `7954f2391a66bffc79d77027cdb5063a332ba31a693dba1e42f0a67b276c791b`.
+- CI is `.github/workflows/perf-docker.yml` ("Build and Push perf Docker Image"), the test job only in step 0; step 1 adds the image build and the deploy.
 
 ### miztoyaml
 

@@ -1,0 +1,62 @@
+/*
+ * The paper copy, through the browser's print dialog (TOLD.md 1.2 item 4): exactly one A4 or Letter page, always
+ * black on white, inputs as plain values, no controls; the footer carries data version, app version and date.
+ *
+ * Black on white needs nothing here: tokens.css applies its dark values on screen only.
+ * The 1280 px page prints without its screen padding (the @page margin replaces it) and at 0.6, so its 1120 px of
+ * content fit the printable width of both A4 (186 mm, 703 px) and Letter (192 mm, 725 px) at 12 mm margins.
+ */
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  :root {
+    color-scheme: light;
+    print-color-adjust: exact;
+  }
+
+  .page {
+    width: 1120px;
+    margin: 0;
+    padding: 0;
+    gap: 24px;
+    zoom: 0.6;
+  }
+
+  /* Inputs as plain values: no underline, no focus ring. An input that does not parse keeps its dotted underline. */
+  .field input:not(.unparsed) {
+    border-bottom-color: transparent;
+  }
+
+  .field input:focus-visible {
+    outline: none;
+  }
+
+  /* A default shown as a placeholder (CG 35.0) is a value on paper: print it in ink. */
+  .field input::placeholder {
+    color: var(--ink);
+    font-weight: bold;
+  }
+
+  select {
+    appearance: none;
+    border: 0;
+    background: transparent;
+  }
+
+  /* No controls and no navigation on paper; a figure reference stays as text. */
+  button,
+  .subpage-link {
+    display: none;
+  }
+
+  a {
+    text-decoration: none;
+  }
+
+  a:hover {
+    opacity: 1;
+  }
+}

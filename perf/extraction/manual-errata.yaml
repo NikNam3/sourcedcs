@@ -1,0 +1,12 @@
+# Misprints in the HAF supplement that a chart spec or a sample problem must not copy.
+# Each entry names where the misprint is, what is printed and what is correct, and why.
+# affects is null, or {spec: <spec id>, sample: <0-based index>, key: <expected key>, value: <number>}
+# when the misprint changes a sample problem's expected value (tests/helpers/errata.ts applies it).
+
+- figure: B7-2
+  sheet: 2
+  where: sample problem text
+  printed: SEC 3,902 ft
+  correct: PRI 3,902 ft
+  reason: 3,902 ft is sheet 1's PRI distance; the SEC distance is 4,058 ft (x1.04)
+  affects: null

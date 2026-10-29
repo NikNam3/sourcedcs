@@ -1,0 +1,10 @@
+{
+  "dataVersion": 1,
+  "dataset": "data-bad-unlisted",
+  "extractorCommit": "14c2cf02",
+  "files": {
+    "pages/X1-1.png": "d44c0303173ecdb8ba72a7ab688f020583b31865537e2f9ab57e56aeec687807"
+  },
+  "pdfSha256": "7954f2391a66bffc79d77027cdb5063a332ba31a693dba1e42f0a67b276c791b",
+  "schemaVersion": 1
+}

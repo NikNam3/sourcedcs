@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>perf mockup: Limitations</title>
+<style>
+:root{--paper:#ffffff;--ink:#000000;--grey:#555555;--rule:#bbbbbb;--alert:#b00000;color-scheme:light}
+@media (prefers-color-scheme: dark){:root{--paper:#000000;--ink:#ffffff;--grey:#a8a8a8;--rule:#444444;--alert:#ff6b6b;color-scheme:dark}}
+body{margin:0;background:var(--paper)}
+
+body{margin:0}
+a{color:#000}a:hover{color:#555}
+
+</style>
+</head>
+<body>
+<div style="width: 1280px; height: 1100px; box-sizing: border-box; background: #ffffff; color: #000000; font-family: 'Times New Roman', Times, 'Liberation Serif', serif; font-size: 17px; line-height: 1.5; padding: 56px 80px; display: flex; flex-direction: column; gap: 28px">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; border-bottom: 1px solid #000; padding-bottom: 6px">
+    <a href="perf-told.html">← Takeoff data</a>
+    <span>F-16C Block 50 · Takeoff</span>
+  </div>
+
+  <div style="text-align: center">
+    <h1 style="margin: 0; font-size: 30px; font-weight: bold; letter-spacing: 0.04em; font-variant: small-caps">Limitations</h1>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px; align-items: start; max-width: 1120px">
+    <section style="display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 18px; font-weight: bold; font-variant: small-caps; letter-spacing: 0.05em; border-bottom: 1px solid #000; padding-bottom: 3px">I. Computation</h2>
+      <p style="margin: 0">1. Exact values are interpolated from the chart curves without rounding.</p>
+      <p style="margin: 0">2. Conservative values round every intermediate step toward the longer distance: each input and intermediate value is rounded to its step in whichever direction gives the worse result: longer distances, lower refusal speed, higher takeoff, approach and touchdown speeds, higher acceleration check speed. Steps: pressure altitude 100 ft, temperature 1 °C, gross weight 100 lb, CG 0.5 % MAC, wind 1 kt, slope 0.1 %, takeoff factor 0.01, speeds 1 kt, distances 10 ft. This rule is the project's own; the flight manual does not define one.</p>
+      <p style="margin: 0">3. Slope is the elevation difference between the two runway ends divided by the runway length, as defined in Appendix B, Part 2. Changes of slope along the runway are not considered.</p>
+      <p style="margin: 0">4. Pressure altitude is computed from field elevation and altimeter setting with the standard-atmosphere relation.</p>
+      <p style="margin: 0">5. Inputs outside a chart's range are rejected, not extrapolated.</p>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 18px; font-weight: bold; font-variant: small-caps; letter-spacing: 0.05em; border-bottom: 1px solid #000; padding-bottom: 3px">II. Drag index</h2>
+      <p style="margin: 0">1. The drag index is built up from the individual store values in Figure B1-1. The manual names the Stores Limitations publication (-1-2) as the authoritative source for complete loadings, so the built-up value may differ slightly.</p>
+      <p style="margin: 0">2. Only stores listed in Figure B1-1 can be selected. The drag index of any other store is entered by the pilot as an additional value.</p>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 18px; font-weight: bold; font-variant: small-caps; letter-spacing: 0.05em; border-bottom: 1px solid #000; padding-bottom: 3px">III. TOLD fields and runway criteria</h2>
+      <p style="margin: 0">1. TOLD fields follow the minimum MDC requirements of AFMAN 11-2F-16V3, para. 2.5.1.</p>
+      <p style="margin: 0">2. Marked as a problem: MIL takeoff roll above 50 % of runway available (afterburner takeoff required, para. 3.6.6); any takeoff roll above 80 % (para. 3.6.3, training missions); landing roll above 80 % (para. 3.18).</p>
+      <p style="margin: 0">3. If the computed takeoff roll is under 2,500 ft, the acceleration check is given at 1,000 ft instead of 2,000 ft (para. 2.5.1).</p>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 18px; font-weight: bold; font-variant: small-caps; letter-spacing: 0.05em; border-bottom: 1px solid #000; padding-bottom: 3px">IV. Source</h2>
+      <p style="margin: 0">T.O. GR1F-16CJ-1-1, HAF Supplemental Flight Manual, Appendix B (F110-GE-129), Change 8, 15 June 2003. Agreement between these charts and the DCS flight model has not been verified. Not for real-world flight.</p>
+    </section>
+  </div>
+</div>
+</body>
+</html>

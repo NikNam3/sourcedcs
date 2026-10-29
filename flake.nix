@@ -17,6 +17,8 @@
         # Python environment for repo tooling plus lxsrs_v2 development
         pythonEnv = pkgs.python3.withPackages (ps: [
           ps.pyyaml
+          ps.pymupdf
+          ps.pillow
           ps.pytest
           ps.numpy
           ps.pandas
