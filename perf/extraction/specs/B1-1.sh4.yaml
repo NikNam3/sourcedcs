@@ -1,6 +1,6 @@
 # Figure B1-1 sheet 4, Drag Indexes and Weights - Individual Stores. Coordinates are PDF points:
 # column x ranges are the printed table's vertical rules, the row band lies between the header
-# rule and the bottom rule (read from the page drawings, .superpowers/sdd/TOLD-STEP0/t8-scratch/).
+# rule and the bottom rule (read from the page drawings with a scratch script, not kept).
 # Group LANTIRN POD:. CATM-88B (WITH / WITHOUT WINGS AND FINS) run over two lines with their
 # values on the second (row_end). The CBU brace label (SUU-30 H/B) is printed in the store column
 # of the middle CBU row only and stays there verbatim (it covers CBU-52B/B, -58 and -71/B).

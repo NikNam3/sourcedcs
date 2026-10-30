@@ -1,6 +1,6 @@
 # Figure B1-1 sheet 1, Drag Indexes and Weights - Basic Aircraft. Coordinates are PDF points:
 # column x ranges are the printed table's vertical rules, row bands lie between its horizontal
-# rules (read from the page drawings, .superpowers/sdd/TOLD-STEP0/t8-scratch/dump.py).
+# rules (read from the page drawings with a scratch script, not kept).
 # The expendables table is split in two: its JP-8 brace label sits in the fuel rows at x 208-227,
 # where the gun ammo rows have text (AMMO/CASINGS), so the fuel part gets a `note` column.
 id: B1-1.sh1

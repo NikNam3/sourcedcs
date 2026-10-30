@@ -1,0 +1,89 @@
+# Figure B7-2 sheet 2, Short Field Landing Distance (Corrected). Coordinates are PDF points, read off
+# PyMuPDF's vector and text data and checked by overlay (questioner evidence,
+# docs/wip/TOLD-STEP1-P1-EVIDENCE.md "B7-2 sheet 2", rulings P1, P2, P8, P16).
+# Enter with sheet 1's uncorrected roll, go right to the RCR curve, down to the wind panel's
+# baseline, along the wind lines, down to the slope panel's baseline, along the slope lines, and
+# down to the corrected roll.
+id: B7-2.sh2
+figure: B7-2
+sheet: 2
+dataset: f16c-f110-129
+title: Short Field Landing Distance (Corrected)
+engine: F110-GE-129
+page_index: 391                 # 0-based
+printed_page: B7-5
+must_contain: ["Short Field Landing Distance (Corrected)", "F110-GE-129", "Figure B7-2. (Sheet 2)", "ENTER CHART WITH UNCORRECTED GROUND"]
+image_clip: [100, 190, 492, 692]
+axes:
+  # Two "0" labels sit at x 131, y 540.6 (this axis) and 551.7 (wind): the ranges separate them.
+  uncorrected_roll: {unit: 1000 ft, page: y, label_band: [124, 138], range: [190, 545], ticks: [0, 2, 4, 6, 8, 10, 12], title: UNCORRECTED GROUND ROLL DISTANCE 1000 FEET, edge: left}
+  ground_roll:      {unit: 1000 ft, page: x, label_band: [666, 676], range: [135, 495], ticks: [0, 2, 4, 6, 8, 10, 12], title: CORRECTED GROUND ROLL DISTANCE 1000 FEET, edge: bottom}
+  # "WIND"/"KNOTS" and "SLOPE"/"%" are separate text lines: one word is the title.
+  wind:             {unit: kt, page: y, label_band: [124, 138], range: [548, 612], ticks: [0, 20, 40], title: KNOTS, edge: left}
+  slope:            {unit: "%", page: y, label_band: [128, 138], range: [614, 668], ticks: [0, 1, 2, 3], title: SLOPE, edge: left}
+panels:
+  # Two RCR families, as Part 7 interpolates them (ruling P2): wet and dry curves cross, so one
+  # family ordered by RCR is monotone nowhere. The four dry curves run from the origin; the three
+  # wet ones start just off it, at uncorrected 0.15 to 0.19 (1000 ft).
+  # Dry (solid): 4 (ICY), 8 (SNOW), 16 (DRY), 23 (DRY CONCRETE). 23 is the identity line; 16 merges
+  # into it at uncorrected 9.0 and they coincide to the corner (12, 12), so the two are one closed
+  # chain that doubles back: the join splits it into its two monotonic pieces. min_chain_pt 30
+  # drops the wet dashes (11.6-12.8 pt).
+  - id: rcr_dry
+    type: curve_family
+    clip: [141.6, 199.5, 483, 541]
+    frame: {x: [142.1, 482.5], y: [200.0, 540.3]}    # frame lines dropped
+    input: uncorrected_roll
+    output: ground_roll
+    param: {name: rcr, unit: "", values: [4, 8, 16, 23]}
+    # labels: a point on each curve beside its printed label, in values order; 16's and 23's
+    # below uncorrected 9.0, where the two are apart
+    labels: [[458.0, 421.0], [446.8, 340.0], [286.0, 407.0], [302.5, 380.0]]
+    # corrected roll falls as RCR rises; not at 9.0 or above (16 and 23 coincide) or at the origin
+    order: {output: falls, check_at: [2, 4]}
+    monotonic: rises            # corrected rises with uncorrected along every curve
+    filter: {join: true, min_chain_pt: 30}
+  # Wet (dashed): 10, 12, 18 (WET), drawn from uncorrected 0.15-0.19 to 5.5-6.9 (they leave the
+  # right frame). 69 dashes joined; max_chain_pt 14 keeps only dashes, and min_span_pt 30 drops
+  # three duplicate dash fragments near the origin (uncorrected 0.6-1.6).
+  - id: rcr_wet
+    type: curve_family
+    clip: [141.6, 199.5, 483, 541]
+    frame: {x: [142.1, 482.5], y: [200.0, 540.3]}
+    input: uncorrected_roll
+    output: ground_roll
+    param: {name: rcr, unit: "", values: [10, 12, 18]}
+    # labels: a point on each curve beside its printed label, in values order
+    labels: [[461.6, 397.0], [463.7, 383.0], [456.5, 362.0]]
+    order: {output: falls, check_at: [2, 4, 5]}
+    monotonic: rises
+    filter: {join: true, max_chain_pt: 14, min_span_pt: 30}
+  # Guide lines: [param, corrected roll], params stored as drawn magnitudes (wind 0-40 kt, slope
+  # 0-3 %); the sign of a wind or slope input only picks the family (ruling R8).
+  - id: wind
+    type: guideline_panel
+    clip: [141.6, 550.6, 483, 608.4]
+    frame: {x: [142.1, 482.5], y: [551.1, 607.9]}
+    input: wind
+    output: ground_roll
+    baseline: 0
+    families: {headwind: falls, tailwind: rises}    # split by direction (headwind solid, tailwind dashed), both drawn to 40 kt
+    count: {headwind: 12, tailwind: 11}             # no tailwind line from 12,000 ft; some leave the right frame early
+  - id: slope
+    type: guideline_panel
+    clip: [141.6, 618.1, 483, 661.7]
+    frame: {x: [142.1, 482.5], y: [618.6, 661.2]}
+    input: slope
+    output: ground_roll
+    baseline: 0
+    families: {uphill: falls, downhill: rises}      # uphill solid, downhill dashed
+    count: {uphill: 12, downhill: 11}               # no downhill line from 12,000 ft
+corrections: []
+# The text labels the 3,902 ft entry SEC; it is sheet 1's PRI distance (manual-errata.yaml,
+# affects null: the expected values are right). The second sample, RCR 4, is drawn on the chart
+# too (I, F, G, J; ruling P8).
+sample_problems:
+  - inputs: {uncorrected_ft: 3902, rcr: 16, wet: false, headwind_kt: 10, slope_pct: 1}
+    expected: {ground_roll_ft: 3375}
+  - inputs: {uncorrected_ft: 3902, rcr: 4, wet: false, headwind_kt: 10, slope_pct: 1}
+    expected: {ground_roll_ft: 8000}

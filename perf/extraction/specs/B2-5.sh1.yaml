@@ -1,0 +1,65 @@
+# Figure B2-5 sheet 1, Refusal Speed (Non-AB), dry concrete (RCR 23). Coordinates are PDF points, read
+# from the page drawings and 6x renders (docs/wip/TOLD-STEP1-P1-EVIDENCE.md "B2-5").
+# The chart turns a corner: takeoff factor -> GW curves -> a line carried up with no printed scale (`carry`,
+# page x) -> runway length lines -> wind and slope guide lines -> refusal speed on the right-hand scale.
+id: B2-5.sh1
+figure: B2-5
+sheet: 1
+dataset: f16c-f110-129
+title: Refusal Speed (Non-AB)
+engine: F110-GE-129
+page_index: 287                 # 0-based
+printed_page: B2-11
+must_contain: ["Refusal Speed (Non-AB)", "F110-GE-129", "Figure B2-5. (Sheet 1)", "DRY CONCRETE (RCR=23)",
+               "FOR RCR=16 (DRY) DECREASE REFUSAL SPEED BY 4 KIAS FOR ALL GW'S."]
+image_clip: [40, 120, 570, 720]
+axes:
+  takeoff_factor: {unit: "", page: y, label_band: [290, 300], range: [510, 705], ticks: [2, 3, 4, 5, 6, 7], title: NON-AB TAKEOFF FACTOR, edge: right}
+  refusal_speed:  {unit: kt, page: y, label_band: [514, 534], range: [190, 495], ticks: [40, 60, 80, 100, 120, 140, 160, 180, 200], title: REFUSAL SPEED KIAS, edge: right}
+  wind:           {unit: kt, page: x, label_band: [492, 502], range: [330, 412], ticks: [0, 20, 40], title: WIND KNOTS, edge: bottom}
+  slope:          {unit: "%", page: x, label_band: [492, 502], range: [450, 515], ticks: [0, 1, 2, 3], title: SLOPE, edge: bottom}
+  carry:          {unit: pt, page: x, unscaled: true}   # the line carried up from the GW curves to the runway lines
+panels:
+  - id: gw
+    type: curve_family
+    clip: [70.5, 517.8, 287.6, 698.9]
+    frame: {x: [71.0, 287.1], y: [518.3, 698.4]}    # frame lines dropped
+    input: takeoff_factor
+    output: carry
+    param: {name: gross_weight, unit: 1000 lb, values: [18, 20, 24, 28, 32, 36, 40, 44, 48]}
+    # labels: the leader arrow tips, from the page drawing, checked on a 6x render, in values order
+    labels: [[189.94, 650.63], [180.28, 647.49], [167.44, 646.52], [156.13, 644.59], [145.33, 640.59], [134.76, 636.04], [124.5, 630.88], [115.11, 626.79], [105.6, 621.52]]
+    # heavier is further left at every takeoff factor: the GW curves do not cross on this sheet (ruling P10)
+    order: {output: falls, check_at: [3, 4, 5, 6]}
+    monotonic: falls            # the carried line moves left as takeoff factor rises
+    filter: {join: true}        # label leaders knock the curves out (ruling P1)
+  - id: runway
+    type: curve_family
+    clip: [70.5, 199.2, 287.6, 488.3]
+    frame: {x: [71.0, 287.1], y: [199.7, 487.8]}
+    input: carry
+    output: refusal_speed
+    param: {name: runway_length, unit: ft, values: [2000, 3000, 4000, 5000, 6000, 7000, 8000, 10000, 12000, 15000, 18000, 20000]}
+    # labels: the point on each line nearest its printed length, read off a 4x render, in values order
+    labels: [[249.86, 406.29], [234.17, 366.25], [220.35, 334.37], [205.8, 310.99], [193.66, 293.16], [183.33, 279.25], [174.51, 267.88], [159.17, 250.93], [147.92, 239.48], [130.85, 235.3], [133.19, 205.21], [119.38, 215.2]]
+    order: {output: rises, check_at: [80, 100, 120]}   # every line draws carry [71.0, 127.6]
+    monotonic: rises
+  - id: wind
+    type: guideline_panel
+    clip: [335.1, 199.2, 408.2, 488.3]
+    frame: {x: [335.6, 407.7], y: [199.7, 487.8]}
+    input: wind
+    output: refusal_speed
+    baseline: 0
+    families: {headwind: rises, tailwind: falls}
+    count: {headwind: 8, tailwind: 8}
+  - id: slope
+    type: guideline_panel
+    clip: [456.0, 199.2, 511.1, 488.3]
+    frame: {x: [456.5, 510.6], y: [199.7, 487.8]}
+    input: slope
+    output: refusal_speed
+    baseline: 0
+    families: {uphill: rises, downhill: falls}
+    count: {uphill: 8, downhill: 8}
+corrections: ["RCR 16 (dry): refusal speed -4 KIAS, all GW"]

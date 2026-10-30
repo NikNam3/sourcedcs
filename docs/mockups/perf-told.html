@@ -1,124 +1,948 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<title>perf mockup: TOLD page</title>
-<style>
-:root{--paper:#ffffff;--ink:#000000;--grey:#555555;--rule:#bbbbbb;--alert:#b00000;color-scheme:light}
-@media (prefers-color-scheme: dark){:root{--paper:#000000;--ink:#ffffff;--grey:#a8a8a8;--rule:#444444;--alert:#ff6b6b;color-scheme:dark}}
-body{margin:0;background:var(--paper)}
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1280" />
+    <title>perf mockup: TOLD page</title>
+    <!-- Built on the step 0 stylesheet itself, so the board and the page cannot drift (step 1 board, 29 Oct 2026). -->
+    <link rel="stylesheet" href="../../perf/web/css/tokens.css" />
+    <link rel="stylesheet" href="../../perf/web/css/perf.css" />
+    <link rel="stylesheet" href="../../perf/web/css/print.css" media="print" />
+    <style>
+      /* Proposed for step 1, not yet in perf/web/css: moves into perf.css and print.css on approval. */
 
-body{margin:0}
-a{color:inherit}a:hover{opacity:.7}
-.f input{font:inherit;font-weight:bold;color:inherit;background:transparent;border:0;border-bottom:1px solid currentColor;padding:2px 0;width:100%;text-align:right;font-variant-numeric:tabular-nums}
-.f input:focus-visible{outline:2px solid currentColor;outline-offset:2px}
-table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
-th,td{padding:6px 8px;text-align:left;vertical-align:baseline}
-.r{text-align:right}
+      /* The figure column: every row names its figure and links to the figure view, which draws the row's paths. */
+      .data-table .fig {
+        width: 92px;
+        font-size: 14px;
+      }
 
-</style>
-</head>
-<body>
-<div style="width: 1280px; height: 1700px; box-sizing: border-box; background: var(--paper); color: var(--ink); font-family: 'Times New Roman', Times, 'Liberation Serif', serif; font-size: 17px; line-height: 1.4; padding: 56px 80px; display: flex; flex-direction: column; gap: 30px">
+      /* The drag index table's fixed columns (the approved mockup had them; the specimen dropped them). */
+      .data-table.drag-index th:first-child {
+        width: 72px;
+      }
 
-  <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; border-bottom: 1px solid var(--ink); padding-bottom: 6px">
-    <span>T.O. GR1F-16CJ-1-1 · Appendix B · F110-GE-129</span>
-    <span>F-16C Block 50</span>
-  </div>
+      .data-table.drag-index .num {
+        width: 44px;
+      }
 
-  <div style="text-align: center">
-    <h1 style="margin: 0; font-size: 30px; font-weight: bold; letter-spacing: 0.04em; font-variant: small-caps">Takeoff and Landing Data</h1>
-  </div>
+      /* The drag index builder. A store or suspension is picked like an input is typed: bold value, underline. */
+      .data-table.drag-index td {
+        padding-top: 3px;
+        padding-bottom: 3px;
+      }
 
-  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px; align-items: start">
-    <section style="display: flex; flex-direction: column; gap: 10px">
-      <h2 style="margin: 0; font-size: 18px; font-weight: bold; font-variant: small-caps; letter-spacing: 0.05em; border-bottom: 1px solid var(--ink); padding-bottom: 3px">I. Aircraft</h2>
-      <div class="f" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px">
-        <label style="display: flex; flex-direction: column; gap: 2px">Takeoff GW, lb<input id="gw" value="37,240"></label>
-        <label style="display: flex; flex-direction: column; gap: 2px">Landing GW, lb<input id="lgw" value="28,000"></label>
-        <label style="display: flex; flex-direction: column; gap: 2px">CG, % MAC<input id="cg" value="35.0"></label>
+      .data-table.drag-index .station-start {
+        border-top: 1px solid var(--rule);
+      }
+
+      .data-table.drag-index .suspension td:nth-child(2) {
+        padding-left: 24px;
+      }
+
+      .picker {
+        position: relative;
+      }
+
+      /* A picked store, suspension or count reads as plain text, as in the manual's table; hover or focus
+         underlines it to show it can be changed. Only a typed value (Additional) is bold and underlined. */
+      .picker > button,
+      .picker > select,
+      .data-table.drag-index input {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 1px 0;
+        border: 0;
+        border-bottom: 1px solid transparent;
+        border-radius: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .data-table.drag-index input {
+        border-bottom-color: currentColor;
+        font-weight: bold;
+      }
+
+      .picker > .chosen {
+        display: block;
+        border-bottom: 1px solid transparent;
+      }
+
+      .picker > button:hover,
+      .picker:hover > .chosen,
+      .picker > select.count:hover {
+        border-bottom-color: currentColor;
+      }
+
+      .picker > select.count {
+        appearance: none;
+        text-align: right;
+        text-align-last: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .picker > .chosen + select {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        opacity: 0;
+      }
+
+      .picker:focus-within > .chosen {
+        outline: 2px solid currentColor;
+        outline-offset: 2px;
+      }
+
+      .picker > select option {
+        background: var(--paper);
+        color: var(--ink);
+      }
+
+      .data-table.drag-index input {
+        text-align: right;
+        cursor: text;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .picker > button.empty {
+        color: var(--grey);
+      }
+
+      .picker > button:focus-visible,
+      .picker > select:focus-visible,
+      .data-table.drag-index input:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 2px;
+      }
+
+      .variant {
+        color: var(--grey);
+        font-size: 14px;
+      }
+
+      /* The store menu: a sheet of the manual laid over the page. */
+      .store-menu {
+        position: absolute;
+        z-index: 10;
+        top: calc(100% + 4px);
+        left: 0;
+        width: 640px;
+        max-height: 420px;
+        display: flex;
+        flex-direction: column;
+        background: var(--paper);
+        border: 1px solid var(--ink);
+        font-size: 15px;
+        font-weight: normal;
+      }
+
+      .data-table.drag-index .store-menu input[type='text'] {
+        margin: 8px 10px;
+        width: auto;
+        text-align: left;
+        font-weight: normal;
+      }
+
+      .store-menu ul {
+        margin: 0;
+        padding: 0 0 6px;
+        list-style: none;
+        overflow-y: auto;
+      }
+
+      .store-menu .group {
+        padding: 6px 10px 2px;
+        font-style: italic;
+        color: var(--grey);
+      }
+
+      .store-menu li[role='option'] {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 170px 50px;
+        gap: 12px;
+        padding: 2px 10px;
+        cursor: pointer;
+      }
+
+      .store-menu li[role='option'] span:nth-child(2) {
+        color: var(--grey);
+        font-size: 13px;
+      }
+
+      .store-menu li[role='option'] span:nth-child(3) {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .store-menu li[aria-selected='true'] {
+        outline: 1px solid var(--ink);
+        outline-offset: -1px;
+      }
+
+      .store-menu .menu-foot {
+        padding: 4px 10px 8px;
+        border-top: 1px solid var(--rule);
+        color: var(--grey);
+        font-size: 13px;
+      }
+
+      /* Split a pair for an asymmetric load, or join it again: grey, beside the station label. */
+      .station-action {
+        margin-left: 6px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--grey);
+        font: inherit;
+        font-size: 13px;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+
+      .data-table.drag-index .exact-total td {
+        font-weight: normal;
+      }
+
+      .data-table.drag-index .cons-total td {
+        font-weight: bold;
+      }
+
+      /* A refused link (#v= other than 1): one grey note under the title. */
+      .page-note {
+        margin: -18px 0 0;
+        text-align: center;
+        font-size: 14px;
+        color: var(--grey);
+      }
+
+      /* The input that breaks a rule (RCR below 10) is marked like a problem value. */
+      .field input.alert {
+        color: var(--alert);
+      }
+
+      /* Board only: the states the main page does not show. */
+      .board-states {
+        box-sizing: border-box;
+        width: 1280px;
+        margin: 0 auto;
+        padding: 0 80px 56px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+
+      .board-states > p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--grey);
+      }
+
+      @media print {
+        /* Red is lost on a mono printer: a problem value is also boxed on paper. */
+        .alert {
+          outline: 1px solid var(--ink);
+          outline-offset: -3px;
+        }
+
+        .board-states,
+        .store-menu,
+        .data-table.drag-index tr.empty-station {
+          display: none;
+        }
+
+        .picker > button,
+        .picker > .chosen,
+        .data-table.drag-index input {
+          border-bottom-color: transparent;
+        }
+
+        .picker > .chosen + select {
+          display: none;
+        }
+
+        /* print.css hides every button; the store picker prints as its value. */
+        .picker > button {
+          display: block;
+        }
+
+        .picker > button:focus-visible,
+        .picker:focus-within > .chosen,
+        .data-table.drag-index input:focus-visible {
+          outline: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="page-header">
+        <span>T.O. GR1F-16CJ-1-1 · Appendix B · F110-GE-129</span>
+        <span>F-16C Block 50</span>
+      </header>
+
+      <h1 class="page-title">Takeoff and Landing Data</h1>
+
+      <div class="columns">
+        <section class="section">
+          <h2 class="section-heading">I. Aircraft</h2>
+          <div class="fields">
+            <label class="field">Takeoff GW, lb<input value="37,240" /></label>
+            <label class="field">Landing GW, lb<input value="28,000" /></label>
+            <label class="field">CG, % MAC<input placeholder="35.0" /></label>
+          </div>
+          <!-- The drag index builder: one row per station pair, as in the manual's worked example (p. B1-2/B1-3).
+               Each store line opens a menu of the Fig. B1-1 stores allowed on that station; the suspension line
+               lists only the sheet 2 items that fit the store's rack. Built by the board script below. -->
+          <table class="data-table drag-index" id="drag-index">
+            <thead>
+              <tr>
+                <th>Sta.</th>
+                <th>Store</th>
+                <th class="num">No.</th>
+                <th class="num">Each</th>
+                <th class="num">DI</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="reason" id="drag-index-notes"></p>
+        </section>
+
+        <section class="section">
+          <h2 class="section-heading">II. Fields</h2>
+          <div class="fields">
+            <label class="field">Runway<input value="21" /></label>
+            <label class="field">Heading, °<input value="210" /></label>
+            <label class="field">Length avail., ft<input value="5,900" /></label>
+            <label class="field">Threshold elev., ft<input value="1,980" /></label>
+            <label class="field">Far-end elev., ft<input value="2,027" /></label>
+            <label class="field">Altimeter, in. Hg<input value="29.86" /></label>
+            <label class="field">Temperature, °C<input value="38.4" /></label>
+            <label class="field">Wind, ° / kt<input value="230 / 08 G15" /></label>
+            <label class="field">RCR dry / wet<input placeholder="23 / 18" /></label>
+          </div>
+          <p class="derived">
+            <span>Pressure altitude 2,036 ft · slope 0.8 % uphill</span>
+            <span>Headwind 7.5 kt · crosswind 2.7 kt from the right · gust 15 kt</span>
+          </p>
+        </section>
       </div>
-      <table style="margin-top: 6px; font-size: 16px">
-        <thead><tr style="border-bottom: 1px solid var(--ink)"><th style="width: 64px">Sta.</th><th>Store</th><th class="r" style="width: 56px">Each</th><th class="r" style="width: 56px">DI</th></tr></thead>
-        <tbody>
-          <tr><td>—</td><td>Basic aircraft (incl. tip AIM-9)</td><td class="r">4</td><td class="r">4</td></tr>
-          <tr><td>1, 9</td><td>AIM-120B on LAU-129</td><td class="r">−3</td><td class="r">−6</td></tr>
-          <tr><td>2, 8</td><td>AIM-9M on LAU-129 + adapter</td><td class="r">11</td><td class="r">22</td></tr>
-          <tr><td>3, 7</td><td>GBU-12 on weapon pylon</td><td class="r">22</td><td class="r">44</td></tr>
-          <tr><td>4, 6</td><td>370-gal tank, single stores at 3/7</td><td class="r">35</td><td class="r">70</td></tr>
-          <tr><td>5R</td><td>LANTIRN targeting pod on pylon</td><td class="r">22</td><td class="r">22</td></tr>
-          <tr><td>—</td><td>Additional (stores not in Fig. B1-1)</td><td class="r"></td><td class="r">0</td></tr>
-          <tr style="border-top: 1px solid var(--ink); font-weight: bold"><td></td><td>Drag index</td><td></td><td class="r">156</td></tr>
-        </tbody>
-      </table>
-    </section>
 
-    <section style="display: flex; flex-direction: column; gap: 10px">
-      <h2 style="margin: 0; font-size: 18px; font-weight: bold; font-variant: small-caps; letter-spacing: 0.05em; border-bottom: 1px solid var(--ink); padding-bottom: 3px">II. Field</h2>
-      <div class="f" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px">
-        <label style="display: flex; flex-direction: column; gap: 2px">Runway<input id="rwy" value="21"></label>
-        <label style="display: flex; flex-direction: column; gap: 2px">Heading, °<input id="hdg" value="210"></label>
-        <label style="display: flex; flex-direction: column; gap: 2px">Length avail., ft<input id="len" value="5,900"></label>
-        <label style="display: flex; flex-direction: column; gap: 2px">Threshold elev., ft<input id="e1" value="1,980"></label>
-        <label style="display: flex; flex-direction: column; gap: 2px">Far-end elev., ft<input id="e2" value="2,027"></label>
-        <label style="display: flex; flex-direction: column; gap: 2px">Altimeter, in. Hg<input id="qnh" value="29.86"></label>
-        <label style="display: flex; flex-direction: column; gap: 2px">Temperature, °C<input id="oat" value="38.4"></label>
-        <label style="display: flex; flex-direction: column; gap: 2px">Wind, ° / kt<input id="wind" value="230 / 08"></label>
-        <label style="display: flex; flex-direction: column; gap: 2px">RCR dry / wet<input id="rcr" value="23 / 18"></label>
-      </div>
-      <div style="font-size: 15px; color: var(--grey); display: flex; flex-direction: column; gap: 2px">
-        <span>Pressure altitude 2,036 ft · slope 0.8 % uphill</span>
-        <span>Headwind 7.5 kt · crosswind 2.7 kt from the right</span>
-      </div>
-    </section>
-  </div>
+      <section class="section told-section">
+        <h2 class="section-heading">III. TOLD</h2>
+        <div class="columns">
+          <div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="table-title">Takeoff</th>
+                  <th></th>
+                  <th colspan="2" class="column-group">MIL</th>
+                  <th colspan="2" class="column-group">MAX AB</th>
+                </tr>
+                <tr class="column-kinds">
+                  <th></th>
+                  <th class="fig">Fig.</th>
+                  <th class="num exact">exact</th>
+                  <th class="num cons">cons.</th>
+                  <th class="num exact">exact</th>
+                  <th class="num cons">cons.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Rotation, KIAS</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B2-2</a></td>
+                  <td class="num exact">172.5</td>
+                  <td class="num cons">174</td>
+                  <td class="num exact">167.5</td>
+                  <td class="num cons">169</td>
+                </tr>
+                <tr>
+                  <td>Takeoff speed, KIAS</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B2-2</a></td>
+                  <td class="num exact">182.5</td>
+                  <td class="num cons">184</td>
+                  <td class="num exact">182.5</td>
+                  <td class="num cons">184</td>
+                </tr>
+                <tr class="group-start">
+                  <td>Takeoff distance, ft</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B2-3</a></td>
+                  <td class="num exact alert">5,752</td>
+                  <td class="num cons alert">5,960</td>
+                  <td class="num exact">3,227</td>
+                  <td class="num cons">3,350</td>
+                </tr>
+                <tr>
+                  <td>Runway used, %</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B2-3</a></td>
+                  <td class="num exact alert">97.5</td>
+                  <td class="num cons alert">101.0</td>
+                  <td class="num exact">54.7</td>
+                  <td class="num cons">56.8</td>
+                </tr>
+                <tr class="group-start">
+                  <td>Accel. check at 2,000 ft, KIAS</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B2-4</a></td>
+                  <td class="num exact no-value">—</td>
+                  <td class="num cons no-value">—</td>
+                  <td class="num exact no-value">—</td>
+                  <td class="num cons no-value">—</td>
+                </tr>
+                <tr>
+                  <td>Refusal speed, dry, KIAS</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B2-5</a> <a class="figure-link" href="perf-figure.html">B2-6</a></td>
+                  <td class="num exact">121</td>
+                  <td class="num cons">119</td>
+                  <td class="num exact">133</td>
+                  <td class="num cons">131</td>
+                </tr>
+                <tr>
+                  <td>Refusal speed, wet, KIAS</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B2-5</a> <a class="figure-link" href="perf-figure.html">B2-6</a></td>
+                  <td class="num exact">108</td>
+                  <td class="num cons">106</td>
+                  <td class="num exact">120</td>
+                  <td class="num cons no-value">—</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="reason">
+              <a class="figure-link" href="perf-figure.html">B2-4</a>: temperature 38.4 °C outside the drawn range
+              −20–35 °C
+            </p>
+            <p class="reason">
+              <a class="figure-link" href="perf-figure.html">B2-6 sh. 2</a>: conservative gross weight 37,300 lb outside
+              the drawn range 20,000–37,250 lb
+            </p>
+            <p class="reason">MIL roll 97.5 % of runway: over 50 %, afterburner takeoff required (para. 3.6.6)</p>
+          </div>
 
-  <section style="display: flex; flex-direction: column; gap: 14px">
-    <h2 style="margin: 0; font-size: 18px; font-weight: bold; font-variant: small-caps; letter-spacing: 0.05em; border-bottom: 1px solid var(--ink); padding-bottom: 3px">III. TOLD</h2>
+          <div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="table-title">Landing</th>
+                  <th></th>
+                  <th colspan="2" class="column-group">Dry</th>
+                  <th colspan="2" class="column-group">Wet</th>
+                </tr>
+                <tr class="column-kinds">
+                  <th></th>
+                  <th class="fig">Fig.</th>
+                  <th class="num exact">exact</th>
+                  <th class="num cons">cons.</th>
+                  <th class="num exact">exact</th>
+                  <th class="num cons">cons.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="subheading">
+                  <td colspan="6">Normal · 28,000 lb</td>
+                </tr>
+                <tr>
+                  <td>Final approach, KIAS</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B7-1</a></td>
+                  <td class="num exact">149.5</td>
+                  <td class="num cons">151</td>
+                  <td class="num exact">149.5</td>
+                  <td class="num cons">151</td>
+                </tr>
+                <tr>
+                  <td>Touchdown, KIAS</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B7-1</a></td>
+                  <td class="num exact">138.0</td>
+                  <td class="num cons">139</td>
+                  <td class="num exact">138.0</td>
+                  <td class="num cons">139</td>
+                </tr>
+                <tr>
+                  <td>Landing distance, ft</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B7-2</a></td>
+                  <td class="num exact">3,610</td>
+                  <td class="num cons">3,650</td>
+                  <td class="num exact">4,480</td>
+                  <td class="num cons">4,530</td>
+                </tr>
+                <tr>
+                  <td>Runway used, %</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B7-2</a></td>
+                  <td class="num exact">61.2</td>
+                  <td class="num cons">61.9</td>
+                  <td class="num exact">75.9</td>
+                  <td class="num cons">76.8</td>
+                </tr>
+                <tr class="subheading group-start">
+                  <td colspan="6">Heavyweight · 37,240 lb</td>
+                </tr>
+                <tr>
+                  <td>Final approach, KIAS</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B7-1</a></td>
+                  <td class="num exact">167.0</td>
+                  <td class="num cons">168</td>
+                  <td class="num exact">167.0</td>
+                  <td class="num cons">168</td>
+                </tr>
+                <tr>
+                  <td>Touchdown, KIAS</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B7-1</a></td>
+                  <td class="num exact">155.5</td>
+                  <td class="num cons">157</td>
+                  <td class="num exact">155.5</td>
+                  <td class="num cons">157</td>
+                </tr>
+                <tr>
+                  <td>Landing distance, ft</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B7-2</a></td>
+                  <td class="num exact">4,380</td>
+                  <td class="num cons">4,420</td>
+                  <td class="num exact alert">5,270</td>
+                  <td class="num cons alert">5,320</td>
+                </tr>
+                <tr>
+                  <td>Runway used, %</td>
+                  <td class="fig"><a class="figure-link" href="perf-figure.html">B7-2</a></td>
+                  <td class="num exact">74.2</td>
+                  <td class="num cons">74.9</td>
+                  <td class="num exact alert">89.3</td>
+                  <td class="num cons alert">90.2</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="reason">Heavyweight wet roll 89.3 % of runway: over 80 % (para. 3.18)</p>
+          </div>
+        </div>
+      </section>
 
-    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px; align-items: start">
-
-      <table style="font-size: 17px">
-        <thead>
-          <tr><th style="font-variant: small-caps; letter-spacing: 0.05em; font-size: 18px">Takeoff</th><th colspan="2" class="r" style="border-bottom: 1px solid var(--ink)">MIL</th><th colspan="2" class="r" style="border-bottom: 1px solid var(--ink)">MAX AB</th></tr>
-          <tr style="border-bottom: 1px solid var(--ink); font-size: 14px; color: var(--grey)"><th></th><th class="r" style="font-weight: normal">exact</th><th class="r">cons.</th><th class="r" style="font-weight: normal">exact</th><th class="r">cons.</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Rotation, KIAS</td><td class="r">172.5</td><td class="r" style="font-weight: bold">174</td><td class="r">167.5</td><td class="r" style="font-weight: bold">169</td></tr>
-          <tr><td>Takeoff speed, KIAS</td><td class="r">182.5</td><td class="r" style="font-weight: bold">184</td><td class="r">182.5</td><td class="r" style="font-weight: bold">184</td></tr>
-          <tr style="border-top: 1px solid var(--rule)"><td>Takeoff distance, ft</td><td class="r" style="color: var(--alert)">5,752</td><td class="r" style="font-weight: bold; color: var(--alert)">5,960</td><td class="r">3,227</td><td class="r" style="font-weight: bold">3,350</td></tr>
-          <tr><td>Runway used, %</td><td class="r" style="color: var(--alert)">97.5</td><td class="r" style="font-weight: bold; color: var(--alert)">101.0</td><td class="r">54.7</td><td class="r" style="font-weight: bold">56.8</td></tr>
-          <tr style="border-top: 1px solid var(--rule)"><td>Accel. check at 2,000 ft, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-          <tr><td>Refusal speed, dry, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-          <tr><td>Refusal speed, wet, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-        </tbody>
-      </table>
-
-      <table style="font-size: 17px">
-        <thead>
-          <tr><th style="font-variant: small-caps; letter-spacing: 0.05em; font-size: 18px">Landing</th><th colspan="2" class="r" style="border-bottom: 1px solid var(--ink)">Dry</th><th colspan="2" class="r" style="border-bottom: 1px solid var(--ink)">Wet</th></tr>
-          <tr style="border-bottom: 1px solid var(--ink); font-size: 14px; color: var(--grey)"><th></th><th class="r" style="font-weight: normal">exact</th><th class="r">cons.</th><th class="r" style="font-weight: normal">exact</th><th class="r">cons.</th></tr>
-        </thead>
-        <tbody>
-          <tr><td colspan="5" style="font-style: italic; padding-top: 8px">Normal · 28,000 lb</td></tr>
-          <tr><td>Final approach, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-          <tr><td>Touchdown, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-          <tr><td>Landing distance, ft</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-          <tr><td>Runway used, %</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-          <tr style="border-top: 1px solid var(--rule)"><td colspan="5" style="font-style: italic; padding-top: 8px">Heavyweight · 37,240 lb</td></tr>
-          <tr><td>Final approach, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-          <tr><td>Touchdown, KIAS</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-          <tr><td>Landing distance, ft</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-          <tr><td>Runway used, %</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td><td class="r" style="color: var(--grey)">—</td></tr>
-        </tbody>
-      </table>
+      <footer class="page-footer">
+        <span>Data f16c-f110-129 v3 · app 0.1.0 · computed 29 Oct 2026</span>
+        <a class="subpage-link" href="perf-limitations.html">Limitations</a>
+      </footer>
     </div>
-  </section>
 
-  <div style="margin-top: auto; display: flex; justify-content: space-between; font-size: 14px; border-top: 1px solid var(--ink); padding-top: 6px">
-    <span>Computed 27 Oct 2026</span>
-    <a href="perf-limitations.html">Limitations</a>
-  </div>
-</div>
-</body>
+    <!-- Board only, not part of the page: the states above does not show. -->
+    <div class="board-states">
+      <h2 class="section-heading">Board: other states</h2>
+
+      <div class="columns">
+        <section class="section">
+          <p class="reason">1. A shared link of another format (#v=0): one note under the title, the last inputs load.</p>
+          <h1 class="page-title" style="font-size: 22px">Takeoff and Landing Data</h1>
+          <p class="page-note" style="margin: 0">This link is from another version of the calculator and was not loaded.</p>
+        </section>
+
+        <section class="section">
+          <p class="reason">2. An input that does not parse: dotted underline, its dependent cells "—".</p>
+          <div class="fields">
+            <label class="field">Takeoff GW, lb<input value="37,240" /></label>
+            <label class="field">Landing GW, lb<input class="unparsed" value="28,0O0" /></label>
+            <label class="field">CG, % MAC<input placeholder="35.0" /></label>
+          </div>
+          <table class="data-table">
+            <tbody>
+              <tr class="subheading">
+                <td colspan="5">Normal · <span class="no-value">—</span></td>
+              </tr>
+              <tr>
+                <td>Final approach, KIAS</td>
+                <td class="num exact no-value">—</td>
+                <td class="num cons no-value">—</td>
+                <td class="num exact no-value">—</td>
+                <td class="num cons no-value">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section">
+          <p class="reason">
+            3. MIL and AB rolls on both sides of 2,500 ft: the row names both check distances (para. 2.5.1).
+          </p>
+          <table class="data-table">
+            <tbody>
+              <tr>
+                <td>Accel. check at 2,000 / 1,000 ft, KIAS</td>
+                <td class="num exact">118.5</td>
+                <td class="num cons">120</td>
+                <td class="num exact">101.0</td>
+                <td class="num cons">102</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section">
+          <p class="reason">4. RCR below 10 at the landing field: the RCR value is the problem (para. 3.18).</p>
+          <div class="fields">
+            <label class="field">RCR dry / wet<input class="alert" value="23 / 8" /></label>
+          </div>
+          <p class="reason">RCR wet 8: below 10 at the landing field (para. 3.18)</p>
+        </section>
+      </div>
+      <p>Values are illustrative, not computed; the drag index builder works on the real Fig. B1-1 rows, the TOLD values do not follow it. Print this page (Ctrl+P) for the paper copy: one page, boxed problem values.</p>
+    </div>
+    <script>
+      // Board script only: a working stand-in for step 1's drag index builder, on the real rows of Fig. B1-1
+      // sheets 2 to 7 (perf/data/f16c-f110-129). Its rules are the board's reading of the manual; step 1's
+      // src/core/inputs/ decides them with tests. The TOLD values on this board do not follow its drag index.
+      const B11 = [{"sh":2,"g":null,"n":"ADAPTER (16S301)","st":"2,3,7, OR 8","r":null,"di":2},{"sh":2,"g":null,"n":"AIM-9 LAUNCHER (16S210)","st":"1 OR 9","r":null,"di":0},{"sh":2,"g":null,"n":"AIM-9 LAUNCHER (16S210) + ADAPTER (16S301)","st":"2,3,7, OR 8","r":null,"di":6},{"sh":2,"g":null,"n":"CENTERLINE PYLON* (16S951)","st":"5","r":null,"di":7},{"sh":2,"g":null,"n":"NONJETTISON (NJETT) FUEL PYLON*","st":"4 OR 6","r":null,"di":8},{"sh":2,"g":null,"n":"LANTIRN TARGETING POD PYLON (16S1150)","st":"5R","r":null,"di":3},{"sh":2,"g":null,"n":"LAU-88/A + WEAPON PYLON*","st":"3 OR 7","r":null,"di":29},{"sh":2,"g":null,"n":"LAU-88 A/A + WEAPON PYLON*","st":"3 OR 7","r":null,"di":24},{"sh":2,"g":null,"n":"LAU-117/A, A(V)1/A, A(V)3/A + WEAPON PYLON*","st":"3 OR 7","r":null,"di":20},{"sh":2,"g":null,"n":"LAU-118(V)4/A + WEAPON PYLON*","st":"3 OR 7","r":null,"di":17},{"sh":2,"g":null,"n":"LAU-129/A LAUNCHER","st":"1 OR 9","r":null,"di":1},{"sh":2,"g":null,"n":"LAU-129/A LAUNCHER + ADAPTER (16S301)","st":"2,3,7, OR 8","r":null,"di":6},{"sh":2,"g":null,"n":"TER (16S1750) + WEAPON PYLON*","st":"3,4,6, OR 7","r":null,"di":24},{"sh":2,"g":null,"n":"TER (66J45517) + WEAPON PYLON*","st":"3,4,6, OR 7","r":null,"di":24},{"sh":2,"g":null,"n":"WEAPON PYLON* (16S1700)","st":"3,4,6, OR 7","r":null,"di":15},{"sh":3,"g":"A/A 37U-36:","n":"TARGET STOWED","st":"3 OR 7","r":"PYLON","di":39},{"sh":3,"g":"A/A 37U-36:","n":"TARGET DEPLOYED","st":"3 OR 7","r":"PYLON","di":204},{"sh":3,"g":"A/A 37U-36:","n":"TOW REEL ONLY (TARGET/CABLE RELEASED)","st":"3 OR 7","r":"PYLON","di":29},{"sh":3,"g":null,"n":"AGM-65A, B","st":"3 OR 7","r":"LAU-88/A, A/A, -117/A, A(V)1/A, A(V)3/A","di":"13/8"},{"sh":3,"g":null,"n":"AGM-65D","st":"3 OR 7","r":"LAU-88/A, A/A, -117/A, A(V)1/A, A(V)3/A","di":"13/8"},{"sh":3,"g":null,"n":"AGM-65G","st":"3 OR 7","r":"LAU-117/A, A(V)1/A, A(V)3/A","di":8},{"sh":3,"g":null,"n":"AGM-88B","st":"3 OR 7","r":"LAU-118(V)4/A","di":8},{"sh":3,"g":null,"n":"AIM-9P, P-1","st":"1 OR 9","r":"LAUNCHER","di":"4*"},{"sh":3,"g":null,"n":"AIM-9P-2, P-3, P-4, P-5, N, N-3","st":"1 OR 9","r":"LAUNCHER","di":"4*"},{"sh":3,"g":null,"n":"AIM-9L, M, S","st":"1 OR 9","r":"LAUNCHER","di":"4*"},{"sh":3,"g":null,"n":"AIM-9P, P-1","st":"2,3,7, OR 8","r":"LAUNCHER + ADAPTER","di":5},{"sh":3,"g":null,"n":"AIM-9P-2, P-3, P-4, P-5, N, N-3","st":"2,3,7, OR 8","r":"LAUNCHER + ADAPTER","di":5},{"sh":3,"g":null,"n":"AIM-9L, M, S","st":"2,3,7, OR 8","r":"LAUNCHER + ADAPTER","di":5},{"sh":3,"g":null,"n":"AIM-120B","st":"1 OR 9","r":"LAUNCHER","di":0},{"sh":3,"g":null,"n":"AIM-120B","st":"2,3,7, OR 8","r":"LAUNCHER + ADAPTER","di":4},{"sh":3,"g":"AN/ASQ:","n":"-T-17 (P4A)","st":"1 OR 9","r":"LAUNCHER","di":"2**"},{"sh":3,"g":"AN/ASQ:","n":"-T-17 (P4A)","st":"2,3,7, OR 8","r":"LAUNCHER + ADAPTER","di":3},{"sh":3,"g":"AN/ASQ:","n":"-T-20 (P4AX)","st":"1 OR 9","r":"LAUNCHER","di":"2**"},{"sh":3,"g":"AN/ASQ:","n":"-T-20 (P4AX)","st":"2,3,7, OR 8","r":"LAUNCHER + ADAPTER","di":3},{"sh":3,"g":"AN/ASQ:","n":"-T-25 (P4AM)","st":"1 OR 9","r":"LAUNCHER","di":"2**"},{"sh":3,"g":"AN/ASQ:","n":"-T-25 (P4AM)","st":"2,3,7, OR 8","r":"LAUNCHER + ADAPTER","di":3},{"sh":4,"g":null,"n":"BDU-33B/B, D/B","st":"3,4,6, OR 7","r":"TER","di":1},{"sh":4,"g":null,"n":"BDU-50/B, A/B","st":"3,4,6, OR 7","r":"PYLON/TER","di":"5/9"},{"sh":4,"g":null,"n":"BL-755 MK 2","st":"3,4,6, OR 7","r":"PYLON/TER","di":"19/23"},{"sh":4,"g":null,"n":"BLU-107/B","st":"3,4,6, OR 7","r":"PYLON/TER","di":"5/8"},{"sh":4,"g":null,"n":"BLU-109/B","st":"3 OR 7","r":"PYLON","di":12},{"sh":4,"g":null,"n":"CATM-88B (WITH WINGS AND FINS)","st":"3 OR 7","r":"LAU-118(V)4/A","di":8},{"sh":4,"g":null,"n":"CATM-88B (WITHOUT WINGS AND FINS)","st":"3 OR 7","r":"LAU-118(V)4/A","di":8},{"sh":4,"g":null,"n":"CATM-120A (107), B (106)","st":"1 OR 9","r":"LAUNCHER","di":0},{"sh":4,"g":null,"n":"CATM-120A (107), B (106)","st":"2,3,7, OR 8","r":"LAUNCHER + ADAPTER","di":4},{"sh":4,"g":null,"n":"CBU-52B/B","st":"3,4,6, OR 7","r":"PYLON/TER","di":"20/24"},{"sh":4,"g":null,"n":"CBU-58/B, A/B (SUU-30 H/B)","st":"3,4,6, OR 7","r":"PYLON/TER","di":"20/24"},{"sh":4,"g":null,"n":"CBU-71/B","st":"3,4,6, OR 7","r":"PYLON/TER","di":"20/24"},{"sh":4,"g":null,"n":"CBU-87/B (SUU-65/B)","st":"3,4,6, OR 7","r":"PYLON/TER","di":"18/22"},{"sh":4,"g":null,"n":"GBU-10/B, A/B, C/B, D/B, E/B, F/B","st":"3,4,6, OR 7","r":"PYLON","di":15},{"sh":4,"g":null,"n":"GBU-10G/B, H/B, J/B","st":"3,4,6, OR 7","r":"PYLON","di":17},{"sh":4,"g":null,"n":"GBU-12/B, A/B, B/B, C/B, D/B, E/B","st":"3,4,6, OR 7","r":"PYLON","di":7},{"sh":4,"g":null,"n":"GBU-12B/B, C/B, D/B, E/B","st":"3 OR 7","r":"TER","di":10},{"sh":4,"g":null,"n":"ITM-88B","st":"3 OR 7","r":"LAU-118(V)4/A","di":8},{"sh":4,"g":"LANTIRN POD:","n":"NAVIGATION","st":"5L","r":"PYLON","di":"32*"},{"sh":4,"g":"LANTIRN POD:","n":"TARGETING","st":"5R","r":"PYLON","di":19},{"sh":5,"g":"LAU-3/A, B/A, C/A, D/A ROCKET LAUNCHER WITH:","n":"(19) M151","st":"3,4,6, OR 7","r":"PYLON/TER","di":"14/20"},{"sh":5,"g":"LAU-3/A, B/A, C/A, D/A ROCKET LAUNCHER WITH:","n":"(19) M156","st":"3,4,6, OR 7","r":"PYLON/TER","di":"14/20"},{"sh":5,"g":"LAU-3/A, B/A, C/A, D/A ROCKET LAUNCHER WITH:","n":"(19) MK 1","st":"3,4,6, OR 7","r":"PYLON/TER","di":"14/20"},{"sh":5,"g":"LAU-3/A, B/A, C/A, D/A ROCKET LAUNCHER WITH:","n":"(19) MK 5","st":"3,4,6, OR 7","r":"PYLON/TER","di":"14/20"},{"sh":5,"g":"LAU-3/A, B/A, C/A, D/A ROCKET LAUNCHER WITH:","n":"FIRED OUT (NO FWD FAIRING)","st":"3,4,6, OR 7","r":"PYLON/TER","di":"26/39"},{"sh":5,"g":"LAU-3/A, B/A, C/A, D/A ROCKET LAUNCHER WITH:","n":"EMPTY WITH FWD FAIRING","st":"3,4,6, OR 7","r":"PYLON/TER","di":"14/20"},{"sh":5,"g":"LAU-68A/A, B/A ROCKET LAUNCHER WITH:","n":"(7) M151","st":"3 OR 7","r":"TER","di":9},{"sh":5,"g":"LAU-68A/A, B/A ROCKET LAUNCHER WITH:","n":"(7) M156","st":"3 OR 7","r":"TER","di":9},{"sh":5,"g":"LAU-68A/A, B/A ROCKET LAUNCHER WITH:","n":"(7) MK 1","st":"3 OR 7","r":"TER","di":9},{"sh":5,"g":"LAU-68A/A, B/A ROCKET LAUNCHER WITH:","n":"(7) MK 5","st":"3 OR 7","r":"TER","di":9},{"sh":5,"g":"LAU-68A/A, B/A ROCKET LAUNCHER WITH:","n":"FIRED OUT (NO FWD FAIRING)","st":"3 OR 7","r":"TER","di":17},{"sh":5,"g":"LAU-68A/A, B/A ROCKET LAUNCHER WITH:","n":"EMPTY WITH FWD FAIRING","st":"3 OR 7","r":"TER","di":9},{"sh":5,"g":"LAU-131/A ROCKET LAUNCHER- WITH:","n":"(7) M151","st":"3 OR 7","r":"TER","di":9},{"sh":5,"g":"LAU-131/A ROCKET LAUNCHER- WITH:","n":"(7) M156","st":"3 OR 7","r":"TER","di":9},{"sh":5,"g":"LAU-131/A ROCKET LAUNCHER- WITH:","n":"(7) MK 1","st":"3 OR 7","r":"TER","di":9},{"sh":5,"g":"LAU-131/A ROCKET LAUNCHER- WITH:","n":"(7) MK 5","st":"3 OR 7","r":"TER","di":9},{"sh":5,"g":"LAU-131/A ROCKET LAUNCHER- WITH:","n":"FIRED OUT (NO FWD FAIRING)","st":"3 OR 7","r":"TER","di":18},{"sh":5,"g":"LAU-131/A ROCKET LAUNCHER- WITH:","n":"EMPTY WITH FWD FAIRING","st":"3 OR 7","r":"TER","di":9},{"sh":5,"g":"LAU-5003/A ROCKET LAUNCHER- WITH:","n":"(19) CM-151 (CRV7)","st":"3 OR 7","r":"TER","di":20},{"sh":5,"g":"LAU-5003/A ROCKET LAUNCHER- WITH:","n":"(19) RA-79 (CRV7)","st":"3 OR 7","r":"TER","di":20},{"sh":5,"g":"LAU-5003/A ROCKET LAUNCHER- WITH:","n":"FIRED OUT (NO FWD FAIRING)","st":"3 OR 7","r":"TER","di":39},{"sh":5,"g":"LAU-5003/A ROCKET LAUNCHER- WITH:","n":"EMPTY WITH FWD FAIRING","st":"3 OR 7","r":"TER","di":20},{"sh":6,"g":null,"n":"M129E2","st":"3,4,6, OR 7","r":"PYLON","di":16},{"sh":6,"g":null,"n":"MK 20 MOD 3,4","st":"3,4,6, OR 7","r":"PYLON/TER","di":"11/14"},{"sh":6,"g":null,"n":"MK 82 AIR","st":"3,4,6, OR 7","r":"PYLON/TER","di":"7/11"},{"sh":6,"g":null,"n":"MK 82 LDGP","st":"3,4,6, OR 7","r":"PYLON/TER","di":"5/9"},{"sh":6,"g":null,"n":"MK 82 (SNAKEYE)","st":"3,4,6, OR 7","r":"PYLON/TER","di":"7/11"},{"sh":6,"g":null,"n":"MK 84 AIR","st":"3,4,6, OR 7","r":"PYLON","di":10},{"sh":6,"g":null,"n":"MK 84 LDGP","st":"3,4,6, OR 7","r":"PYLON","di":9},{"sh":6,"g":null,"n":"MXU-648A/A, C/A (TRAVEL POD) (MAX CARGO WT IS 300 LB)","st":"3,4,5,6, OR 7","r":"PYLON/TER","di":"10/10"},{"sh":6,"g":"SUU-20A/A, B/A WITH: (A/A) (B/A)","n":"(6) BDU-33B/B, D/B","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-20A/A, B/A WITH: (A/A) (B/A)","n":"(6) MK 106","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-20A/A, B/A WITH: (A/A) (B/A)","n":"(4) M151","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-20A/A, B/A WITH: (A/A) (B/A)","n":"(6) BDU-33B/B, D/B+(4) M151","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-20A/A, B/A WITH: (A/A) (B/A)","n":"(6) MK 106+(4) M151","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-20A/A, B/A WITH: (A/A) (B/A)","n":"EMPTY","st":"3,4,6, OR 7","r":"PYLON","di":12},{"sh":6,"g":"SUU-5003A/A, B/A WITH: (A/A) (B/A)","n":"(6) BDU-33B/B, D/B","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-5003A/A, B/A WITH: (A/A) (B/A)","n":"(6) MK 106","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-5003A/A, B/A WITH: (A/A) (B/A)","n":"(4) CM-151 (CRV7)","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-5003A/A, B/A WITH: (A/A) (B/A)","n":"(6) BDU-33B/B, D/B+(4) CM-151","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-5003A/A, B/A WITH: (A/A) (B/A)","n":"(6) MK 106+(4) CM-151","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-5003A/A, B/A WITH: (A/A) (B/A)","n":"(4) RA-79T (RA-82) (CRV7)","st":"3,4,6, OR 7","r":"PYLON","di":14},{"sh":6,"g":"SUU-5003A/A, B/A WITH: (A/A) (B/A)","n":"EMPTY","st":"3,4,6, OR 7","r":"PYLON","di":12},{"sh":7,"g":null,"n":"TGM-65A, B","st":"3 OR 7","r":"LAU-88/A, A/A, -117/A, A(V)1A, A(V)3/A","di":"13/8"},{"sh":7,"g":null,"n":"TGM-65D, G","st":"3 OR 7","r":"LAU-88/A, A/A, -117/A, A(V)1A, A(V)3/A","di":"13/8"},{"sh":7,"g":"300-GALLON TANK (EMPTY/FULL):","n":"NO STORES AT 4 OR 6","st":"5","r":"PYLON","di":15},{"sh":7,"g":"300-GALLON TANK (EMPTY/FULL):","n":"STORES AT 4 AND 6","st":"5","r":"PYLON","di":18},{"sh":7,"g":"370-GALLON TANK (EMPTY/FULL):","n":"NO STORES AT 3 OR 7","st":"4 OR 6","r":"NONE","di":27},{"sh":7,"g":"370-GALLON TANK (EMPTY/FULL):","n":"AIM-9'S AT 3 OR 7","st":"4 OR 6","r":"NONE","di":27},{"sh":7,"g":"370-GALLON TANK (EMPTY/FULL):","n":"SINGLE RACKS OR STORES AT 3 OR 7","st":"4 OR 6","r":"NONE","di":35},{"sh":7,"g":"370-GALLON TANK (EMPTY/FULL):","n":"MULTIPLE STORES AT 3 OR 7","st":"4 OR 6","r":"NONE","di":39},{"sh":7,"g":"600-GALLON TANK (EMPTY/FULL):","n":"NO STORES AT 3 OR 7","st":"4 OR 6","r":"PYLON (NJETT)","di":20},{"sh":7,"g":"600-GALLON TANK (EMPTY/FULL):","n":"AIM-9'S AT 3 OR 7","st":"4 OR 6","r":"PYLON (NJETT)","di":20},{"sh":7,"g":"600-GALLON TANK (EMPTY/FULL):","n":"SINGLE RACKS OR STORES AT 3 OR 7","st":"4 OR 6","r":"PYLON (NJETT)","di":30},{"sh":7,"g":"600-GALLON TANK (EMPTY/FULL):","n":"MULTIPLE STORES AT 3 OR 7","st":"4 OR 6","r":"PYLON (NJETT)","di":32}];
+      const BASIC_DI = 4; // sheet 1, F-16C, subsonic of "4/2"
+      const TIP_AIM9_DI = 4; // sheet 3, AIM-9 at 1 or 9: "4*", the value removed with a tip missile
+      const PAIRS = [['1', '9'], ['2', '8'], ['3', '7'], ['4', '6']];
+      const SINGLES = [['5'], ['5L'], ['5R']];
+      // A wing tank's variant follows the store inboard of it: 4 looks at 3, 6 at 7.
+      const TANK_NEIGHBOUR = { 4: '3', 6: '7' };
+
+      const stationsOf = (text) => text.replace(/OR/g, ' ').split(/[\s,]+/).filter(Boolean);
+      const fits = (row, sts) => row.st && sts.every((x) => stationsOf(row.st).includes(x));
+      const isTip = (sts) => sts.every((x) => x === '1' || x === '9');
+      const subsonic = (di) => Number(String(di).replace(/\*/g, '').split('/')[0]);
+      const isTank = (row) => /TANK \(EMPTY\/FULL\):$/.test(row.g || '');
+      const tankName = (g) => g.replace(/ \(EMPTY\/FULL\):$/, '');
+      const minus = (n) => (n < 0 ? '−' + Math.abs(n) : String(n));
+      const suspensions = B11.filter((r) => r.sh === 2);
+      // Stores per station a suspension item carries: the rack's capacity, which Fig. B1-1 does not give.
+      const capacity = (name) => (/^TER |^LAU-88/.test(name) ? 3 : 1);
+
+      // The menu's options for one station group: every store row that fits, the tank variants as one option.
+      function optionsFor(sts) {
+        const options = [];
+        const seenTank = new Set();
+        if (isTip(sts)) {
+          options.push({ key: 'no-tip', text: 'NO TIP MISSILE', heading: '', rack: 'NONE', diText: '−4', each: -TIP_AIM9_DI, consEach: 0 });
+        }
+        B11.forEach((row, i) => {
+          if (row.sh === 2 || !fits(row, sts)) return;
+          if (isTank(row)) {
+            if (seenTank.has(row.g)) return;
+            seenTank.add(row.g);
+            options.push({ key: 'tank:' + row.g, text: tankName(row.g), heading: '', rack: row.r, diText: 'by 3/7', tank: row.g });
+            return;
+          }
+          options.push({ key: String(i), text: row.n, heading: row.g ? row.g.replace(/:$/, '').replace(/- WITH$/, ' WITH') : '', rack: row.r || '', diText: String(row.di), row });
+        });
+        return options;
+      }
+
+      // The sheet 2 items that carry a store with this rack at these stations.
+      function suspensionsFor(rack, sts) {
+        const r = rack || 'NONE';
+        const fit = suspensions.filter((s) => fits(s, sts));
+        const pick = (test) => fit.filter((s) => test(s.n));
+        const pylon = (n) => /PYLON/.test(n) && !/^(LAU|TER|NON)/.test(n);
+        const ter = (n) => /^TER /.test(n);
+        if (r === 'NONE') return [];
+        if (r === 'LAUNCHER') return pick((n) => /LAUNCHER/.test(n) && !/ADAPTER/.test(n));
+        if (r === 'LAUNCHER + ADAPTER') return pick((n) => /LAUNCHER/.test(n) && /ADAPTER/.test(n));
+        if (r === 'PYLON') return pick(pylon);
+        if (r === 'TER') return pick(ter);
+        if (r === 'PYLON/TER') return pick((n) => pylon(n) || ter(n));
+        if (r === 'PYLON (NJETT)') return pick((n) => /NJETT/.test(n));
+        return pick((n) => (/LAU-88/.test(r) && /^LAU-88/.test(n)) || (/117/.test(r) && /^LAU-117/.test(n)) || (/LAU-118/.test(r) && /^LAU-118/.test(n)));
+      }
+
+      // One group per station pair; a pair split for an asymmetric load becomes two single-station groups.
+      let groups = [...PAIRS, ...SINGLES].map((sts) => ({ id: sts.join(', '), sts, key: null, susp: null, no: sts.length }));
+      const groupById = (id) => groups.find((g) => g.id === id);
+      const groupOf = (station) => groups.find((g) => g.sts.includes(station));
+      const pairOf = (station) => PAIRS.find((p) => p.includes(station));
+      const optionCache = new Map();
+      const optionsOf = (g) => {
+        if (!optionCache.has(g.id)) optionCache.set(g.id, optionsFor(g.sts));
+        return optionCache.get(g.id);
+      };
+      const optionOf = (g) => optionsOf(g).find((o) => o.key === g.key) || null;
+      const loaded = (g) => (optionOf(g) ? g.sts.slice(0, Math.min(g.no, g.sts.length)) : []);
+      let additional = 0;
+
+      function storeAt(station) {
+        const g = groupOf(station);
+        return loaded(g).includes(station) ? { option: optionOf(g), perStation: g.no / g.sts.length } : null;
+      }
+
+      // A tank's variant at one station, from what the builder holds next to it (4 and 6 for the centreline tank).
+      function tankVariant(option, station) {
+        const variants = B11.filter((r) => r.g === option.tank && fits(r, [station]));
+        if (station === '5') {
+          const both = storeAt('4') && storeAt('6');
+          return variants.find((v) => (both ? /^STORES AT 4 AND 6/ : /^NO STORES/).test(v.n));
+        }
+        const at = storeAt(TANK_NEIGHBOUR[station]);
+        let test = /^NO STORES/;
+        if (at && /AIM-9/.test(at.option.text)) test = /^AIM-9/;
+        else if (at && at.perStation > 1) test = /^MULTIPLE/;
+        else if (at) test = /^SINGLE/;
+        return variants.find((v) => test.test(v.n));
+      }
+
+      function lines() {
+        const out = [];
+        const notes = new Set();
+        for (const g of groups) {
+          const option = optionOf(g);
+          if (!option) {
+            out.push({ g, store: true, empty: true });
+            continue;
+          }
+          let eachText;
+          let di;
+          let consDi;
+          let variant = null;
+          let rack = option.rack;
+          // The count is limited by what the suspension can carry: three per station on a TER or LAU-88,
+          // otherwise one. Untouched, the suspension is the smallest one that carries the count.
+          const firstRack = option.tank ? tankVariant(option, g.sts[0]).r : rack;
+          const candidates = suspensionsFor(firstRack, g.sts);
+          const bySize = [...candidates].sort((a, b) => capacity(a.n) - capacity(b.n));
+          const maxNo = g.sts.length * Math.max(1, ...candidates.map((c) => capacity(c.n)));
+          let n = Math.min(g.no, maxNo);
+          const chosen = candidates.find((c) => c.n === g.susp) || bySize.find((c) => capacity(c.n) * g.sts.length >= n) || bySize.at(-1);
+          if (chosen) n = Math.min(n, capacity(chosen.n) * g.sts.length);
+          g.no = n;
+          if (option.tank) {
+            const rows = loaded(g).map((st) => [st, tankVariant(option, st)]);
+            const eaches = rows.map(([, r]) => subsonic(r.di));
+            di = consDi = eaches.reduce((a, b) => a + b, 0);
+            eachText = [...new Set(eaches)].map(minus).join(', ');
+            const texts = [...new Set(rows.map(([, r]) => r.n.toLowerCase()))];
+            variant = texts.length === 1 ? texts[0] : rows.map(([st, r]) => st + ': ' + r.n.toLowerCase()).join('; ');
+          } else {
+            let each = option.each;
+            let consEach = option.consEach ?? option.each;
+            if (option.row) {
+              const printed = String(option.row.di);
+              each = consEach = subsonic(printed);
+              if (isTip(g.sts) && /^\d+\*$/.test(printed)) {
+                each = consEach = 0;
+                notes.add('* A tip AIM-9 is part of the basic aircraft (sh. 3, note *).');
+              }
+              if (isTip(g.sts) && /^\d+\*\*$/.test(printed)) {
+                each = consEach = subsonic(printed) - TIP_AIM9_DI;
+                notes.add('** A tip pod replaces the tip AIM-9: 2 less than the missile (sh. 3, note **).');
+              }
+              if (printed.includes('/')) notes.add('Two values (subsonic/supersonic): the subsonic one.');
+            } else if (option.key === 'no-tip') {
+              notes.add('No tip missile: −4 each exact, 0 conservative (sh. 3, note *: zero is slightly conservative).');
+            }
+            di = n * each;
+            consDi = n * consEach;
+            eachText = minus(each);
+          }
+          out.push({ g, store: true, option, no: n, maxNo, eachText, di, consDi });
+          if (variant) out.push({ g, variant });
+          if (chosen) {
+            const count = Math.min(n, g.sts.length);
+            out.push({ g, suspension: true, candidates, chosen, count, each: chosen.di, di: count * chosen.di, consDi: count * chosen.di });
+          }
+        }
+        return { out, notes };
+      }
+
+      function split(g) {
+        const [a, b] = g.sts;
+        const first = Math.ceil(g.no / 2);
+        const second = g.no - first;
+        const i = groups.indexOf(g);
+        groups.splice(i, 1, { id: a, sts: [a], key: g.key, susp: g.susp, no: first }, { id: b, sts: [b], key: second ? g.key : null, susp: g.susp, no: Math.max(second, 1) });
+      }
+
+      function join(pair) {
+        const ga = groupOf(pair[0]);
+        const gb = groupOf(pair[1]);
+        const key = ga.key ?? gb.key;
+        const no = ga.key && gb.key && ga.key !== gb.key ? ga.no * 2 : (ga.key ? ga.no : 0) + (gb.key ? gb.no : 0);
+        const i = groups.indexOf(ga);
+        groups.splice(i, 2, { id: pair.join(', '), sts: [...pair], key, susp: ga.key ? ga.susp : gb.susp, no: Math.max(no, 2) });
+      }
+
+      const el = (tag, props = {}, ...children) => {
+        const node = Object.assign(document.createElement(tag), props);
+        node.append(...children);
+        return node;
+      };
+      const num = (text) => el('td', { className: 'num', textContent: text });
+
+      function render(focusId) {
+        const tbody = document.querySelector('#drag-index tbody');
+        const { out, notes } = lines();
+        tbody.replaceChildren();
+        tbody.append(el('tr', {}, el('td', { textContent: '—' }), el('td', { textContent: 'BASIC AIRCRAFT (INCL. TIP AIM-9)' }), num('1'), num(String(BASIC_DI)), num(String(BASIC_DI))));
+        let total = BASIC_DI;
+        let consTotal = BASIC_DI;
+        for (const line of out) {
+          const { g } = line;
+          if (line.store) {
+            const button = el('button', { type: 'button', className: line.empty ? 'empty' : '', textContent: line.empty ? '— empty' : line.option.text });
+            button.setAttribute('aria-haspopup', 'listbox');
+            button.dataset.group = g.id;
+            button.addEventListener('click', () => openMenu(g, button));
+            const station = el('td', {}, g.id);
+            const pair = pairOf(g.sts[0]);
+            const splitHere = pair && g.sts.length === 2 && !line.empty;
+            const joinHere = pair && g.sts.length === 1 && g.sts[0] === pair[0];
+            if (splitHere || joinHere) {
+              const action = el('button', { type: 'button', className: 'station-action', textContent: splitHere ? 'split' : 'join' });
+              action.setAttribute('aria-label', splitHere ? `Different stores on ${pair[0]} and ${pair[1]}` : `Same store on ${pair[0]} and ${pair[1]}`);
+              action.title = action.getAttribute('aria-label');
+              action.addEventListener('click', () => {
+                if (splitHere) split(g);
+                else join(pair);
+                render(groupOf(pair[0]).id);
+              });
+              station.append(action);
+            }
+            const tr = el('tr', { className: 'station-start' + (line.empty && !joinHere ? ' empty-station' : '') }, station, el('td', { className: 'picker' }, button));
+            if (line.empty) {
+              tr.append(num(''), num(''), num(''));
+            } else {
+              let count = num(String(line.no));
+              if (line.maxNo > 1) {
+                const select = el('select', { className: 'count' });
+                select.setAttribute('aria-label', 'Number of stores at ' + g.id);
+                for (let n = 1; n <= line.maxNo; n++) select.append(el('option', { value: String(n), textContent: String(n), selected: n === line.no }));
+                select.addEventListener('change', () => {
+                  g.no = Number(select.value);
+                  g.susp = null;
+                  render();
+                });
+                count = el('td', { className: 'num picker' }, select);
+              }
+              tr.append(count, num(line.eachText), num(minus(line.di)));
+              total += line.di;
+              consTotal += line.consDi;
+            }
+            tbody.append(tr);
+          } else if (line.variant) {
+            tbody.append(el('tr', {}, el('td'), el('td', { className: 'variant', textContent: line.variant }), el('td'), el('td'), el('td')));
+          } else if (line.suspension) {
+            let cell;
+            if (line.candidates.length > 1) {
+              const select = el('select');
+              select.setAttribute('aria-label', 'Suspension at ' + g.id);
+              line.candidates.forEach((c) => select.append(el('option', { value: c.n, textContent: 'on ' + c.n, selected: c === line.chosen })));
+              select.addEventListener('change', () => {
+                g.susp = select.value;
+                render();
+              });
+              cell = el('td', { className: 'picker' }, el('span', { className: 'chosen', textContent: 'on ' + line.chosen.n }), select);
+            } else {
+              cell = el('td', { textContent: 'on ' + line.chosen.n });
+            }
+            tbody.append(el('tr', { className: 'suspension' }, el('td'), cell, num(String(line.count)), num(minus(line.each)), num(minus(line.di))));
+            total += line.di;
+            consTotal += line.consDi;
+          }
+        }
+        const extra = el('input', { value: additional ? String(additional) : '', placeholder: '0', inputMode: 'numeric' });
+        extra.setAttribute('aria-label', 'Additional drag index');
+        extra.addEventListener('change', () => {
+          additional = Number(extra.value) || 0;
+          render();
+        });
+        tbody.append(el('tr', { className: 'station-start' }, el('td', { textContent: '—' }), el('td', { textContent: 'Additional (stores not in Fig. B1-1)' }), num(''), num(''), el('td', { className: 'num' }, extra)));
+        total += additional;
+        consTotal += additional;
+        // Exact and conservative differ only when a choice has two values (no tip missile): then both are shown.
+        if (total === consTotal) {
+          tbody.append(el('tr', { className: 'total' }, el('td'), el('td', { textContent: 'Drag index' }), num(''), num(''), num(minus(total))));
+        } else {
+          tbody.append(el('tr', { className: 'total exact-total' }, el('td'), el('td', { textContent: 'Drag index, exact' }), num(''), num(''), num(minus(total))));
+          tbody.append(el('tr', { className: 'cons-total' }, el('td'), el('td', { textContent: 'Drag index, cons.' }), num(''), num(''), num(minus(consTotal))));
+        }
+        document.getElementById('drag-index-notes').textContent = [...notes].join(' ');
+        if (focusId) tbody.querySelector(`button[data-group="${focusId}"]`)?.focus();
+      }
+
+      let closeMenu = () => {};
+
+      function openMenu(g, button) {
+        closeMenu();
+        const all = [{ key: null, text: '— empty', heading: '', rack: '', diText: '' }, ...optionsOf(g)];
+        const search = el('input', { type: 'text', placeholder: 'Type to filter; arrow keys and Enter to take' });
+        search.setAttribute('aria-label', 'Filter stores at ' + g.id);
+        const list = el('ul', { role: 'listbox' });
+        const foot = el('div', { className: 'menu-foot' }, 'Fig. B1-1 stores for station ' + g.id + '. A store not listed: enter its drag index as Additional.');
+        const menu = el('div', { className: 'store-menu' }, search, list, foot);
+        let shown = [];
+        let active = 0;
+        const choose = (option) => {
+          g.key = option.key;
+          g.susp = null;
+          closeMenu();
+          render(g.id);
+        };
+        const paint = () => {
+          const q = search.value.trim().toUpperCase();
+          shown = all.filter((o) => !q || (o.heading + ' ' + o.text).toUpperCase().includes(q));
+          active = Math.min(active, Math.max(shown.length - 1, 0));
+          list.replaceChildren();
+          let heading = null;
+          shown.forEach((o, i) => {
+            if (o.heading !== heading) {
+              heading = o.heading;
+              if (heading) list.append(el('li', { className: 'group', textContent: heading }));
+            }
+            const li = el('li', { role: 'option' }, el('span', { textContent: o.text }), el('span', { textContent: o.rack || '' }), el('span', { textContent: o.diText }));
+            li.setAttribute('aria-selected', String(i === active));
+            li.addEventListener('mousedown', (e) => {
+              e.preventDefault();
+              choose(o);
+            });
+            list.append(li);
+          });
+          list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+        };
+        search.addEventListener('input', () => {
+          active = 0;
+          paint();
+        });
+        search.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowDown') active = Math.min(active + 1, shown.length - 1);
+          else if (e.key === 'ArrowUp') active = Math.max(active - 1, 0);
+          else if (e.key === 'Enter' && shown[active]) {
+            // Swallowed, or the same keypress would press the store button that takes focus and reopen the menu.
+            e.preventDefault();
+            return choose(shown[active]);
+          }
+          else if (e.key === 'Escape') {
+            closeMenu();
+            return button.focus();
+          } else return;
+          e.preventDefault();
+          paint();
+        });
+        const outside = (e) => {
+          if (!menu.contains(e.target) && e.target !== button) closeMenu();
+        };
+        closeMenu = () => {
+          menu.remove();
+          document.removeEventListener('mousedown', outside);
+          closeMenu = () => {};
+        };
+        document.addEventListener('mousedown', outside);
+        active = Math.max(all.findIndex((o) => o.key === g.key), 0);
+        button.parentElement.append(menu);
+        paint();
+        search.focus();
+      }
+
+      // The manual's worked example (p. B1-2/B1-3): 4 AIM-9L on LAU-129/A, 2 MK 84, 2 × 370 gal; store DI 142, total 146.
+      function preset(id, storeText, stationText, suspension) {
+        const g = groupById(id);
+        const option = optionsOf(g).find((o) => (o.row ? o.row.n === storeText && o.row.st === stationText : o.text === storeText));
+        g.key = option.key;
+        g.susp = suspension;
+      }
+      preset('1, 9', 'AIM-9L, M, S', '1 OR 9', 'LAU-129/A LAUNCHER');
+      preset('2, 8', 'AIM-9L, M, S', '2,3,7, OR 8', 'LAU-129/A LAUNCHER + ADAPTER (16S301)');
+      preset('3, 7', 'MK 84 LDGP', '3,4,6, OR 7', 'WEAPON PYLON* (16S1700)');
+      preset('4, 6', '370-GALLON TANK', null, null);
+      render();
+    </script>
+  </body>
 </html>
