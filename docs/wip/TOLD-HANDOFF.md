@@ -27,8 +27,8 @@ main checkout `/home/nklx/dev/personal/sourcedcs` (a crc session works there on 
     checkpoints: `perf/README.md`.
 - The manual PDF is at `/home/nklx/dev/other/HAF-F16-Supplement.pdf` (SHA-256 verified against the pin). Export it as
   `PERF_PDF`; Python runs inside `nix develop` from the worktree root.
-- **Watch:** one full `npm test` run after the B2-4 merge showed one failure that did not come back in the next runs.
-  It may be a flaky test; it is not identified.
+- **Watch:** one full `npm test` run after the B2-4 merge showed one failure, never identified. Every full run since
+  passed 318/318 (5 runs, the last 4 on the plan 1 head): not reproduced in 5 runs; keep watching.
 
 ## Waiting on the human
 
@@ -40,7 +40,8 @@ Nothing else is waiting on the human.
 
 ## Decisions taken in plan 1 that the human may want to revisit
 
-All are written into TOLD.md 1.6 or the plan. These are the ones most likely to come back:
+All are written into TOLD.md 1.6 or the plan (step 0's two into TOLD.md 5.2 and 1.2). These are the ones most
+likely to come back:
 
 - **P2, B7-2 sheet 2 is two RCR families (a contract change).** Dry (4, 8, 16, 23) and wet (10, 12, 18), chosen by a
   `wet: boolean` input on `groundRollCorrected`, because Part 7 interpolates them separately and one family ordered
@@ -56,6 +57,10 @@ All are written into TOLD.md 1.6 or the plan. These are the ones most likely to 
   - a refusal entry outside the drawn wind or slope lines (B2-6 sheet 3 needs about 80 KIAS for a 20 kt tailwind).
 
   Each gives "—" with a reason line, and each is a Limitations note.
+- **Step 0: conservative value = the pilot's per-point rounding** (TOLD.md 5.2, ADR 0149), decided by the supervisor
+  after the step 0 Task 4 review, not the maximum over every combination; the human was told and may reverse it.
+- **Step 0: R11, a B2-3 roll under 1,000 ft** is out of chart at the next guideline panel that moves it (TOLD.md 1.2,
+  "Notes carried from step 0"; `docs/wip/TOLD-STEP0.md` R11).
 - **Checkpoints live in their own files** (`perf/extraction/checkpoints/<spec id>.yaml`), not in the spec YAML as 1.6
   first said. This keeps the lane that writes a spec from editing the hand readings. TOLD.md 1.6 now says so.
 
@@ -65,8 +70,9 @@ All are written into TOLD.md 1.6 or the plan. These are the ones most likely to 
 heavyweight; dry and wet), the runway rules with their paragraphs, the drag index builder on the B1-1 data, and input
 parsing (pressure altitude, slope, wind, `wet`). TOLD.md 1.2 items 2 and 3, 1.3, 1.4, 5.2 and 5.3 hold the design.
 "Notes carried from step 0" and "Notes carried from plan 1" list what the earlier work left for it: id prefixes for a
-figure called twice, refusal speed interpolation by RCR, `limits` null semantics, `OutOfChart` values in chart units,
-the deferred minors and the open output-edge tolerance question.
+figure called twice, refusal speed interpolation by RCR, `limits` null semantics, the conservative limit verdicts
+`evaluate` does not surface yet, `OutOfChart` values in chart units, quantity names and units that differ across
+figures, the deferred minors and the open output-edge tolerance question.
 
 Run plan 2 as plan 1 ran: `superpowers:brainstorming` on what TOLD.md leaves open (the RCR interpolation rule and its
 ranges, how a chain prefixes ids, what the figure view needs from a chain), then a spec section in TOLD.md, then

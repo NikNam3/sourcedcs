@@ -41,8 +41,9 @@ const LIMIT_PANELS: Readonly<Record<keyof LimitVerdicts, string>> = Object.freez
  *   `temperature` with no drawn range, since the pilot's inputs have no single range there; never on the unscaled
  *   carried axis (Review Focus 3).
  *
- * `limits` judges this run's carried position and its read roll (after `ctx.read`), so the exact and the conservative
- * pass each get their own; it is null when the roll is out of chart.
+ * `limits` judges this run's carried position and its read roll (after `ctx.read`), so a verdict is computable for
+ * every run, the conservative ones included; `evaluate` does not surface a conservative run's verdicts yet (TOLD.md
+ * 1.2, "For plan 2"). It is null when the roll is out of chart.
  */
 export function groundRollUncorrected(
   ctx: Ctx,

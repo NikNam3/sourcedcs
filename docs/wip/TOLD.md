@@ -395,10 +395,16 @@ Notes carried from plan 1 (30 Oct 2026). For the Limitations page, in addition t
 - **Drawn takeoff factor ranges** (P11, measured): B2-4 [1.09, 6.00] on the 1,000 to 2,000 ft curves the chain uses
   (the 500 ft curve runs 1.18 to 5.13, the curves from 2,500 ft up start higher); B2-5 2.10 to 6.78; B2-6 1.20 to
   3.86. Outside them the speed is not computed (`OutOfChart` on `takeoff_factor`), never extrapolated.
-- **A refusal speed whose entry lies outside the drawn wind or slope lines is not computed** (P15, `OutOfChart` on
-  `refusal_speed`). The guide lines do not all reach the panel's edge: on B2-6 sheet 3 the tailwind line from 60 KIAS
-  stops at 18.75 kt, so a 20 kt tailwind needs an entry of about 80 KIAS or more (B2-5 sheet 3: 19.81 kt); on every
-  refusal sheet the 160 and 180 KIAS headwind lines stop short of 40 kt.
+- **An entry outside the drawn wind or slope guidelines is not computed, on any chart** (P15; `OutOfChart` on the
+  panel's output, for example `refusal_speed`). The guidelines do not start at every entry and do not all reach the
+  panel's edge:
+  - B2-4: the tailwind and uphill lines start at 60 KIAS, so a tailwind or an uphill slope with a lower entry is not
+    computed.
+  - B2-5 and B2-6: at low speeds the tailwind lines end below 20 kt. On B2-6 sheet 3 the line from 60 KIAS stops at
+    18.75 kt, so a 20 kt tailwind needs an entry of about 80 KIAS or more (B2-5 sheet 3: 19.81 kt). On every refusal
+    sheet the 160 and 180 KIAS headwind lines stop short of 40 kt.
+  - B7-2 sheet 2: there is no tailwind or downhill line from 12,000 ft (those families run 1,000 to 11,000 ft), so a
+    roll entering the wind or slope panel above 11,000 ft with a tailwind or a downhill slope is not computed.
 - **Limit lines are judged only where they are drawn** (P7): a landing whose carried position lies outside a line's
   drawn range is not checked against that line. The B7-2 sample itself (2,000 ft, 40 °C, 28,000 lb) is not judged
   against either tire line.
@@ -423,17 +429,36 @@ For plan 2 (core):
   1000 lb, the B7-2 rolls in 1000 ft) and wind and slope are magnitudes (R8, the sign is not restored). The carried
   line's `OutOfChart` (`gross_weight` on B2-5 and B2-6, `temperature` on B7-2 sheet 1) has `drawnRange: null`. The
   result carries no unit; plan 3's reason line takes it from the panel's input quantity.
-- **Rounding ids are fixed per figure** except the refusal sheets' prefix (`b2-5.sh1`, …, sheet 3 `b2-6.sh3` with
-  chart `snow` or `icy`, giving `b2-6.sh3.snow.runway`). A chain that calls B2-3, B2-4, B7-1 or B7-2 twice (MIL and
-  AB; normal landing weight and heavyweight; dry and wet) must prefix the ids (the step 0 note above).
+- **Rounding ids are fixed per figure.** The refusal sheet functions hard-code their prefix too (`b2-5.sh1`, …,
+  sheet 3 `b2-6.sh3` with chart `snow` or `icy`, giving `b2-6.sh3.snow.runway`); only `refusalSpeed` itself takes one.
+  No id-prefix mechanism exists yet. A chain that calls one figure twice (MIL and AB through B2-3 and B2-4; normal
+  landing weight and heavyweight through B7-1 and B7-2; dry and wet through B7-2 sheet 2) reads the same id twice,
+  which `ctx` throws on as a chain defect, so it needs one (the step 0 note above). The cheap mechanism: a `ctx`
+  wrapper that prefixes every id before passing the read on (`withPrefix(ctx, 'mil')` reads `mil.b2-3.gw`), with no
+  change to any figure function.
 - **B2-4's check distance** reads 500 to 11,000 ft (`OutOfChart` on `check_distance` outside); the chain picks 2,000
   or 1,000 ft from the takeoff roll, a branch the conservative pass re-tests (5.2).
-- **Deferred minors that touch plan 2's files:** `decreased()` is duplicated in `b2-5.ts` and `b2-6.ts`; the plan's
-  contract table should read the refusal ids as `<prefix>[.<chart>].runway`, and the panel ids `gw`, `runway`
-  (`_snow`, `_icy`), `wind`, `slope` are a convention no code checks; `figure-refusal.test.ts` exempts icy by matching
+- **Deferred minors that touch plan 2's files:** `decreased()` is duplicated in `b2-5.ts` and `b2-6.ts`; the refusal
+  panel ids `gw`, `runway` (`_snow`, `_icy`), `wind`, `slope` (now in the plan's contract table) are a convention no
+  code checks; `figure-refusal.test.ts` exempts icy by matching
   the sheet name string; no test yet for a B7-2 sheet 2 entry outside the wind or slope lines; B2-4's out-of-chart
   loop could add 0 ft; checkpoint inputs are numbers only (runners also take boolean flags). The step 0 note on the
   edge tolerance at an output-edge end is still open.
+- **Conservative limit verdicts are not reachable yet** (final review of plan 1). 1.2 item 3 checks the conservative
+  cell against the B7-2 limit lines as well as the exact one. `groundRollUncorrected` computes `limits` in every run,
+  but a `Chain<K>` (`ctx.ts`) returns only `Read<number>` outputs, and `evaluate` keeps neither the run that decided a
+  conservative cell nor the per-output direction map, so its side outputs are lost. Plan 2 cannot get conservative
+  `limits` without changing `ctx.ts`. Two options, plan 2 decides:
+  - `evaluate` returns the deciding run per output (or its direction map), so a chain can re-run it and read that
+    run's `limits`;
+  - the verdicts become numeric chain outputs with their own `OutputKind` (for example the roll's margin past each
+    line, worse = higher), so `evaluate` rounds them like any other cell; a `null` verdict still needs a form there.
+- **Quantity names and units differ across figures** in the data: `refusal_speed` has unit `kt` on B2-5 and B2-6,
+  every other speed `KIAS`; temperature is `deg C` on B2-1 and `°C` on B7-2 sheet 1; pressure altitude is
+  `pressure_altitude` on B2-1 and `altitude` on B7-2 sheet 1. Either align them in plan 2 (spec edit and re-extract)
+  or map them for plan 3's reason lines, which take the name and unit from the panel's input quantity.
+- **Flake watch:** one full `npm test` run after the B2-4 merge failed once and was never identified. Every full run
+  since passed 318/318 (5 runs, the last 4 on the plan 1 head): not reproduced in 5 runs; keep watching.
 
 ### 1.3 Inputs
 
@@ -517,7 +542,8 @@ Part 2) is plan 2's.
    passed on without `ctx.read` (a pilot does not read or round a line carried across); out of chart returns
    `OutOfChart` naming the figure and the input. The limit lines come with the roll, not from a separate function:
    `groundRollUncorrected` returns `{rollFt, limits}`, where `limits` (`LimitVerdicts`, brake energy, MLG tire, NLG
-   tire) judges that run's carried position and read roll, so the exact and the conservative pass each get their own;
+   tire) judges that run's carried position and read roll, so a verdict is computable for every run, the conservative
+   ones included; `ctx`'s `evaluate` does not surface a conservative run's verdicts yet (see "For plan 2").
    `limits` is null when the roll is out of chart. `groundRollCorrected` takes `wet: boolean` (P2), which picks the
    RCR family. Plan 2 builds chains on these.
 2. **Golden tests:** the manual's samples within 2 %; the 15 hand-read checkpoints within ±2 kt.
@@ -555,10 +581,12 @@ Part 2) is plan 2's.
 
 One lane worktree per task (`../sourcedcs-told-p1-t<N>` on `lane/told-p1-t<N>` off `perf-told`), at most 4 agents at
 once including a questioner, all on Opus, a task review after each lane, lanes run only their own test file, the
-supervisor runs the gates (`nice -n 19`) and merges. Tasks 1 and 2 run first, together; then 3 to 6, up to three at a
-time. Every extraction rewrites `manifest.json`: a conflict there is resolved by re-running the extractor on the
-merged tree, never by hand; commit order extractor change, re-run, data. Plan 1 lands on `perf-told` as a PR into
-`main` with a merge commit.
+supervisor runs the gates (`nice -n 19`) and merges. The order as run: Tasks 1 and 2 together, then 1b (after the
+questioner's rulings), then 3, 4 and 6 together, then 5 (it needs Task 4's `refusal-speed.ts`), then 7. Every
+extraction rewrites `manifest.json`, which is never edited by hand: a conflict there takes `perf-told`'s own
+pre-merge manifest, the merge is committed first, then the extractor is re-run on the clean merged tree and the
+manifest committed separately (the plan's "Supervisor rulings during execution": re-running before the merge commit
+stamps `-dirty`). Plan 1 lands on `perf-told` as a PR into `main` with a merge commit.
 
 ## Step 2: Performance
 
