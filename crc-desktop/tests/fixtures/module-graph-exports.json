@@ -1758,6 +1758,7 @@
   "sync.js": [
    "_setSyncSocket",
    "_syncAuthHeaders",
+   "casdoorAuthorizeUrl",
    "getSyncFeedUrl",
    "isSyncOpen",
    "sendToSync",
