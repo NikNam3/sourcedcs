@@ -1,3 +1,7 @@
+### Fixed in 2.0.1
+- **Login works again on a fresh install.** CRC no longer asks Casdoor to skip its login page, so if you are not already signed in you now get the Discord sign-in instead of "Session state missing"
+- A login error from Casdoor is shown as itself (for example "Auth error: login_required") instead of a CSRF warning
+
 ### Changed: FAA vocabulary (read this first)
 - Positions are renamed after the FAA's operating-position designators: Tower is now **LC** (Local Control), Ground is **GC** (Ground Control), Approach is **AP**. Their Bays follow (`lc-…`, `gc-…`, `ap-…`). `OPS`, `CD`, `RSU`, `SFA`, `PAR`, `CTR` and the tactical and carrier Positions keep their names
 - The FIELD STATE panel is now **RUNWAY STATUS**; the short-term conflict alert tag is now **CA** (Conflict Alert); Block 5's label is **BEACON** (the assigned code); a Strip's Role is now its **strip type**; "FDR" is **flight data**
