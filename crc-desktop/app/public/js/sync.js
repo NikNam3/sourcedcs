@@ -84,19 +84,31 @@ async function applyConnOverrides() {
   } catch (_) { /* local server not up yet or unreachable — proxies will just use their own defaults */ }
 }
 
+// No prompt=none: with it Casdoor never shows its login page, so a user without a live Casdoor session in this app
+// (every fresh install) is sent straight back with error=login_required and can never sign in. Without it, a user
+// who is still signed in passes through as before, and anyone else gets the login page (tests/casdoor-login.test.mjs).
+export function casdoorAuthorizeUrl({ endpoint, clientId, redirectUri, state }) {
+  return `${endpoint}/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid+profile&state=${encodeURIComponent(state)}`;
+}
+
 function openSyncLogin() {
   if (!CASDOOR_ENDPOINT) {
     console.error('[sync] CASDOOR_ENDPOINT not configured — open Connection Settings and fill it in');
     showConnWidget();
     return;
   }
-  const ru = encodeURIComponent(window.location.origin + '/auth-callback.html');
   const stArr = new Uint8Array(16);
   try { window.crypto.getRandomValues(stArr); } catch (_) {}
   const st = Array.from(stArr).map(b => b.toString(16).padStart(2, '0')).join('');
-  try { sessionStorage.setItem('crc-desktop-oauth-state', st); } catch (_) {}
-  const url = `${CASDOOR_ENDPOINT}/login/oauth/authorize?client_id=${CASDOOR_CLIENT_ID}` +
-    `&redirect_uri=${ru}&response_type=code&scope=openid+profile&state=${st}&prompt=none`;
+  // localStorage, not sessionStorage: sessionStorage reaches the popup only as a copy made at window.open, and a
+  // Windows install lost it ("Session state missing"). Every localhost:<port> window shares localStorage, and
+  // auth-callback.html removes the value on first read, so it stays single-use.
+  try { localStorage.setItem('crc-desktop-oauth-state', st); } catch (_) {}
+  const url = casdoorAuthorizeUrl({
+    endpoint: CASDOOR_ENDPOINT, clientId: CASDOOR_CLIENT_ID,
+    redirectUri: window.location.origin + '/auth-callback.html', state: st,
+  });
   window.open(url, 'crc-login', 'width=480,height=640');
 }
 

@@ -59,12 +59,16 @@
   });
 
   var savedState = null;
-  try { savedState = sessionStorage.getItem('crc-desktop-oauth-state'); } catch (e) {}
+  // Written by sync.js's openSyncLogin in the main window; localStorage is shared with this popup (same origin).
+  try { savedState = localStorage.getItem('crc-desktop-oauth-state'); } catch (e) {}
+  try { localStorage.removeItem('crc-desktop-oauth-state'); } catch (e) {}
+
+  // Casdoor's own error first: an error carries no code, so there is nothing to protect with the state check, and
+  // checking the state first hid the real reason (e.g. login_required) behind "Session state missing".
+  if (params.error) { fail('Auth error: ' + (params.error_description || params.error)); return; }
+
   if (params.state && !savedState) { fail('Session state missing — possible CSRF attack or session expired.'); return; }
   if (savedState && params.state && params.state !== savedState) { fail('State mismatch — possible CSRF attack.'); return; }
-  try { sessionStorage.removeItem('crc-desktop-oauth-state'); } catch (e) {}
-
-  if (params.error) { fail('Auth error: ' + (params.error_description || params.error)); return; }
 
   var code = params.code;
   if (!code) { fail('No authorization code received. The login may have been cancelled.'); return; }
