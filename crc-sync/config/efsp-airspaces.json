@@ -43,7 +43,7 @@
       "kind": "JURISDICTION",
       "controllingFacilityId": "CARRIER",
       "controllingPositionId": "CV_PRIFLY",
-      "ownerPositionIds": ["CV_MARSHAL", "CV_PRIFLY", "CV_APP1", "CV_APP2"],
+      "ownerPositionIds": ["CV_MARSHAL", "CV_PRIFLY", "CV_APP1", "CV_APP2", "CV_DEP"],
       "vfrService": "ADVISORY",
       "altLowerFt": null,
       "altUpperFt": null,

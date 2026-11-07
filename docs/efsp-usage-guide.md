@@ -36,7 +36,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
 - **The tactical Positions are fenced**: a JTAC is sent only the lines it was handed, `AIC` hands back and cannot advance a line, and `TAC_C2` answers the TOFI exit on an AIC-held line. See §8C1.
 - **Metrics and a traffic count**: the METRICS panel (PANELS → METRICS), with what crc-sync itself costs in CPU and memory, and, behind it, read endpoints on crc-sync. See §10.
 - **ATO import** — `TAC_C2` pastes or drops a USMTF ATO (atobrief exports one) and it becomes mission lines on the Board, with the air-refuelling tanker/receiver join shown on the Strips. See §8I.
-- **The carrier (a first working prototype)** — a `CARRIER` Facility with four Positions (`CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2`): the Marshal creates the carrier's Strips (Recovery or Launch), a read-only ship banner, the **CARRIER** panel (BRC, final bearing, Case, ramp time, marshal position, weather at the ship, recovery tanker; PriFly and the Marshal set them), the **MARSHAL** panel (the recovery board: re-sequence, Commence, Back to stack, Delta, an EAT and the fuel typed by hand, changed clearances marked until passed), the **CARRIER MAP** panel (a radar picture fixed on the ship, with the stack, the approach path and the pattern), PriFly's Bay of recovered aircraft, and the handoff buttons from launch to recovery. Every carrier view names an aircraft by its **side number**. There is no PAR on the carrier. See §8K. Not yet seen against a real DCS ship.
+- **The carrier (a first working prototype)** — a `CARRIER` Facility with five Positions (`CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2`, `CV_DEP`): the Marshal creates the recovery Strip and PriFly the launch Strip, a read-only ship banner, the **CARRIER** panel (BRC, final bearing, Case, ramp time, marshal position, weather at the ship, recovery tanker; PriFly and the Marshal set them), the **MARSHAL** panel (the recovery board: re-sequence, Commence, Back to stack, Delta, an EAT and the fuel typed by hand, changed clearances marked until passed), the **CARRIER MAP** panel (a radar picture fixed on the ship, with the stack, the approach path and the pattern), PriFly's Bay of recovered aircraft, and the handoff buttons from launch to recovery. Every carrier view names an aircraft by its **side number**. There is no PAR on the carrier. See §8K. Not yet seen against a real DCS ship.
 - **Suggestions from surveillance** — a quiet `AIRBORNE? ▸` chip when a departure Strip still says it is on the ground but the aircraft is flying, a `STALE` badge when it was ignored, and a takeoff time stamped when a Strip enters Airborne. Surveillance informs; nothing moves by itself. See §8F.
 - **Incirlik's tower pattern, the single frequency approach and the PAR** (LC, AP, PAR): the tower works pattern traffic on its ordinary Strips (P/S and OPT cells, an IN PATTERN Bay, Closed traffic and Leave pattern); AP's SFA frequency Bay and **Hand off to PAR**; PAR's FINAL Strip (HDG, ALT, Begin descent, Cleared to land, Landed, Missed approach) and the PAR panel, whose elevation and azimuth scopes crc-sync measures against approach values the PAR controller sets. There is no RSU and no SFA Position. See §8L.
 - **Mode C intruder alerts and MARSA groups** — Conflict Alert is between two aircraft with Strips; an aircraft with no Strip that squawks is a Mode C intruder (`MCI`); one formation and one MARSA never alert against each other; a receiver under tanker MARSA is watched against the tanker. See §8E and §8D.
@@ -73,7 +73,7 @@ Facility/Position map as it stands:
 |---|---|---|
 | `INCIRLIK` | `OPS`, `CD`, `GC`, `LC`, `AP` (+ `PAR`, §8L) | Hat offers, in order (§8M): `CD` → `GC`, `LC`, `AP`; `GC` → `LC`, `AP`; `LC` → `AP`; `PAR` → `AP`. `OPS` and `AP` have none. Nothing moves when a Position is left |
 | `CENTER` | `CTR` | No offers (mirrors `OPS`) |
-| `CARRIER` | `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2` | Hat offers (§8K): `CV_APP1` → `CV_MARSHAL`, `CV_APP2`, `CV_PRIFLY`; `CV_APP2` → `CV_MARSHAL`, `CV_APP1`, `CV_PRIFLY`; `CV_PRIFLY` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`; `CV_MARSHAL` → `CV_APP1`, `CV_APP2`, `CV_PRIFLY` |
+| `CARRIER` | `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2`, `CV_DEP` | Hat offers (§8K): `CV_APP1` → `CV_MARSHAL`, `CV_APP2`, `CV_DEP`, `CV_PRIFLY`; `CV_APP2` → `CV_MARSHAL`, `CV_APP1`, `CV_DEP`, `CV_PRIFLY`; `CV_PRIFLY` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`, `CV_DEP`; `CV_MARSHAL` → `CV_APP1`, `CV_APP2`, `CV_DEP`, `CV_PRIFLY`; `CV_DEP` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`, `CV_PRIFLY` |
 | `TACTICAL` | `TAC_C2`, `AIC`, `GCI`, `JTAC` | `AIC`/`GCI`/`JTAC` hand their lines back to `TAC_C2` (the one place Strips still move at a sign-off, below); `AIC` and `JTAC` work only lines `TAC_C2` hands them (§8C1) |
 | `RANGES` | derived from the airspace config | One Position per range that has control of its own; works no Strips — see §8A |
 
@@ -1906,17 +1906,20 @@ the variation goes in that file's `magneticVariation` (`fixedDeg` or `offsetDeg`
 the ATIS text give the wind **magnetic** (`NNN°M`; the reference card's tooltip shows the true value, and
 the ATIS says "Wind not available." when the variation is unknown, H76).
 
-## 8K. The carrier (`CARRIER` Facility, `adr/0074`, `0113`-`0116`, `0137`)
+## 8K. The carrier (`CARRIER` Facility, `adr/0074`, `0113`-`0116`, `0137`, `0155`)
 
-Sign on to `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1` or `CV_APP2` under **Panels → Acting As** (group `CARRIER`). A carrier
+Sign on to `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2` or `CV_DEP` (departure control, Case III only) under
+**Panels → Acting As** (group `CARRIER`). A carrier
 Strip has one of three strip types: **MARSHAL** (launch, then the stack), **FINAL** (the groove: nothing to type)
-and **PATTERN** (in the visual pattern, then recovered). **The Marshal creates the carrier's Strips**: in the New Strip
-toolbar pick **Marshal · Recovery** (the flight joins the stack) or **Marshal · Launch**, and type the callsign. There is
+and **PATTERN** (in the visual pattern, then recovered). **The Marshal creates the recovery Strip and PriFly the launch
+Strip**: the Marshal's New Strip toolbar gives **Marshal · Recovery** (the flight joins the stack), PriFly's gives
+**PriFly · Launch** (in `cv-prifly-launch`, on deck); type the callsign. There is
 no flight-plan lookup for a carrier Strip, and a recovery typed by callsign is a new flight (it is not joined to the
-launch of the same callsign). PriFly and the approach lanes create nothing. When a carrier Position is left, its Strips stay with it and
-the next controller on its list is **offered** the hat (§8M): `CV_APP1` → `CV_MARSHAL`, `CV_APP2`, `CV_PRIFLY`;
-`CV_APP2` → `CV_MARSHAL`, `CV_APP1`, `CV_PRIFLY`; `CV_PRIFLY` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`; `CV_MARSHAL` →
-`CV_APP1`, `CV_APP2`, `CV_PRIFLY`. The Marshal comes first (the human's order, H111). Whoever takes a Position holds it
+launch of the same callsign). Departure control and the approach lanes create nothing. When a carrier Position is left, its Strips stay with it and
+the next controller on its list is **offered** the hat (§8M): `CV_APP1` → `CV_MARSHAL`, `CV_APP2`, `CV_DEP`, `CV_PRIFLY`;
+`CV_APP2` → `CV_MARSHAL`, `CV_APP1`, `CV_DEP`, `CV_PRIFLY`; `CV_PRIFLY` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`, `CV_DEP`;
+`CV_MARSHAL` → `CV_APP1`, `CV_APP2`, `CV_DEP`, `CV_PRIFLY`; `CV_DEP` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`, `CV_PRIFLY`.
+The Marshal comes first (the human's order, H111). Whoever takes a Position holds it
 as well as their own, so a Marshal who takes an approach lane can advance its Strips only as an approach Position would
 (the Marshal owns LAUNCH, LAUNCHED and IN_STACK); take the hat only if you will work it. The carrier raises no combination warning:
 there is no source in the repo for one. A hand-off into an empty carrier Position that somebody is offered is delivered
@@ -2036,9 +2039,11 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
   frequency), bingo and low state. They are on the flight, so they are on the recovery Strip too. The
   squawk the launch Strip held is re-claimed by the recovery Strip if you dropped the launch Strip in
   between.
-- **Launched** moves the launch Strip to the Marshal's airborne Bay (`cv-marshal-airborne`, state `LAUNCHED`); it stays
-  yours. The carrier hands nothing out: the controller who takes the aircraft next (CTR, a GCI) creates their own Strip,
-  and you **Drop** yours when they have it (`adr/0154`). A flight still at `LAUNCHED` has a live MARSHAL Strip, so its
+- **Launched** (PriFly) hands the airborne aircraft on (`adr/0155`). In **Case III** it goes to departure control
+  (`CV_DEP`, Bay `cv-dep-departures`, state `LAUNCHED`), whose **To Marshal** passes it to the Marshal; in **Case I and
+  II** there is no departure control and it goes straight to the Marshal. At the Marshal it sits in the airborne Bay
+  (`cv-marshal-airborne`, state `LAUNCHED`). The carrier hands nothing off the ship: the controller who takes the
+  aircraft next (CTR, a GCI) creates their own Strip, and the Marshal **Drops** its Strip when they have it (`adr/0154`). A flight still at `LAUNCHED` has a live MARSHAL Strip, so its
   recovery Strip can be made on the same flight only after that drop.
 - **The handoffs, one button each**, each recording its trigger type: **Commence** (Marshal to an approach
   lane), **Radar contact** (lane, MARSHAL becomes FINAL), **Ball** (FINAL to BALL), **Trapped** (the lane, at BALL:

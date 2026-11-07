@@ -18,6 +18,10 @@ const CARRIER_HANDOFF_EFFECTS = Object.freeze({
   MARSHAL_TO_PRIFLY:         Object.freeze({ stripType: 'MARSHAL', state: 'IN_STACK',  toStripType: 'PATTERN', toState: 'IN_PATTERN', owner: 'TO',   defaultTo: 'CV_PRIFLY' }),
   MARSHAL_TO_PATTERN_CASE_I: Object.freeze({ stripType: 'MARSHAL', state: 'IN_STACK',  toStripType: 'PATTERN', toState: 'IN_PATTERN', owner: 'TO',   defaultTo: 'CV_PRIFLY' }),
   FINAL_TRAPPED:             Object.freeze({ stripType: 'FINAL',   state: 'BALL',      toStripType: 'PATTERN', toState: 'RECOVERED',  owner: 'TO',   defaultTo: 'CV_PRIFLY' }), // docs/adr/0137
+  // docs/adr/0155: the launch, PriFly -> departure control (Case III) or the Marshal (Case I, II), departure -> the Marshal.
+  LAUNCH_TO_DEPARTURE:       Object.freeze({ stripType: 'MARSHAL', state: 'LAUNCH',    toStripType: 'MARSHAL', toState: 'LAUNCHED',   owner: 'TO',   defaultTo: 'CV_DEP' }),
+  LAUNCH_TO_MARSHAL:         Object.freeze({ stripType: 'MARSHAL', state: 'LAUNCH',    toStripType: 'MARSHAL', toState: 'LAUNCHED',   owner: 'TO',   defaultTo: 'CV_MARSHAL' }),
+  DEPARTURE_TO_MARSHAL:      Object.freeze({ stripType: 'MARSHAL', state: 'LAUNCHED',  toStripType: 'MARSHAL', toState: 'LAUNCHED',   owner: 'TO',   defaultTo: 'CV_MARSHAL' }),
 });
 
 module.exports = { CARRIER_HANDOFF_EFFECTS };

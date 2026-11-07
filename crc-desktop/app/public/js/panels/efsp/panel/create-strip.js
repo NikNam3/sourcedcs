@@ -152,12 +152,12 @@ const CREATE_STRIP_ORIGINS = [
   // the one Bay it actually has to land in.
   { actingPositionId: 'TAC_C2', bayId: 'tac-c2-tasked', stripType: 'MISSION', label: 'TAC_C2 · Mission' },
   { actingPositionId: 'GCI', bayId: 'gci-on-station', stripType: 'MISSION', label: 'GCI · Mission', initialState: 'ON_STATION' },
-  // The carrier (live test U18, docs/adr/0137): the Marshal originates both of the carrier's Strips, as the server's
-  // createsStripTypes already allowed (a MARSHAL Strip, docs/adr/0064): a recovery check-in joins the stack (IN_STACK,
-  // the strip type's initial state) and a launch is a MARSHAL Strip in LAUNCH (docs/adr/0109 binds it to an ATO
-  // mission line by callsign). PriFly and the lanes receive their Strips by a carrier handoff and create none.
+  // The carrier (live test U18, docs/adr/0137; crc-sync docs/adr/0155): the Marshal originates the recovery check-in, which
+  // joins the stack (IN_STACK, the strip type's initial state), and PriFly the launch, a MARSHAL Strip in LAUNCH on deck
+  // (docs/adr/0109 binds it to an ATO mission line by callsign). Departure and the lanes receive their Strips by a carrier
+  // handoff and create none.
   { actingPositionId: 'CV_MARSHAL', bayId: 'cv-marshal-stack', stripType: 'MARSHAL', label: 'Marshal · Recovery' },
-  { actingPositionId: 'CV_MARSHAL', bayId: 'cv-marshal-departures', stripType: 'MARSHAL', label: 'Marshal · Launch', initialState: 'LAUNCH' },
+  { actingPositionId: 'CV_PRIFLY', bayId: 'cv-prifly-launch', stripType: 'MARSHAL', label: 'PriFly · Launch', initialState: 'LAUNCH' },
 ];
 
 /**

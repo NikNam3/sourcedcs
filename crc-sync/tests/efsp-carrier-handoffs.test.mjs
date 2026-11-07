@@ -29,8 +29,11 @@ test('the four §9.12 kinds have four distinct triggers and four distinct labels
 });
 
 test('every row, including the [SOURCE-DEFINED] Case I row, has a distinct label and a known trigger', () => {
-  const all = Object.values(CARRIER_HANDOFFS);
+  // docs/adr/0155: PriFly's "Launched" is one button whose receiver the Case decides (two rows, never both legal at once).
+  const all = Object.entries(CARRIER_HANDOFFS).filter(([k]) => k !== 'LAUNCH_TO_MARSHAL').map(([, r]) => r);
   assert.equal(new Set(all.map((r) => r.label)).size, all.length);
+  assert.equal(CARRIER_HANDOFFS.LAUNCH_TO_MARSHAL.label, CARRIER_HANDOFFS.LAUNCH_TO_DEPARTURE.label);
+  assert.equal(CARRIER_HANDOFFS.LAUNCH_TO_MARSHAL.cases.some((c) => CARRIER_HANDOFFS.LAUNCH_TO_DEPARTURE.cases.includes(c)), false);
   for (const r of all) assert.ok(TRIGGER_TYPES.includes(r.trigger));
   assert.equal(CARRIER_HANDOFFS.MARSHAL_TO_PATTERN_CASE_I.source, '[SOURCE-DEFINED]');
   assert.ok(Object.isFrozen(CARRIER_HANDOFFS.MARSHAL_TO_APPROACH));

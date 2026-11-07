@@ -15,7 +15,8 @@
 // which lives on the flight data, survives to it). FINAL is the talk-down strip type, shared
 // with PAR (L18); PATTERN is the carrier's visual-pattern strip type (PriFly).
 // LAUNCHED (docs/adr/0154): the aircraft is off the deck and still the Marshal's until the Marshal drops the Strip. The
-// carrier hands nothing out (ADR 0064); the next controller makes their own Strip.
+// carrier hands nothing out (ADR 0064); the next controller makes their own Strip. docs/adr/0155: PriFly creates the
+// launch (LAUNCH, on deck); in Case III departure control (CV_DEP) holds it LAUNCHED first and hands it to the Marshal.
 const MARSHAL_STATES = ['LAUNCH', 'LAUNCHED', 'IN_STACK', 'COMMENCED', 'DROPPED'];
 
 // The carrier's three strip types (docs/adr/0064 B2, docs/adr/0074), [SOURCE-DEFINED]
@@ -26,8 +27,8 @@ const MARSHAL_STATES = ['LAUNCH', 'LAUNCHED', 'IN_STACK', 'COMMENCED', 'DROPPED'
 // reach PriFly by their own transfer (carrier/handoffs.js).
 const CV_LANES = ['CV_APP1', 'CV_APP2'];
 const MARSHAL_STATE_OWNERS = {
-  LAUNCH:    ['CV_MARSHAL'],
-  LAUNCHED:  ['CV_MARSHAL'],
+  LAUNCH:    ['CV_PRIFLY'],
+  LAUNCHED:  ['CV_DEP', 'CV_MARSHAL'],
   IN_STACK:  ['CV_MARSHAL'],
   COMMENCED: CV_LANES,
 };
@@ -43,12 +44,21 @@ const MARSHAL_STATE_OWNERS = {
  */
 function computeMarshalNla(strip, flightData, now, ctx) {
   switch (strip.state) {
-    case 'LAUNCH':
-      // "Launched": the aircraft is airborne and stays the Marshal's (docs/adr/0154). Nobody on the carrier hands it on
-      // (ADR 0064); the controller who takes it next creates their own Strip.
-      return { toState: 'LAUNCHED' };
+    case 'LAUNCH': {
+      // "Launched" (docs/adr/0155): PriFly hands the airborne aircraft to departure control in Case III, to the Marshal
+      // in Case I and II. Nobody on the carrier hands it off the ship (ADR 0064, 0154).
+      const toDeparture = ctx.carrierCase() === 'III';
+      const to = toDeparture ? 'CV_DEP' : 'CV_MARSHAL';
+      if (!ctx.isStaffed(to) && !ctx.consolidatedAt(to)) return { inhibited: 'no receiving Position present' };
+      return { toState: 'LAUNCHED', transferTo: to, carrierHandoff: toDeparture ? 'LAUNCH_TO_DEPARTURE' : 'LAUNCH_TO_MARSHAL' };
+    }
 
     case 'LAUNCHED':
+      // Departure control's "To Marshal" (docs/adr/0155), whatever the Case is now.
+      if (strip.ownerPositionId === 'CV_DEP') {
+        if (!ctx.isStaffed('CV_MARSHAL') && !ctx.consolidatedAt('CV_MARSHAL')) return { inhibited: 'no receiving Position present' };
+        return { toState: 'LAUNCHED', transferTo: 'CV_MARSHAL', carrierHandoff: 'DEPARTURE_TO_MARSHAL' };
+      }
       // The Marshal is done with it. The recovery will be a new MARSHAL Strip on the same flight, and EEAT is on the
       // flight (ADR 0064).
       return { toState: 'DROPPED' };
@@ -92,6 +102,9 @@ const family = {
   states: MARSHAL_STATES,
   initialState: 'IN_STACK',
   stateOwners: MARSHAL_STATE_OWNERS,
+  // docs/adr/0155: a MARSHAL Strip is created only by the owner of its first state: PriFly the launch, the Marshal the
+  // recovery (board/ops/create-strip.js).
+  creatorOwnsInitialState: true,
   computeNla: computeMarshalNla,
   countablePreDropStates: ['LAUNCH', 'LAUNCHED'],
   excludedWhenNotCountable: 'NEVER_DEPARTED',

@@ -1,3 +1,8 @@
+### Changed in 2.0.5
+- **The carrier has a Departure Position (`CV_DEP`).** In Case III a launch now goes PriFly → Departure → Marshal: PriFly's **Launched** hands the airborne aircraft to Departure, whose **To Marshal** passes it to the Marshal's airborne Bay. In Case I and II there is no Departure and **Launched** goes straight to the Marshal
+- **PriFly creates the launch Strip** (**PriFly · Launch**, in PriFly's new launch Bay); the Marshal's New Strip makes only the recovery
+- This release changes the wire protocol: update CRC, an older version shows "Update required" (a server change: crc-sync is redeployed with this release)
+
 ### Changed in 2.0.4
 - **A launched aircraft stays with the Marshal.** **Launched** no longer drops the launch Strip: it moves to the Marshal's new airborne Bay, and the Marshal presses **Drop** once the next controller (CTR, a GCI) has made their own Strip. The carrier still hands nothing off (a server change: crc-sync is redeployed with this release)
 - **Acting As shows who holds a Position.** A Position someone else is Primary at shows their name in grey; signing on there makes you an Observer

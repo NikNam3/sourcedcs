@@ -1,7 +1,7 @@
 'use strict';
 
 // The CARRIER Position family (authority registry, S3-2): CV_MARSHAL, CV_PRIFLY,
-// CV_APP1, CV_APP2 (docs/adr/0064 B4, docs/adr/0074). Moved from permission.js.
+// CV_APP1, CV_APP2 (docs/adr/0064 B4, docs/adr/0074) and CV_DEP (docs/adr/0155). Moved from permission.js.
 
 const { NON_CREATE_OPS } = require('../op-kinds');
 const { CARRIER_HANDOFFS } = require('../../carrier/handoffs'); // pure (docs/adr/0064)
@@ -11,17 +11,18 @@ const PERMISSIONS = {
   // ATC afloat"). Written as literals over NON_CREATE_OPS, which already excludes
   // every coordination primitive, TOFI, ConvertToArrival and the airspace-entry
   // ops: "the carrier does not talk to the centre" (§9.13) holds by construction,
-  // not by a list that has to stay current. Only the Marshal originates Strips
-  // (launch and recovery check-in); FINAL and PATTERN Strips come only by a
+  // not by a list that has to stay current. The Marshal originates the recovery
+  // check-in and PriFly the launch (docs/adr/0155); FINAL and PATTERN Strips come only by a
   // carrier transfer. CarrierHandoff is NOT in OP_KINDS (it is not a `.filter()`
   // grant anyone could pick up silently): board/ops/carrier-handoff.js asks
   // canRecordCarrierHandoff below, one acting Position and one transfer kind.
   // docs/adr/0101 (DR-3): the Marshal RECEIVES a HANDOFF (and asks for a ControlRelease); it proposes nothing, which
   // COORDINATION_ACTIONS below holds at the action level, since the grant is by op kind.
   CV_MARSHAL: new Set([...NON_CREATE_OPS, 'CreateStrip', 'HANDOFF', 'ControlRelease']),
-  CV_PRIFLY:  new Set(NON_CREATE_OPS),
+  CV_PRIFLY:  new Set([...NON_CREATE_OPS, 'CreateStrip']),
   CV_APP1:    new Set(NON_CREATE_OPS),
   CV_APP2:    new Set(NON_CREATE_OPS),
+  CV_DEP:     new Set(NON_CREATE_OPS),
 };
 
 /**
@@ -49,7 +50,10 @@ const CREATE_STRIP_TYPE_PERMISSIONS = {
   // Launch and recovery check-in are both a MARSHAL Strip (ADR 0064: a launch is
   // a MARSHAL Strip in LAUNCH). FINAL and PATTERN are never created, only
   // converted to by a carrier transfer, so no Position may CreateStrip them.
+  // docs/adr/0155: PriFly creates the launch, the Marshal the recovery. Which one is the state's owner
+  // (MARSHAL's `creatorOwnsInitialState`): PriFly owns LAUNCH, the Marshal IN_STACK.
   CV_MARSHAL: new Set(['MARSHAL']),
+  CV_PRIFLY:  new Set(['MARSHAL']),
 };
 
 /**
@@ -74,6 +78,7 @@ const CARRIER_CAPABILITIES = {
   CV_PRIFLY:  { editsCarrierState: true,  sequencesStack: false },
   CV_APP1:    { editsCarrierState: false, sequencesStack: false },
   CV_APP2:    { editsCarrierState: false, sequencesStack: false },
+  CV_DEP:     { editsCarrierState: false, sequencesStack: false },
 };
 
 function _carrierCap(positionId, key) {
@@ -89,7 +94,7 @@ function canRecordCarrierHandoff(actingPositionId, kind) {
 
 const family = {
   family: 'carrier',
-  positions: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'],
+  positions: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2', 'CV_DEP'],
   permissions: PERMISSIONS,
   createsStripTypes: CREATE_STRIP_TYPE_PERMISSIONS,
   capabilities: CARRIER_CAPABILITIES,

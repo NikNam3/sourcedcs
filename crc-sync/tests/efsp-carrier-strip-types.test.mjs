@@ -82,13 +82,16 @@ test('Block Maps: derived Blocks are not writable by SetBlock; carrier Blocks ro
   for (const type of ['MARSHAL', 'FINAL', 'PATTERN']) assert.deepEqual(blockMap.resolveBlockTarget(type, '9E'), remarks, type);
 });
 
-test('permissions: only the Marshal creates, only as MARSHAL; no CV Position proposes a coordination, TOFIs or converts (the Marshal answers a HANDOFF, docs/adr/0101)', () => {
-  assert.equal(classPermission.canMutate('CV_MARSHAL', 'CreateStrip'), true);
-  assert.equal(permission.canCreateStripType('CV_MARSHAL', 'MARSHAL'), true);
-  assert.equal(permission.canCreateStripType('CV_MARSHAL', 'FINAL'), false);
-  assert.equal(permission.canCreateStripType('CV_MARSHAL', 'PATTERN'), false);
-  for (const p of ['CV_PRIFLY', 'CV_APP1', 'CV_APP2']) assert.equal(classPermission.canMutate(p, 'CreateStrip'), false, p);
-  for (const p of ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2']) {
+test('permissions: the Marshal and PriFly create, only as MARSHAL; no CV Position proposes a coordination, TOFIs or converts (the Marshal answers a HANDOFF, docs/adr/0101)', () => {
+  // docs/adr/0155: PriFly creates the launch, the Marshal the recovery (create-strip.js holds each to its own first state).
+  for (const p of ['CV_MARSHAL', 'CV_PRIFLY']) {
+    assert.equal(classPermission.canMutate(p, 'CreateStrip'), true, p);
+    assert.equal(permission.canCreateStripType(p, 'MARSHAL'), true, p);
+    assert.equal(permission.canCreateStripType(p, 'FINAL'), false, p);
+    assert.equal(permission.canCreateStripType(p, 'PATTERN'), false, p);
+  }
+  for (const p of ['CV_APP1', 'CV_APP2', 'CV_DEP']) assert.equal(classPermission.canMutate(p, 'CreateStrip'), false, p);
+  for (const p of ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2', 'CV_DEP']) {
     // The Marshal alone holds HANDOFF and ControlRelease, and only their receiving actions (DR-3).
     const held = p === 'CV_MARSHAL' ? ['HANDOFF', 'ControlRelease'] : [];
     for (const k of [...permission.COORDINATION_OP_KINDS, 'ControlRelease', 'TOFI', 'ConvertToArrival', 'ApproveAirspaceEntry', 'ClearAirspaceEntry']) {
@@ -129,17 +132,27 @@ test('state authority: Marshal to Commence, lane to the end of the approach, Pri
   assert.equal(permission.canActOnState('CV_MARSHAL', 'FINAL', 'ON_FINAL'), false);
   assert.equal(permission.canActOnState('CV_PRIFLY', 'PATTERN', 'IN_PATTERN'), true);
   assert.equal(permission.canActOnState('CV_PRIFLY', 'FINAL', 'BALL'), false);
+  // docs/adr/0155: PriFly launches; departure control and the Marshal work the airborne launch.
+  assert.equal(permission.canActOnState('CV_PRIFLY', 'MARSHAL', 'LAUNCH'), true);
+  assert.equal(permission.canActOnState('CV_MARSHAL', 'MARSHAL', 'LAUNCH'), false);
+  assert.equal(permission.canActOnState('CV_DEP', 'MARSHAL', 'LAUNCHED'), true);
+  assert.equal(permission.canActOnState('CV_MARSHAL', 'MARSHAL', 'LAUNCHED'), true);
+  assert.equal(permission.canActOnState('CV_DEP', 'MARSHAL', 'IN_STACK'), false);
 });
 
-test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier states, PriFly on the offer lists (H111)', () => {
+test('the CARRIER Facility: five MILITARY_ATC Positions, Bays that imply carrier states, PriFly on the offer lists (H111)', () => {
   const c = facilityConfig.getFacilityConfig('CARRIER');
-  assert.deepEqual(c.positions, ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2']);
+  assert.deepEqual(c.positions, ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2', 'CV_DEP']);
   for (const p of c.positions) assert.equal(facilityConfig.getPositionClass(p), 'MILITARY_ATC');
   // The lists themselves are asserted once, in efsp-facility-config.test.mjs; here only that every Position can be offered and be offered to.
-  for (const p of c.positions) assert.ok(Array.isArray(c.consolidation[p]) && c.consolidation[p].length === 3, p);
+  for (const p of c.positions) assert.ok(Array.isArray(c.consolidation[p]) && c.consolidation[p].length === 4, p);
+  // docs/adr/0155: PriFly's launch Bay, departure control's airborne Bay, the Marshal's airborne Bay.
+  assert.equal(facilityConfig.bayImpliesState('cv-prifly-launch', 'CARRIER'), 'LAUNCH');
+  assert.equal(facilityConfig.bayImpliesState('cv-dep-departures', 'CARRIER'), 'LAUNCHED');
+  assert.equal(facilityConfig.bayImpliesState('cv-marshal-airborne', 'CARRIER'), 'LAUNCHED');
   assert.equal(facilityConfig.bayImpliesState('cv-marshal-stack', 'CARRIER'), 'IN_STACK');
   assert.equal(facilityConfig.bayImpliesState('cv-app2-bolter', 'CARRIER'), 'BOLTER_WAVEOFF');
-  assert.deepEqual(facilityConfig.getBaysFor('CV_PRIFLY', 'CARRIER')[0].rackIds, ['main'], 'no pattern legs (live test U19, docs/adr/0137)');
+  assert.deepEqual(facilityConfig.getBaysFor('CV_PRIFLY', 'CARRIER').find((b) => b.bayId === 'cv-prifly-pattern').rackIds, ['main'], 'no pattern legs (live test U19, docs/adr/0137)');
   // every Bay-implied state is a state of some carrier strip type
   const carrierStates = new Set(CARRIER_STRIP_TYPES.flatMap(r => nla.STATES_BY_STRIP_TYPE[r]));
   for (const b of facilityConfig.getAllBays('CARRIER')) if (b.impliesState) assert.ok(carrierStates.has(b.impliesState), b.bayId);
@@ -165,9 +178,22 @@ test('the NLA tables: Commence is Case- and lane-dependent; one next action per 
   // Trapped (docs/adr/0137, live test U20): to PriFly's RECOVERED Bay as a PATTERN Strip, not a drop at the lane.
   assert.deepEqual(nla.computeNla(strip('FINAL', 'BALL'), null, NOW, {}), { toState: 'RECOVERED', carrierHandoff: 'FINAL_TRAPPED', alsoLegal: ['BOLTER_WAVEOFF'] });
   assert.equal(nla.computeNla(strip('PATTERN', 'IN_PATTERN'), null, NOW, {}).toState, 'RECOVERED');
-  // Launched keeps the Strip with the Marshal (docs/adr/0154); the Marshal drops it.
-  assert.deepEqual(nla.computeNla(strip('MARSHAL', 'LAUNCH'), null, NOW, {}), { toState: 'LAUNCHED' });
-  assert.deepEqual(nla.computeNla(strip('MARSHAL', 'LAUNCHED'), null, NOW, {}), { toState: 'DROPPED' });
+  // docs/adr/0155: PriFly's Launched goes to departure control in Case III, to the Marshal in Case I and II; departure's
+  // To Marshal in any Case; the Marshal drops it (docs/adr/0154).
+  const lctx = (caseValue, staffed = true) => ({ ...ctx(caseValue, 'CV_APP1', staffed), consolidatedAt: () => null });
+  assert.deepEqual(nla.computeNla(strip('MARSHAL', 'LAUNCH'), null, NOW, lctx('III')),
+    { toState: 'LAUNCHED', transferTo: 'CV_DEP', carrierHandoff: 'LAUNCH_TO_DEPARTURE' });
+  for (const c of ['I', 'II']) {
+    assert.deepEqual(nla.computeNla(strip('MARSHAL', 'LAUNCH'), null, NOW, lctx(c)),
+      { toState: 'LAUNCHED', transferTo: 'CV_MARSHAL', carrierHandoff: 'LAUNCH_TO_MARSHAL' }, c);
+  }
+  assert.equal(nla.computeNla(strip('MARSHAL', 'LAUNCH'), null, NOW, lctx('III', false)).inhibited, 'no receiving Position present');
+  const atDep = { ...strip('MARSHAL', 'LAUNCHED'), ownerPositionId: 'CV_DEP' };
+  for (const c of ['I', 'II', 'III']) {
+    assert.deepEqual(nla.computeNla(atDep, null, NOW, lctx(c)),
+      { toState: 'LAUNCHED', transferTo: 'CV_MARSHAL', carrierHandoff: 'DEPARTURE_TO_MARSHAL' }, c);
+  }
+  assert.deepEqual(nla.computeNla({ ...strip('MARSHAL', 'LAUNCHED'), ownerPositionId: 'CV_MARSHAL' }, null, NOW, lctx('III')), { toState: 'DROPPED' });
 });
 
 test('a ship radar selector can name the radar and the hull', async () => {

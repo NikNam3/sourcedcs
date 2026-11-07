@@ -41,7 +41,7 @@ assert.notEqual(CARRIER_ATO, IRON);
 assert.notEqual(DIVERT_ATO, IRON);
 
 const clock = { now: () => Date.UTC(2016, 5, 21, 10, 0), source: 'MISSION' };
-const CREW = { TAC_C2: 'TACTICAL', CV_MARSHAL: 'CARRIER', CV_PRIFLY: 'CARRIER', OPS: 'INCIRLIK' };
+const CREW = { TAC_C2: 'TACTICAL', CV_MARSHAL: 'CARRIER', CV_PRIFLY: 'CARRIER', CV_DEP: 'CARRIER', OPS: 'INCIRLIK' };
 
 function fresh() {
   fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
@@ -69,9 +69,10 @@ function importAto(efsp, c, text, choices = []) {
 const flightOf = (efsp, callsign) => efsp.flightDataStore.getAll().find((f) => f.identity.callsign === callsign);
 const missionLines = (efsp) => efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.stripType === 'MISSION' && s.state !== 'DROPPED');
 const launchOp = (flightData) => ({
-  kind: 'CreateStrip', bayId: 'cv-marshal-departures', rackId: 'main', stripType: 'MARSHAL', initialState: 'LAUNCH', flightData,
+  kind: 'CreateStrip', bayId: 'cv-prifly-launch', rackId: 'main', stripType: 'MARSHAL', initialState: 'LAUNCH', flightData,
 });
-const launch = (efsp, c, callsign) => mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, launchOp({ callsign, aircraftType: 'F-16C' }));
+// docs/adr/0155: PriFly creates the launch.
+const launch = (efsp, c, callsign) => mustAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', null, launchOp({ callsign, aircraftType: 'F-16C' }));
 const live = (efsp, facilityId) => efsp.boardStoreFor(facilityId).getAll().filter((s) => s.state !== 'DROPPED');
 
 // ── Recognising a carrier mission ────────────────────────────────────────────
@@ -112,8 +113,8 @@ test('a launch typed by callsign binds to its ATO line: same flight, same Mode 3
   importAto(efsp, c, CARRIER_ATO);
   const viper = flightOf(efsp, 'VIPER11');
   const before = efsp.flightDataStore.getAll().length;
-  const ack = efsp.handleMessage(c.CV_MARSHAL.session, {
-    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), facilityId: 'CARRIER', actingPositionId: 'CV_MARSHAL',
+  const ack = efsp.handleMessage(c.CV_PRIFLY.session, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), facilityId: 'CARRIER', actingPositionId: 'CV_PRIFLY',
     op: launchOp({ callsign: 'VIPER11', aircraftType: 'F-16C' }),
   }).ack;
   assert.equal(ack.ok, true, JSON.stringify(ack));
@@ -209,7 +210,7 @@ test('a cancelled launch leaves the line standing; the next launch binds to it a
   const viper = flightOf(efsp, 'VIPER11');
   const first = launch(efsp, c, 'VIPER11');
   assert.equal(first.flightDataId, viper.flightDataId);
-  mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', first, { kind: 'DropStrip' });
+  mustAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', first, { kind: 'DropStrip' });
   assert.equal(missionLines(efsp).some((s) => s.flightDataId === viper.flightDataId), true, 'the MISSION line stays');
   assert.equal(efsp.flightDataStore.getFlightData(viper.flightDataId).identity.beaconAssigned, '4521', 'the ATO code is not released');
   const second = launch(efsp, c, 'VIPER11');
@@ -256,8 +257,12 @@ async function countOf(efsp, c, atoText, mutateFlight) {
   if (atoText) importAto(efsp, c, atoText);
   const strip = launch(efsp, c, 'VIPER11');
   if (mutateFlight) mutateFlight(strip.flightDataId);
-  const airborne = await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
-  assert.equal(airborne.state, 'LAUNCHED'); // docs/adr/0154: Launched keeps it with the Marshal
+  // docs/adr/0155: Case III (the default), so PriFly's Launched goes to departure control, which hands it to the Marshal.
+  const airborne = await advance(efsp, c.CV_PRIFLY, 'CV_PRIFLY', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
+  assert.equal(airborne.state, 'LAUNCHED');
+  assert.equal(airborne.ownerPositionId, 'CV_DEP');
+  const atMarshal = await advance(efsp, c.CV_DEP, 'CV_DEP', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
+  assert.equal(atMarshal.ownerPositionId, 'CV_MARSHAL'); // docs/adr/0154: the Marshal keeps it until it drops it
   const dropped = await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
   assert.equal(dropped.state, 'DROPPED');
   const rec = fs.readFileSync(process.env.CRCSYNC_EFSP_TRAFFIC_COUNT_PATH, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.type === 'COUNT' && r.stripId === strip.stripId);

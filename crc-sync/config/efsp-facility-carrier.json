@@ -4,25 +4,29 @@
     "CV_MARSHAL",
     "CV_PRIFLY",
     "CV_APP1",
-    "CV_APP2"
+    "CV_APP2",
+    "CV_DEP"
   ],
   "positionClasses": {
     "CV_MARSHAL": "MILITARY_ATC",
     "CV_PRIFLY": "MILITARY_ATC",
     "CV_APP1": "MILITARY_ATC",
-    "CV_APP2": "MILITARY_ATC"
+    "CV_APP2": "MILITARY_ATC",
+    "CV_DEP": "MILITARY_ATC"
   },
   "positionLetters": {
     "CV_MARSHAL": "V",
     "CV_PRIFLY": "P",
     "CV_APP1": "1",
-    "CV_APP2": "2"
+    "CV_APP2": "2",
+    "CV_DEP": "D"
   },
   "consolidation": {
-    "CV_APP1": ["CV_MARSHAL", "CV_APP2", "CV_PRIFLY"],
-    "CV_APP2": ["CV_MARSHAL", "CV_APP1", "CV_PRIFLY"],
-    "CV_PRIFLY": ["CV_MARSHAL", "CV_APP1", "CV_APP2"],
-    "CV_MARSHAL": ["CV_APP1", "CV_APP2", "CV_PRIFLY"]
+    "CV_APP1": ["CV_MARSHAL", "CV_APP2", "CV_DEP", "CV_PRIFLY"],
+    "CV_APP2": ["CV_MARSHAL", "CV_APP1", "CV_DEP", "CV_PRIFLY"],
+    "CV_PRIFLY": ["CV_MARSHAL", "CV_APP1", "CV_APP2", "CV_DEP"],
+    "CV_MARSHAL": ["CV_APP1", "CV_APP2", "CV_DEP", "CV_PRIFLY"],
+    "CV_DEP": ["CV_MARSHAL", "CV_APP1", "CV_APP2", "CV_PRIFLY"]
   },
   "handBack": {},
   "positionRadars": {
@@ -54,6 +58,13 @@
         "coalition": "own",
         "hull": "CVN-72"
       }
+    ],
+    "CV_DEP": [
+      {
+        "kind": "carrier",
+        "coalition": "own",
+        "hull": "CVN-72"
+      }
     ]
   },
   "modeCIntruder": {
@@ -72,13 +83,6 @@
         "impliesState": "IN_STACK"
       },
       {
-        "bayId": "cv-marshal-departures",
-        "rackIds": [
-          "main"
-        ],
-        "impliesState": "LAUNCH"
-      },
-      {
         "bayId": "cv-marshal-airborne",
         "rackIds": [
           "main"
@@ -93,6 +97,13 @@
       }
     ],
     "CV_PRIFLY": [
+      {
+        "bayId": "cv-prifly-launch",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "LAUNCH"
+      },
       {
         "bayId": "cv-prifly-pattern",
         "rackIds": [
@@ -160,6 +171,15 @@
           "main"
         ],
         "impliesState": "BOLTER_WAVEOFF"
+      }
+    ],
+    "CV_DEP": [
+      {
+        "bayId": "cv-dep-departures",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "LAUNCHED"
       }
     ]
   },

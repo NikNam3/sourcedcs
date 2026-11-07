@@ -42,6 +42,14 @@ function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } 
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.bayId} holds ${impliedState} Strips, not ${op.initialState}` };
     }
   }
+  // docs/adr/0155: a strip type whose Strips are made by the owner of their first state (MARSHAL: PriFly the launch, the
+  // Marshal the recovery).
+  if (family && family.creatorOwnsInitialState) {
+    const startState = op.initialState || impliedState || ctx.initialStateFor(stripType);
+    if (!authority.stateOwners(stripType, startState).includes(actingPositionId)) {
+      return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} does not create a ${stripType} Strip in ${startState}` };
+    }
+  }
 
   // BIND, rather than originate (docs/adr/0054). `op.flightDataId` attaches this
   // new Strip to a flight that already exists instead of minting a fresh

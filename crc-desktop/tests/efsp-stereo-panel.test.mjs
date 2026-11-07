@@ -310,32 +310,28 @@ test('a burst of snapshots does not stack fetches — the in-flight latch holds'
 
 // ── the carrier (live test U18, docs/adr/0137) ──────────────────────────
 
-test('the Marshal creates a recovery or a launch Strip from the toolbar, no flight-plan lookup, in the carrier\'s Facility', async () => {
+test('the Marshal creates a recovery and PriFly a launch Strip from the toolbar, no flight-plan lookup, in the carrier\'s Facility (crc-sync docs/adr/0155)', async () => {
   let lookups = 0;
-  const { els, sent } = await mounted({ signedOn: ['CV_MARSHAL'], lookupSpy: async () => { lookups += 1; return { found: false }; } });
-  const type = els['efsp-create-strip-type'];
-  assert.equal(els['efsp-create-strip-btn'].disabled, false);
-  assert.equal(type.hidden, false, 'two origins, so a choice');
-  assert.deepEqual(type.children.map(o => o.textContent), ['Marshal · Recovery', 'Marshal · Launch']);
-  assert.equal(els['efsp-create-strip-stereo'].hidden, true);
-
-  els['efsp-new-strip-callsign'].value = 'ROOK21';
-  for (const fn of els['efsp-create-strip-btn']._listeners.click) await fn({});
-  type.value = type.children[1].value;
-  els['efsp-new-strip-callsign'].value = 'ROOK22';
-  for (const fn of els['efsp-create-strip-btn']._listeners.click) await fn({});
-
+  const sentAll = [];
+  for (const pos of ['CV_MARSHAL', 'CV_PRIFLY']) {
+    const { els, sent } = await mounted({ signedOn: [pos], lookupSpy: async () => { lookups += 1; return { found: false }; } });
+    assert.equal(els['efsp-create-strip-btn'].disabled, false, pos);
+    assert.equal(els['efsp-create-strip-type'].hidden, true, `${pos}: one origin, no choice`);
+    assert.equal(els['efsp-create-strip-stereo'].hidden, true);
+    els['efsp-new-strip-callsign'].value = 'ROOK21';
+    for (const fn of els['efsp-create-strip-btn']._listeners.click) await fn({});
+    sentAll.push(...sent);
+  }
   assert.equal(lookups, 0);
-  assert.equal(sent.length, 2);
-  assert.deepEqual(sent.map(x => [x.actingPositionId, x.facilityId, x.op.bayId, x.op.stripType, x.op.initialState]), [
+  assert.deepEqual(sentAll.map(x => [x.actingPositionId, x.facilityId, x.op.bayId, x.op.stripType, x.op.initialState]), [
     ['CV_MARSHAL', 'CARRIER', 'cv-marshal-stack', 'MARSHAL', undefined],
-    ['CV_MARSHAL', 'CARRIER', 'cv-marshal-departures', 'MARSHAL', 'LAUNCH'],
+    ['CV_PRIFLY', 'CARRIER', 'cv-prifly-launch', 'MARSHAL', 'LAUNCH'],
   ]);
-  assert.deepEqual(sent[0].op.flightData, { callsign: 'ROOK21', aircraftType: '' });
+  assert.deepEqual(sentAll[0].op.flightData, { callsign: 'ROOK21', aircraftType: '' });
 });
 
-test('PriFly and the approach lanes originate no Strip', async () => {
-  for (const p of ['CV_PRIFLY', 'CV_APP1']) {
+test('departure control and the approach lanes originate no Strip', async () => {
+  for (const p of ['CV_DEP', 'CV_APP1']) {
     const { els } = await mounted({ signedOn: [p] });
     assert.equal(els['efsp-create-strip-btn'].disabled, true, p);
   }

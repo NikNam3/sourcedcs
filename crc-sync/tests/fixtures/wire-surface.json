@@ -1,5 +1,5 @@
 {
-  "protocol": 2,
+  "protocol": 3,
   "surface": {
     "clientToServer": [
       "aptConfigSet",
@@ -172,8 +172,11 @@
       "handoffs": [
         "APPROACH_TO_FINAL",
         "COMMENCED_TO_MARSHAL",
+        "DEPARTURE_TO_MARSHAL",
         "FINAL_TO_LSO",
         "FINAL_TRAPPED",
+        "LAUNCH_TO_DEPARTURE",
+        "LAUNCH_TO_MARSHAL",
         "MARSHAL_TO_APPROACH",
         "MARSHAL_TO_PATTERN_CASE_I",
         "MARSHAL_TO_PRIFLY"

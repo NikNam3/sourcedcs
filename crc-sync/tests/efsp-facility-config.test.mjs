@@ -48,12 +48,13 @@ test('OPS and AP have no offer list: OPS is not a control position (guide 4.1 ru
   assert.equal('AP' in lists, false);
 });
 
-test('the shipped carrier offer lists (H111 Q-C2: a Position is offered to the most important staffed one first, Marshal, then the lanes, then PriFly)', () => {
+test('the shipped carrier offer lists (H111 Q-C2: a Position is offered to the most important staffed one first, Marshal, then the lanes, then departure (docs/adr/0155), then PriFly)', () => {
   assert.deepEqual(getConsolidation('CARRIER'), {
-    CV_APP1: ['CV_MARSHAL', 'CV_APP2', 'CV_PRIFLY'],
-    CV_APP2: ['CV_MARSHAL', 'CV_APP1', 'CV_PRIFLY'],
-    CV_PRIFLY: ['CV_MARSHAL', 'CV_APP1', 'CV_APP2'],
-    CV_MARSHAL: ['CV_APP1', 'CV_APP2', 'CV_PRIFLY'],
+    CV_APP1: ['CV_MARSHAL', 'CV_APP2', 'CV_DEP', 'CV_PRIFLY'],
+    CV_APP2: ['CV_MARSHAL', 'CV_APP1', 'CV_DEP', 'CV_PRIFLY'],
+    CV_PRIFLY: ['CV_MARSHAL', 'CV_APP1', 'CV_APP2', 'CV_DEP'],
+    CV_MARSHAL: ['CV_APP1', 'CV_APP2', 'CV_DEP', 'CV_PRIFLY'],
+    CV_DEP: ['CV_MARSHAL', 'CV_APP1', 'CV_APP2', 'CV_PRIFLY'],
   });
   assert.deepEqual(getHandBack('CARRIER'), {});
 });

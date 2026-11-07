@@ -100,6 +100,10 @@ export const CARRIER_HANDOFFS = {
   COMMENCED_TO_MARSHAL:      { label: 'Back to stack', trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'] },
   MARSHAL_TO_PATTERN_CASE_I: { label: 'To pattern',    trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'] },
   FINAL_TRAPPED:             { label: 'Trapped',       trigger: 'CONTROLLER_INITIATED', from: ['CV_APP1', 'CV_APP2'], cases: ['I', 'II', 'III'] }, // crc-sync docs/adr/0137
+  // crc-sync docs/adr/0155: the launch, PriFly -> departure control (Case III) or the Marshal (Case I, II), then departure -> the Marshal.
+  LAUNCH_TO_DEPARTURE:       { label: 'Launched',      trigger: 'CONTROLLER_INITIATED', from: ['CV_PRIFLY'], cases: ['III'] },
+  LAUNCH_TO_MARSHAL:         { label: 'Launched',      trigger: 'CONTROLLER_INITIATED', from: ['CV_PRIFLY'], cases: ['I', 'II'] },
+  DEPARTURE_TO_MARSHAL:      { label: 'To Marshal',    trigger: 'CONTROLLER_INITIATED', from: ['CV_DEP'], cases: ['I', 'II', 'III'] },
 };
 
 // crc-sync docs/adr/0126: an ARRIVAL NLA that LC's pattern cells (9J-ENTRY, 9J-OPTION) turned towards the pattern, keyed
@@ -219,7 +223,7 @@ export const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HA
 export const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVERFLIGHT: 'IN_SECTOR' };
 
 // The carrier's three strip types — mirrors the authority tables exactly (crc-sync docs/adr/0074).
-export const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], LAUNCHED: ['CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };
+export const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_PRIFLY'], LAUNCHED: ['CV_DEP', 'CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };
 // PAR (docs/adr/0075) shares FINAL: the same strip type, more owners. PATTERN is the carrier's only (docs/adr/0126: no RSU). BALL is the carrier's only (docs/adr/0117).
 export const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2', 'PAR'], BALL: ['CV_APP1', 'CV_APP2'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2', 'PAR'] };
 export const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY'], RECOVERED: ['CV_PRIFLY'] };

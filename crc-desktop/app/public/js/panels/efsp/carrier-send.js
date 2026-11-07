@@ -15,6 +15,7 @@ export const CARRIER_CAPABILITIES = {
   CV_PRIFLY:  { editsCarrierState: true,  sequencesStack: false },
   CV_APP1:    { editsCarrierState: false, sequencesStack: false },
   CV_APP2:    { editsCarrierState: false, sequencesStack: false },
+  CV_DEP:     { editsCarrierState: false, sequencesStack: false },
 };
 
 /** The signed-on CV Position that has this capability, or null. Pure over `signedOnIds`. */

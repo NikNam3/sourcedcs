@@ -14,7 +14,7 @@ const SHIPPED = path.join(path.dirname(new URL(import.meta.url).pathname), '..',
 const SYRIA = schema.loadStandingList({ paths: { read: SHIPPED } }).Syria;
 const byId = (id) => SYRIA.find(d => d.airspaceId === id);
 
-const FACILITIES = { INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'AP', 'PAR'], CENTER: ['CTR'], CARRIER: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'] };
+const FACILITIES = { INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'AP', 'PAR'], CENTER: ['CTR'], CARRIER: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2', 'CV_DEP'] };
 const lookup = {
   hasFacility: (id) => id in FACILITIES,
   positionsOf: (id) => FACILITIES[id] || [],

@@ -113,6 +113,41 @@ const CARRIER_HANDOFFS = Object.freeze({
     source: '[SOURCE-DEFINED]',
     guide: 'docs/adr/0137 — a trapped aircraft\'s Strip goes to PriFly\'s RECOVERED Bay',
   }),
+  // docs/adr/0155: the launch. PriFly creates the Strip on deck (LAUNCH) and "Launched" hands the airborne aircraft on: in
+  // Case III to CATCC departure control (CV_DEP), in Case I and II straight to the Marshal (departure control works Case III
+  // only, as the lanes are the approach side of CATCC). Departure's "To Marshal" ends its part; the Marshal keeps the flight
+  // until it drops it (docs/adr/0154). [SOURCE-DEFINED]: the human's ruling of 2026-11-07, CV NATOPS 5 not re-read here.
+  LAUNCH_TO_DEPARTURE: _row({
+    trigger: 'CONTROLLER_INITIATED',
+    from: ['CV_PRIFLY'], to: Object.freeze(['CV_DEP']),
+    cases: ['III'],
+    ownershipChange: true, stripTypeChange: null, // MARSHAL stays MARSHAL, LAUNCH -> LAUNCHED
+    stackEffect: null,
+    label: 'Launched',
+    source: '[SOURCE-DEFINED]',
+    guide: 'docs/adr/0155 — Case III: PriFly hands a launched aircraft to departure control',
+  }),
+  LAUNCH_TO_MARSHAL: _row({
+    trigger: 'CONTROLLER_INITIATED',
+    from: ['CV_PRIFLY'], to: Object.freeze(['CV_MARSHAL']),
+    cases: ['I', 'II'],
+    ownershipChange: true, stripTypeChange: null, // MARSHAL stays MARSHAL, LAUNCH -> LAUNCHED
+    stackEffect: null,
+    label: 'Launched',
+    source: '[SOURCE-DEFINED]',
+    guide: 'docs/adr/0155 — Case I and II: PriFly hands a launched aircraft to the Marshal',
+  }),
+  // Any Case: a flight departure control already holds must still be handed on after PriFly changes the Case.
+  DEPARTURE_TO_MARSHAL: _row({
+    trigger: 'CONTROLLER_INITIATED',
+    from: ['CV_DEP'], to: Object.freeze(['CV_MARSHAL']),
+    cases: ['I', 'II', 'III'],
+    ownershipChange: true, stripTypeChange: null, // MARSHAL stays MARSHAL, LAUNCHED stays LAUNCHED
+    stackEffect: null,
+    label: 'To Marshal',
+    source: '[SOURCE-DEFINED]',
+    guide: 'docs/adr/0155 — departure control hands the departure to the Marshal',
+  }),
 });
 
 /** The four kinds §9.12 names — the ones that MUST stay four distinct affordances. */

@@ -22,7 +22,7 @@ const FACILITIES = {
   INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'AP', 'PAR'],
   CENTER: ['CTR'],
   TACTICAL: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
-  CARRIER: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'],
+  CARRIER: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2', 'CV_DEP'],
 };
 const lookup = {
   hasFacility: (id) => id in FACILITIES,

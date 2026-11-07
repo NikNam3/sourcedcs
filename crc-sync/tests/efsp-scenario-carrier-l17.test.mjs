@@ -25,7 +25,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 const { createEfsp } = await import('../src/efsp/index.js');
 const { crew, hold, freshEfsp, act, mustAct, carrierAct, mustCarrierAct, advance } = await import('./helpers/efsp-scenario.mjs');
 
-const STAFFED = { CV_MARSHAL: 'CARRIER', CV_PRIFLY: 'CARRIER', CV_APP1: 'CARRIER', CV_APP2: 'CARRIER' };
+const STAFFED = { CV_MARSHAL: 'CARRIER', CV_PRIFLY: 'CARRIER', CV_APP1: 'CARRIER', CV_APP2: 'CARRIER', CV_DEP: 'CARRIER' };
 const strip = (efsp, id) => efsp.boardStoreFor('CARRIER').getStrip(id);
 const live = (efsp) => efsp.boardStoreFor('CARRIER').getAll().filter(s => s.state !== 'DROPPED');
 const stack = (efsp) => efsp.carrierStore.getRecord().stacks.MAIN.entries;
@@ -42,6 +42,14 @@ function checkIn(efsp, c, callsign, { flightDataId } = {}) {
   });
 }
 
+// docs/adr/0155: PriFly creates the launch on deck.
+function launchStrip(efsp, c, callsign) {
+  return mustAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', null, {
+    kind: 'CreateStrip', bayId: 'cv-prifly-launch', rackId: 'main', stripType: 'MARSHAL', initialState: 'LAUNCH',
+    flightData: { callsign, aircraftType: 'F-18C' },
+  });
+}
+
 function refused(ack, reason, detail, label = '') {
   assert.equal(ack.ok, false, `${label} should be refused: ${JSON.stringify(ack)}`);
   if (reason) assert.equal(ack.reason, reason, `${label}: ${JSON.stringify(ack)}`);
@@ -50,21 +58,27 @@ function refused(ack, reason, detail, label = '') {
 
 test('a launch is a MARSHAL Strip in LAUNCH; EEAT set on it is on the recovery Strip, because it is on the flight', async () => {
   const { efsp, c } = fresh();
-  const launch = mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, {
-    kind: 'CreateStrip', bayId: 'cv-marshal-departures', rackId: 'main', stripType: 'MARSHAL', initialState: 'LAUNCH',
-    flightData: { callsign: 'VIPER11', aircraftType: 'F-18C' },
-  });
+  const launch = launchStrip(efsp, c, 'VIPER11');
   assert.equal(launch.stripType, 'MARSHAL');
   assert.equal(launch.state, 'LAUNCH');
+  assert.equal(launch.ownerPositionId, 'CV_PRIFLY');
+  assert.equal(launch.bayId, 'cv-prifly-launch');
   assert.equal(stack(efsp).length, 0, 'a launch is not in the recovery stack');
   const eeat = Date.UTC(2026, 5, 1, 14, 30);
-  mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', launch, { kind: 'SetBlock', blockId: 'C15', value: eeat });
-  mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId), { kind: 'SetBlock', blockId: 'C10', value: 7 });
-  // "Launched": the Strip stays the Marshal's, airborne (docs/adr/0154); nobody on the carrier hands it on
-  const airborne = await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId));
+  mustAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', launch, { kind: 'SetBlock', blockId: 'C15', value: eeat });
+  mustAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', strip(efsp, launch.stripId), { kind: 'SetBlock', blockId: 'C10', value: 7 });
+  // "Launched" in Case III (the default): to departure control (docs/adr/0155)
+  const departing = await advance(efsp, c.CV_PRIFLY, 'CV_PRIFLY', strip(efsp, launch.stripId));
+  assert.equal(departing.state, 'LAUNCHED');
+  assert.equal(departing.ownerPositionId, 'CV_DEP');
+  assert.equal(departing.bayId, 'cv-dep-departures');
+  assert.equal(departing.carrierHandoff.kind, 'LAUNCH_TO_DEPARTURE');
+  // "To Marshal": the Strip stays the Marshal's, airborne (docs/adr/0154); nobody on the carrier hands it off the ship
+  const airborne = await advance(efsp, c.CV_DEP, 'CV_DEP', strip(efsp, launch.stripId));
   assert.equal(airborne.state, 'LAUNCHED');
   assert.equal(airborne.ownerPositionId, 'CV_MARSHAL');
   assert.equal(airborne.bayId, 'cv-marshal-airborne');
+  assert.equal(airborne.carrierHandoff.kind, 'DEPARTURE_TO_MARSHAL');
   assert.equal(stack(efsp).length, 0, 'an airborne launch is not in the recovery stack');
   // the Marshal drops it once the next controller has the aircraft on their own Strip
   const dropped = await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId));
@@ -373,12 +387,11 @@ test('a Case change re-states every carrier Strip\'s NLA: Commence becomes To pa
 
 test('the recovery Strip keeps the flight\'s squawk: dropping the launch Strip must not hand its code to another flight', async () => {
   const { efsp, c } = fresh();
-  const launch = mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, {
-    kind: 'CreateStrip', bayId: 'cv-marshal-departures', rackId: 'main', stripType: 'MARSHAL', initialState: 'LAUNCH', flightData: { callsign: 'VIPER11', aircraftType: 'F-18C' },
-  });
+  const launch = launchStrip(efsp, c, 'VIPER11');
   const code = efsp.flightDataStore.getFlightData(launch.flightDataId).identity.beaconAssigned;
   assert.ok(code, 'the launch minted a squawk');
-  await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId)); // launched: airborne, still the Marshal's
+  await advance(efsp, c.CV_PRIFLY, 'CV_PRIFLY', strip(efsp, launch.stripId)); // launched: to departure control (Case III)
+  await advance(efsp, c.CV_DEP, 'CV_DEP', strip(efsp, launch.stripId)); // to the Marshal, airborne
   await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId)); // the Marshal drops it
   const recovery = checkIn(efsp, c, null, { flightDataId: launch.flightDataId });
   assert.equal(efsp.flightDataStore.getFlightData(recovery.flightDataId).identity.beaconAssigned, code);
@@ -386,4 +399,39 @@ test('the recovery Strip keeps the flight\'s squawk: dropping the launch Strip m
   // and another flight created now does not get the same code
   const other = checkIn(efsp, c, 'OTHER22');
   assert.notEqual(efsp.flightDataStore.getFlightData(other.flightDataId).identity.beaconAssigned, code, 'a duplicate Mode 3/A');
+});
+
+test('docs/adr/0155: in Case I and II PriFly\'s Launched goes straight to the Marshal; departure control is Case III only', async () => {
+  for (const caseValue of ['I', 'II']) {
+    const { efsp, c } = fresh();
+    mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: caseValue });
+    const launch = launchStrip(efsp, c, 'VIPER11');
+    const airborne = await advance(efsp, c.CV_PRIFLY, 'CV_PRIFLY', strip(efsp, launch.stripId));
+    assert.equal(airborne.ownerPositionId, 'CV_MARSHAL', caseValue);
+    assert.equal(airborne.bayId, 'cv-marshal-airborne', caseValue);
+    assert.equal(airborne.carrierHandoff.kind, 'LAUNCH_TO_MARSHAL', caseValue);
+    // the explicit op cannot send it to departure control outside Case III
+    const other = launchStrip(efsp, c, 'VIPER12');
+    refused(act(efsp, c.CV_PRIFLY, 'CV_PRIFLY', other, { kind: 'CarrierHandoff', transfer: 'LAUNCH_TO_DEPARTURE' }), 'VALIDATION_ERROR', /Case III/, caseValue);
+  }
+});
+
+test('docs/adr/0155: a flight departure control holds still goes to the Marshal after the Case changes', async () => {
+  const { efsp, c } = fresh();
+  const launch = launchStrip(efsp, c, 'VIPER11');
+  await advance(efsp, c.CV_PRIFLY, 'CV_PRIFLY', strip(efsp, launch.stripId));
+  mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'I' });
+  const airborne = await advance(efsp, c.CV_DEP, 'CV_DEP', strip(efsp, launch.stripId));
+  assert.equal(airborne.ownerPositionId, 'CV_MARSHAL');
+});
+
+test('docs/adr/0155: PriFly creates only the launch and the Marshal only the recovery; departure and the lanes create nothing', () => {
+  const { efsp, c } = fresh();
+  const create = (pos, bayId, initialState) => act(efsp, c[pos], pos, null, {
+    kind: 'CreateStrip', bayId, rackId: 'main', stripType: 'MARSHAL', ...(initialState ? { initialState } : {}),
+    flightData: { callsign: 'AAA11', aircraftType: 'F-18C' },
+  });
+  refused(create('CV_MARSHAL', 'cv-marshal-coordination', 'LAUNCH'), 'PERMISSION_DENIED', null, 'a Marshal launch');
+  refused(create('CV_PRIFLY', 'cv-prifly-deck'), 'PERMISSION_DENIED', null, 'a PriFly recovery');
+  for (const pos of ['CV_DEP', 'CV_APP1']) refused(create(pos, pos === 'CV_DEP' ? 'cv-dep-departures' : 'cv-app1-lane'), 'PERMISSION_DENIED', null, pos);
 });
