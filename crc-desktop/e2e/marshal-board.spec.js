@@ -293,8 +293,20 @@ test('08 the Marshal types the fuel and assigns an EAT in the panel (U22, crc-sy
 
   // fuel: typed in thousands, as spoken; it is the Strip's LOW ST
   const fuelIn = row(page, s2).locator('input[data-marshal-input="fuel"]');
+  await expect(fuelIn).toHaveValue('6.0');
+  // a figure that is not one is refused in place, marked, and Escape puts the shown fuel back
+  await fuelIn.fill('4,8');
+  await fuelIn.press('Enter');
+  await expect(fuelIn).toHaveClass(/mb-input-bad/);
+  await expect(fuelIn).toBeFocused();
+  await fuelIn.press('Escape');
+  await expect(fuelIn).not.toBeFocused();
+  await expect(fuelIn).toHaveValue('6.0');
+  await expect(fuelIn).not.toHaveClass(/mb-input-bad/);
   await fuelIn.fill('4.8');
   await fuelIn.press('Enter');
+  await expect(fuelIn).not.toBeFocused();
+  // the row is redrawn from the Strip once the input is left: amber within the margin of bingo (6.0 was not)
   await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveValue('4.8');
   await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveClass(/mb-fuel-attn/);
 
