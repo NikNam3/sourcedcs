@@ -1,3 +1,8 @@
+### Fixed in 2.0.2
+- **MARSHAL: the fuel is a box you type in.** On a holding flight whose Strip you own, FUEL is always an input: type the low state in thousands (4.8) and press Enter. A figure that is not one is outlined and not sent; Escape puts the shown fuel back
+- MARSHAL: typing in a fuel, EAT or angels box no longer freezes the rest of the board, and the click after it (EAT, Commence, the next fuel box) is no longer lost
+- 2.0.1's login fix reaches Linux with this release (the 2.0.1 AppImage was not built)
+
 ### Fixed in 2.0.1
 - **Login works again on a fresh install.** CRC no longer asks Casdoor to skip its login page, so if you are not already signed in you now get the Discord sign-in instead of "Session state missing"
 - A login error from Casdoor is shown as itself (for example "Auth error: login_required") instead of a CSRF warning
