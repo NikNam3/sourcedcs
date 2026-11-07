@@ -52,7 +52,7 @@ const ELIGIBILITY = {
   INBOUND: true, HANDED_TO_TOWER: true, TRAFFIC_PATTERN: true, FINAL: true, LANDED: true, TAXI_IN: true,
   IN_SECTOR: true, AIRBORNE: true, ON_STATION: true, OFF_STATION: true, RTB: true,
   // carrier (docs/adr/0074): all eligible, LAUNCH included (correlation reads the track store, not illumination)
-  LAUNCH: true, IN_STACK: true, COMMENCED: true, ON_FINAL: true, BALL: true, BOLTER_WAVEOFF: true, IN_PATTERN: true, RECOVERED: true,
+  LAUNCH: true, LAUNCHED: true, IN_STACK: true, COMMENCED: true, ON_FINAL: true, BALL: true, BOLTER_WAVEOFF: true, IN_PATTERN: true, RECOVERED: true,
   // docs/adr/0146: a tagged VFR has a track by definition
   TRACKED: true,
 };
@@ -165,7 +165,9 @@ test('the NLA tables: Commence is Case- and lane-dependent; one next action per 
   // Trapped (docs/adr/0137, live test U20): to PriFly's RECOVERED Bay as a PATTERN Strip, not a drop at the lane.
   assert.deepEqual(nla.computeNla(strip('FINAL', 'BALL'), null, NOW, {}), { toState: 'RECOVERED', carrierHandoff: 'FINAL_TRAPPED', alsoLegal: ['BOLTER_WAVEOFF'] });
   assert.equal(nla.computeNla(strip('PATTERN', 'IN_PATTERN'), null, NOW, {}).toState, 'RECOVERED');
-  assert.equal(nla.computeNla(strip('MARSHAL', 'LAUNCH'), null, NOW, {}).toState, 'DROPPED');
+  // Launched keeps the Strip with the Marshal (docs/adr/0154); the Marshal drops it.
+  assert.deepEqual(nla.computeNla(strip('MARSHAL', 'LAUNCH'), null, NOW, {}), { toState: 'LAUNCHED' });
+  assert.deepEqual(nla.computeNla(strip('MARSHAL', 'LAUNCHED'), null, NOW, {}), { toState: 'DROPPED' });
 });
 
 test('a ship radar selector can name the radar and the hull', async () => {

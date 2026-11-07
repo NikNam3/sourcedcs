@@ -64,6 +64,7 @@ export const NLA_LABELS = {
   // reads its label from CARRIER_HANDOFFS; this is the fallback.
   MARSHAL: {
     LAUNCH:    'Launched',
+    LAUNCHED:  'Drop',
     IN_STACK:  'Commence',
     COMMENCED: 'Radar contact',
   },
@@ -218,7 +219,7 @@ export const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HA
 export const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVERFLIGHT: 'IN_SECTOR' };
 
 // The carrier's three strip types — mirrors the authority tables exactly (crc-sync docs/adr/0074).
-export const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };
+export const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], LAUNCHED: ['CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };
 // PAR (docs/adr/0075) shares FINAL: the same strip type, more owners. PATTERN is the carrier's only (docs/adr/0126: no RSU). BALL is the carrier's only (docs/adr/0117).
 export const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2', 'PAR'], BALL: ['CV_APP1', 'CV_APP2'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2', 'PAR'] };
 export const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY'], RECOVERED: ['CV_PRIFLY'] };

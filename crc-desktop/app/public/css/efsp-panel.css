@@ -1857,6 +1857,8 @@
 .efsp-tab-freq { margin-left: 6px; font-size: 10px; opacity: 0.7; }
 .efsp-position-tab-combined { box-shadow: inset 0 -2px 0 #e0a83c; }
 .panel-ctrl-freq { margin-left: 8px; font-size: 10px; opacity: 0.7; }
+.panel-ctrl-held { margin-left: 8px; font-size: 10px; color: var(--ui-text-dim); }
+.panel-ctrl-held::before { content: "● "; }
 
 /* docs/adr/0101, 0122: an accepted HANDOFF's chips (who has communications and control, released or not, a release request). */
 .efsp-strip .efsp-handoff-chips { flex-wrap: wrap; row-gap: 2px; }

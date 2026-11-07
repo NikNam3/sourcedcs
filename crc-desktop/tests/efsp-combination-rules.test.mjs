@@ -124,3 +124,12 @@ test('vacatedBetween names what the controller left', () => {
   assert.deepEqual(vacatedBetween({ INCIRLIK: ['LC', 'GC'] }, { INCIRLIK: ['LC'] }), ['GC']);
   assert.deepEqual(vacatedBetween({}, { INCIRLIK: ['LC'] }), []);
 });
+
+test('the Acting As list names the Primary only when it is someone else', async () => {
+  const { heldByOtherText } = await import('../app/public/js/panels/efsp/combination-rules.js');
+  assert.equal(heldByOtherText({ primary: { controllerId: 'b', controllerName: 'Viper' } }, 'a'), 'Viper');
+  assert.equal(heldByOtherText({ primary: { controllerId: 'b' } }, 'a'), 'taken');
+  assert.equal(heldByOtherText({ primary: { controllerId: 'a', controllerName: 'Me' } }, 'a'), '');
+  assert.equal(heldByOtherText({ primary: null }, 'a'), '');
+  assert.equal(heldByOtherText(null, 'a'), '');
+});

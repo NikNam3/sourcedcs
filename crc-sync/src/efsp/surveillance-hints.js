@@ -57,7 +57,7 @@ const UNEXPECTING = Object.freeze({
   // The carrier strip types (docs/adr/0074) expect nothing yet: "airborne" is judged against the nearest
   // airfield's elevation and footprint, which means nothing for a moving deck. Integration default
   // (S-M-L19); building a ship-relative phase is a supervisor decision.
-  MARSHAL: Object.freeze(['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED']),
+  MARSHAL: Object.freeze(['LAUNCH', 'LAUNCHED', 'IN_STACK', 'COMMENCED', 'DROPPED']),
   FINAL: Object.freeze(['ON_FINAL', 'BALL', 'BOLTER_WAVEOFF', 'DROPPED']),
   PATTERN: Object.freeze(['IN_PATTERN', 'RECOVERED', 'DROPPED']),
   // docs/adr/0146: a VFR strip is tagged on the ground or in the air and stays TRACKED through both, so its state says

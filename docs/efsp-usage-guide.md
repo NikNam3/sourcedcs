@@ -1918,7 +1918,7 @@ the next controller on its list is **offered** the hat (§8M): `CV_APP1` → `CV
 `CV_APP2` → `CV_MARSHAL`, `CV_APP1`, `CV_PRIFLY`; `CV_PRIFLY` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`; `CV_MARSHAL` →
 `CV_APP1`, `CV_APP2`, `CV_PRIFLY`. The Marshal comes first (the human's order, H111). Whoever takes a Position holds it
 as well as their own, so a Marshal who takes an approach lane can advance its Strips only as an approach Position would
-(the Marshal owns LAUNCH and IN_STACK); take the hat only if you will work it. The carrier raises no combination warning:
+(the Marshal owns LAUNCH, LAUNCHED and IN_STACK); take the hat only if you will work it. The carrier raises no combination warning:
 there is no source in the repo for one. A hand-off into an empty carrier Position that somebody is offered is delivered
 there and says so; one nobody is offered is refused.
 
@@ -2036,6 +2036,10 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
   frequency), bingo and low state. They are on the flight, so they are on the recovery Strip too. The
   squawk the launch Strip held is re-claimed by the recovery Strip if you dropped the launch Strip in
   between.
+- **Launched** moves the launch Strip to the Marshal's airborne Bay (`cv-marshal-airborne`, state `LAUNCHED`); it stays
+  yours. The carrier hands nothing out: the controller who takes the aircraft next (CTR, a GCI) creates their own Strip,
+  and you **Drop** yours when they have it (`adr/0154`). A flight still at `LAUNCHED` has a live MARSHAL Strip, so its
+  recovery Strip can be made on the same flight only after that drop.
 - **The handoffs, one button each**, each recording its trigger type: **Commence** (Marshal to an approach
   lane), **Radar contact** (lane, MARSHAL becomes FINAL), **Ball** (FINAL to BALL), **Trapped** (the lane, at BALL:
   the Strip goes to PriFly's RECOVERED Bay, `cv-prifly-recovered`, and leaves the MARSHAL board) and **See you** (Case II

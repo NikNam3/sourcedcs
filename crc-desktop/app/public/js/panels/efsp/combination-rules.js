@@ -16,6 +16,18 @@ export function formatFrequency(f) {
   return `${f.label} ${Number(f.mhz).toFixed(3).replace(/0+$/, '').replace(/\.$/, '.0')}`;
 }
 
+/**
+ * Who holds a Position, for the Acting As list: the Primary's name when it is someone else, '' when it is nobody or this
+ * controller (the toggle already says that). A Primary with no name is still someone: "taken".
+ * @param {{primary?:{controllerId:string, controllerName?:string}|null}|null} position
+ * @param {string|null} selfId
+ */
+export function heldByOtherText(position, selfId) {
+  const p = position && position.primary;
+  if (!p || !p.controllerId || p.controllerId === selfId) return '';
+  return p.controllerName ? String(p.controllerName) : 'taken';
+}
+
 /** "GND 275.8 · TWR 251.0", or '' when the Position has none. */
 export function formatFrequencies(frequencies) {
   return (frequencies || []).map(formatFrequency).join(' · ');

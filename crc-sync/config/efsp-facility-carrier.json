@@ -79,6 +79,13 @@
         "impliesState": "LAUNCH"
       },
       {
+        "bayId": "cv-marshal-airborne",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "LAUNCHED"
+      },
+      {
         "bayId": "cv-marshal-coordination",
         "rackIds": [
           "main"

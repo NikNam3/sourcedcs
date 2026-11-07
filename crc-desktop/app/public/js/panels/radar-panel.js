@@ -3,9 +3,9 @@ import { onEfspChanged } from './efsp/efsp-change-bus.js';
 import { NM_M } from '../geo.js';
 import { PANEL_TITLES, isDockPanelOpen, isPanelPinned, setPanelPinned, toggleDockPanel } from '../dock-handle.js';
 import { hideLosProfile, showLosProfile } from './los-panel.js';
-import { getAllEfspPositions } from './efsp/efsp-state.js';
+import { getAllEfspPositions, getEfspSelf } from './efsp/efsp-state.js';
 import { FACILITY_POSITIONS, shippedFacilityIds, RANGES_FACILITY_ID } from './efsp/facility-topology.js';
-import { formatFrequencies } from './efsp/combination-rules.js';
+import { formatFrequencies, heldByOtherText } from './efsp/combination-rules.js';
 import { getSignedOnPositions, isObserverAt, sendEfspSetPositions } from './efsp/efsp-ws.js';
 import { coverageSignedOnPositions, getActiveRadars } from '../picture.js';
 
@@ -272,8 +272,18 @@ function _efspFacilityIds() {
 let _positionControlsEl = null;
 let _positionWarningsEl = null;
 
+function _selfId() { const me = getEfspSelf(); return me ? me.controllerId : null; }
+
+/** Who is Primary where (other than this controller): the Acting As list redraws only when this changes. */
+function _heldSignature() {
+  const self = _selfId();
+  return getAllEfspPositions().map(p => `${p.facilityId || ''}/${p.positionId}=${heldByOtherText(p, self)}`).sort().join('|');
+}
+let _heldSig = '';
+
 export function renderPositionControls() {
   if (!_positionControlsEl) return;
+  _heldSig = _heldSignature();
   const $positions = _positionControlsEl;
   $positions.innerHTML = '';
 
@@ -302,6 +312,15 @@ export function renderPositionControls() {
         $f.className = 'panel-ctrl-freq';
         $f.textContent = freqText;
         $label.appendChild($f);
+      }
+      // Who already holds it, when that is someone else: ticking it then makes this controller an Observer there.
+      const heldBy = heldByOtherText(entry, _selfId());
+      if (heldBy) {
+        const $h = document.createElement('span');
+        $h.className = 'panel-ctrl-held';
+        $h.textContent = heldBy;
+        $h.title = `Primary: ${heldBy}. Signing on here makes you an Observer.`;
+        $label.appendChild($h);
       }
       $row.appendChild($label);
 
@@ -380,3 +399,5 @@ export function initRadarPanel() {
 }
 
 onEfspChanged(['scope'], () => updateRadarBadge()); // the scope was redrawn (efsp-change-bus.js)
+// A colleague signing on or off rides the Board delta and the snapshot: redraw the Acting As list when who holds what changed.
+onEfspChanged(['snapshot', 'board', 'positions'], () => { if (_positionControlsEl && _heldSignature() !== _heldSig) renderPositionControls(); });

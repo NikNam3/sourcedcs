@@ -14,7 +14,9 @@
 // LAUNCH; the recovery is a NEW MARSHAL Strip on the same flightDataId, so EEAT,
 // which lives on the flight data, survives to it). FINAL is the talk-down strip type, shared
 // with PAR (L18); PATTERN is the carrier's visual-pattern strip type (PriFly).
-const MARSHAL_STATES = ['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED'];
+// LAUNCHED (docs/adr/0154): the aircraft is off the deck and still the Marshal's until the Marshal drops the Strip. The
+// carrier hands nothing out (ADR 0064); the next controller makes their own Strip.
+const MARSHAL_STATES = ['LAUNCH', 'LAUNCHED', 'IN_STACK', 'COMMENCED', 'DROPPED'];
 
 // The carrier's three strip types (docs/adr/0064 B2, docs/adr/0074), [SOURCE-DEFINED]
 // like every state table here: guide §4.1 names the Positions and §9.12 the
@@ -25,6 +27,7 @@ const MARSHAL_STATES = ['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED'];
 const CV_LANES = ['CV_APP1', 'CV_APP2'];
 const MARSHAL_STATE_OWNERS = {
   LAUNCH:    ['CV_MARSHAL'],
+  LAUNCHED:  ['CV_MARSHAL'],
   IN_STACK:  ['CV_MARSHAL'],
   COMMENCED: CV_LANES,
 };
@@ -41,8 +44,13 @@ const MARSHAL_STATE_OWNERS = {
 function computeMarshalNla(strip, flightData, now, ctx) {
   switch (strip.state) {
     case 'LAUNCH':
-      // "Launched": the launch Strip ends. The recovery will be a new MARSHAL
-      // Strip on the same flight, and EEAT is on the flight (ADR 0064).
+      // "Launched": the aircraft is airborne and stays the Marshal's (docs/adr/0154). Nobody on the carrier hands it on
+      // (ADR 0064); the controller who takes it next creates their own Strip.
+      return { toState: 'LAUNCHED' };
+
+    case 'LAUNCHED':
+      // The Marshal is done with it. The recovery will be a new MARSHAL Strip on the same flight, and EEAT is on the
+      // flight (ADR 0064).
       return { toState: 'DROPPED' };
 
     case 'IN_STACK': {
@@ -85,7 +93,7 @@ const family = {
   initialState: 'IN_STACK',
   stateOwners: MARSHAL_STATE_OWNERS,
   computeNla: computeMarshalNla,
-  countablePreDropStates: ['LAUNCH'],
+  countablePreDropStates: ['LAUNCH', 'LAUNCHED'],
   excludedWhenNotCountable: 'NEVER_DEPARTED',
   replicaStateOnReceipt: null,
   senderStateOnAccept: null,

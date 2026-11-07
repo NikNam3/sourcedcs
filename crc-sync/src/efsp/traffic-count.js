@@ -160,7 +160,7 @@ function classifyLocality(strip, flightData, homeAirports, opts) {
     // this hull, and a recovery (a Strip that was not a launch) lands on it. The other end is the filed
     // plan's, else the flight's ATO line (a hull is its code, a field its ATO location), else unknown.
     const hull = _code([...home][0]);
-    const launch = !!(opts && opts.preDropState === 'LAUNCH');
+    const launch = !!(opts && (opts.preDropState === 'LAUNCH' || opts.preDropState === 'LAUNCHED'));
     const ato = (flightData && flightData.ato) || {};
     const car = ato.carrier || null;
     const atoEnd = (place, onHull) => (onHull && car ? _code(car.hullCode) : _code(place && place.location));

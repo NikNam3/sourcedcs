@@ -256,6 +256,8 @@ async function countOf(efsp, c, atoText, mutateFlight) {
   if (atoText) importAto(efsp, c, atoText);
   const strip = launch(efsp, c, 'VIPER11');
   if (mutateFlight) mutateFlight(strip.flightDataId);
+  const airborne = await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
+  assert.equal(airborne.state, 'LAUNCHED'); // docs/adr/0154: Launched keeps it with the Marshal
   const dropped = await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
   assert.equal(dropped.state, 'DROPPED');
   const rec = fs.readFileSync(process.env.CRCSYNC_EFSP_TRAFFIC_COUNT_PATH, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.type === 'COUNT' && r.stripId === strip.stripId);

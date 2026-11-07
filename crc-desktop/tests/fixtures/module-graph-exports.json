@@ -812,6 +812,7 @@
    "formatFrequencies",
    "formatFrequency",
    "hatRows",
+   "heldByOtherText",
    "luawInUse",
    "vacatedBetween"
   ],

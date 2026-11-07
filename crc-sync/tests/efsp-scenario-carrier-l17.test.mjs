@@ -60,7 +60,13 @@ test('a launch is a MARSHAL Strip in LAUNCH; EEAT set on it is on the recovery S
   const eeat = Date.UTC(2026, 5, 1, 14, 30);
   mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', launch, { kind: 'SetBlock', blockId: 'C15', value: eeat });
   mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId), { kind: 'SetBlock', blockId: 'C10', value: 7 });
-  // "Launched": the Strip ends
+  // "Launched": the Strip stays the Marshal's, airborne (docs/adr/0154); nobody on the carrier hands it on
+  const airborne = await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId));
+  assert.equal(airborne.state, 'LAUNCHED');
+  assert.equal(airborne.ownerPositionId, 'CV_MARSHAL');
+  assert.equal(airborne.bayId, 'cv-marshal-airborne');
+  assert.equal(stack(efsp).length, 0, 'an airborne launch is not in the recovery stack');
+  // the Marshal drops it once the next controller has the aircraft on their own Strip
   const dropped = await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId));
   assert.equal(dropped.state, 'DROPPED');
   // the recovery is a new MARSHAL Strip on the same flight
@@ -372,7 +378,8 @@ test('the recovery Strip keeps the flight\'s squawk: dropping the launch Strip m
   });
   const code = efsp.flightDataStore.getFlightData(launch.flightDataId).identity.beaconAssigned;
   assert.ok(code, 'the launch minted a squawk');
-  await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId)); // launched: the Strip drops
+  await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId)); // launched: airborne, still the Marshal's
+  await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId)); // the Marshal drops it
   const recovery = checkIn(efsp, c, null, { flightDataId: launch.flightDataId });
   assert.equal(efsp.flightDataStore.getFlightData(recovery.flightDataId).identity.beaconAssigned, code);
   assert.equal(efsp.flightDataStore.codeAllocator.isAllocated(code), true, 'the code is held again, not free in the pool');

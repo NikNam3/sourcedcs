@@ -1,3 +1,7 @@
+### Changed in 2.0.4
+- **A launched aircraft stays with the Marshal.** **Launched** no longer drops the launch Strip: it moves to the Marshal's new airborne Bay, and the Marshal presses **Drop** once the next controller (CTR, a GCI) has made their own Strip. The carrier still hands nothing off (a server change: crc-sync is redeployed with this release)
+- **Acting As shows who holds a Position.** A Position someone else is Primary at shows their name in grey; signing on there makes you an Observer
+
 ### Fixed in 2.0.3
 - **The carrier Positions have radar again.** MARSHAL, PRI-FLY and the CV approach Positions now see the carrier's radars whenever the carrier panel finds the ship. Before, a CVN-72 whose DCS unit was not named exactly `UNION` had a working carrier panel but no radar at any carrier Position (a server fix: crc-sync is redeployed with this release)
 
