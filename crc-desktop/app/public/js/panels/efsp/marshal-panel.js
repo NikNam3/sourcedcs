@@ -21,9 +21,9 @@ import { pictureModel, renderMarshalPicture } from './marshal-picture.js';
 // is no countdown, no checklist, no required call; everything is named by the side number, never a callsign.
 //
 // Who can do what: the Marshal (CV_MARSHAL) drags a HOLD row to re-sequence, Commences, sends a commenced flight Back to stack, sends
-// a Delta and closes up a vacancy; on a holding flight it types the fuel (the Strip's LOW ST) and assigns an EAT by clicking the
-// FUEL or EAT figure (crc-sync docs/adr/0137: an assigned EAT is underlined until cleared with an empty entry); every other carrier
-// Position reads. The ramp time, the marshal radial and the first fix are the
+// a Delta and closes up a vacancy; on a holding flight it types the fuel (the Strip's LOW ST, a standing input when it owns the
+// Strip) and assigns an EAT by clicking the EAT figure (crc-sync docs/adr/0137: an assigned EAT is underlined until cleared with an
+// empty entry); every other carrier Position reads. The ramp time, the marshal radial and the first fix are the
 // ship's and are typed in the carrier panel; here they are shown. No arithmetic of the recovery is done here: angels, DME and the
 // EATs are the server's (hull view), see marshal-board-model.js.
 
@@ -35,7 +35,7 @@ registerSettingsTab('marshal', [
 let _emptyEl = null;
 let _bodyEl = null;
 let _els = null;
-let _tableSig = '';
+let _rows = []; // the table's rows in tbody order: { key, sig, tr }
 let _pictureSig = '';
 let _lastBoard = null;
 let _dragging = null;
@@ -73,6 +73,7 @@ function _backToStack(row) {
 
 function _build() {
   _bodyEl.textContent = '';
+  _rows = [];
   const hdr = _el('div', 'mb-hdr');
   const cell = (k, id) => { const s = _el('span', 'mb-hcell'); s.appendChild(_el('span', 'mb-k', k)); const b = _el('b', null, ''); b.dataset.marshal = id; s.appendChild(b); hdr.appendChild(s); return b; };
   const hull = _el('span', 'mb-hcell');
@@ -174,9 +175,9 @@ function _collect(view) {
   });
 }
 
-function _rowSignature(r, m, canSequence) {
+function _rowSignature(r, m, { canSequence, caseValue }) {
   return [r.flightDataId, r.seq, r.kind, r.status, r.side, r.callsign, r.type, r.fuelLb, r.fuelLevel, r.eatUtc, r.eatSet ? 1 : 0, r.angels, r.slot,
-    r.late ? 1 : 0, r.next ? 1 : 0, m.angels ? 1 : 0, m.eat ? 1 : 0, canSequence ? 1 : 0].join('/');
+    r.late ? 1 : 0, r.next ? 1 : 0, m.angels ? 1 : 0, m.eat ? 1 : 0, canSequence ? 1 : 0, caseValue, _fuelTypable(r, canSequence) ? 1 : 0].join('/');
 }
 
 function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
@@ -192,14 +193,22 @@ function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
   tr.appendChild(_el('td', 'mb-type', r.type));
   const fe = _el('td', 'mb-fe');
   fe.dataset.cell = 'fuel-eat';
-  const fuel = _el('span', r.fuelLevel ? `mb-fuel-${r.fuelLevel}` : '', fuelText(r.fuelLb) || '--');
+  const fuelClass = r.fuelLevel ? `mb-fuel-${r.fuelLevel}` : '';
+  // the fuel is a standing input on a holding flight whose Strip this controller can write (the LOW ST is the owner's Block)
+  const fuel = _fuelTypable(r, canSequence)
+    ? _panelInput({
+      part: 'fuel', value: fuelText(r.fuelLb), placeholder: 'k lb', className: `mb-fe-input ${fuelClass}`, size: 4,
+      label: 'Fuel low state in thousands of pounds', bad: 'the fuel in thousands of pounds (4.8), or empty to clear it',
+      send: (text) => _sendFuel(r, text), onLeave: (inp, sent) => { if (sent) _redrawRowOf(inp); },
+    })
+    : _el('span', fuelClass, fuelText(r.fuelLb) || '--');
   fuel.dataset.part = 'fuel';
   const eat = _el('span', [m.eat ? 'mb-chg' : r.late ? 'mb-late' : '', r.eatSet ? 'mb-eat-set' : ''].filter(Boolean).join(' '), eatMinuteText(r.eatUtc) || '--');
   eat.dataset.part = 'eat';
   if (r.eatSet) eat.title = 'EAT assigned by the Marshal; clear it to use the slot\'s';
-  if (canSequence && r.kind === 'hold') {
-    _editable(fuel, 'fuel', fuelText(r.fuelLb), 'k lb', (text) => _sendFuel(r, text));
-    if (sequenced) _editable(eat, 'eat', r.eatUtc != null ? carrierHhmm(r.eatUtc) : '', 'HHMM', (text) => _sendEat(r, text));
+  if (canSequence && r.kind === 'hold' && sequenced) {
+    _editable(eat, 'eat', r.eatUtc != null ? carrierHhmm(r.eatUtc) : '', 'HHMM', 'a Zulu time as HHMM, or empty for the slot\'s EAT',
+      (text) => _sendEat(r, text));
   }
   fe.append(fuel, document.createTextNode(':'), eat);
   tr.appendChild(fe);
@@ -207,17 +216,16 @@ function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
   ang.dataset.cell = 'ang';
   if (!sequenced && r.inStack && canSequence) {
     // Case I: the stack is a list of squadron-assigned altitudes, not a timed stack (guide 9.12 rule 3); the Marshal types the angels.
-    const inp = _el('input', 'mb-input mb-ang-input');
-    inp.type = 'text'; inp.size = 3; inp.placeholder = r.angels != null ? String(r.angels) : 'angels';
-    inp.value = r.angels != null ? String(r.angels) : '';
-    inp.dataset.marshalInput = 'angels';
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const raw = inp.value.trim();
-        _sendStackOp({ kind: 'SetCaseIAngels', flightDataId: r.flightDataId, caseIAngels: raw === '' ? null : Number(raw) });
-      }
-    });
-    ang.appendChild(inp);
+    ang.appendChild(_panelInput({
+      part: 'angels', value: r.angels != null ? String(r.angels) : '', placeholder: r.angels != null ? String(r.angels) : 'angels',
+      className: 'mb-ang-input', size: 3, bad: 'whole angels (6), or empty to clear them',
+      send: (text) => {
+        const raw = text.trim();
+        if (raw !== '' && !/^\d+$/.test(raw)) return false;
+        return _sendStackOp({ kind: 'SetCaseIAngels', flightDataId: r.flightDataId, caseIAngels: raw === '' ? null : Number(raw) });
+      },
+      onLeave: (inp, sent) => { if (sent) _redrawRowOf(inp); },
+    }));
   } else {
     ang.textContent = r.angels != null ? String(r.angels) : '';
   }
@@ -255,35 +263,69 @@ function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
 }
 
 /**
- * A FUEL or EAT figure the Marshal may type over (crc-sync docs/adr/0137): a click turns it into an input, Enter sends, Escape or
- * leaving it puts the figure back. The table is not rebuilt while an input has the focus (renderMarshal's `typing`).
+ * An input in the board (crc-sync docs/adr/0137). Enter sends and leaves it; a figure `send` refuses (it returns false) stays,
+ * marked, with what it takes in the tooltip. Escape, or leaving without a send, puts the shown figure back. Nothing here redraws
+ * the table: leaving an input must not take the element the next click lands on, nor the input the focus is moving to.
+ * `onLeave(input, sent)` runs when the focus goes.
  */
-function _editable(span, part, value, placeholder, send) {
+function _panelInput({ part, value, placeholder, className, label, size, bad, send, onLeave }) {
+  const inp = _el('input', `mb-input ${className}`.trim());
+  inp.type = 'text'; inp.size = size; inp.placeholder = placeholder; inp.value = value;
+  if (label) inp.setAttribute('aria-label', label);
+  inp.dataset.marshalInput = part;
+  let sent = false;
+  const unmark = () => { inp.classList.remove('mb-input-bad'); inp.removeAttribute('title'); };
+  inp.addEventListener('click', (ev) => ev.stopPropagation());
+  inp.addEventListener('input', () => { sent = false; unmark(); });
+  inp.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      if (!send(inp.value)) { inp.classList.add('mb-input-bad'); inp.title = `Not sent: ${bad}`; return; }
+      sent = true;
+      inp.blur();
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      sent = false;
+      inp.blur();
+    }
+  });
+  inp.addEventListener('blur', () => {
+    if (!sent) inp.value = value;
+    unmark();
+    if (onLeave) onLeave(inp, sent);
+  });
+  return inp;
+}
+
+/** An EAT figure the Marshal may type over (crc-sync docs/adr/0137): a click turns it into an input, leaving it puts the figure back. */
+function _editable(span, part, value, placeholder, bad, send) {
   span.classList.add('mb-edit');
   span.dataset.edit = part;
   span.addEventListener('click', (e) => {
     e.stopPropagation();
-    const inp = _el('input', 'mb-input mb-fe-input');
-    inp.type = 'text'; inp.size = 4; inp.placeholder = placeholder; inp.value = value;
-    inp.dataset.marshalInput = part;
-    const done = () => { _tableSig = ''; renderMarshal(); };
-    inp.addEventListener('click', (ev) => ev.stopPropagation());
-    inp.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter') { ev.preventDefault(); if (send(inp.value) !== false) { inp.blur(); } }
-      else if (ev.key === 'Escape') { ev.preventDefault(); inp.blur(); }
+    const inp = _panelInput({
+      part, value, placeholder, className: 'mb-fe-input', size: 4, bad, send,
+      onLeave: (el, sent) => { if (el.isConnected) el.replaceWith(span); if (sent) _redrawRowOf(span); },
     });
-    inp.addEventListener('blur', done);
     span.replaceWith(inp);
     inp.focus();
-    if (typeof inp.select === 'function') inp.select();
+    inp.select();
   });
 }
+
+function _ownsStrip(row) {
+  const strip = row.stripId ? getEfspStrip(row.stripId) : null;
+  return !!strip && signedOnCarrierIds().includes(strip.ownerPositionId);
+}
+
+/** The fuel is typed by a Marshal on a holding flight whose Strip one of this controller's carrier Positions owns. */
+function _fuelTypable(row, canSequence) { return canSequence && row.kind === 'hold' && _ownsStrip(row); }
 
 /** The fuel as the holding flight's Strip LOW ST Block, sent as the Strip's owner when this controller holds it. */
 function _sendFuel(row, text) {
   const op = fuelBlockOp(text);
   const strip = row.stripId ? getEfspStrip(row.stripId) : null;
-  if (!op || !strip || !signedOnCarrierIds().includes(strip.ownerPositionId)) return false;
+  if (!op || !strip || !_ownsStrip(row)) return false;
   sendEfspMutation(strip.ownerPositionId, strip, op);
   return true;
 }
@@ -297,6 +339,8 @@ function _sendEat(row, text) {
 function _wireDrag(tr, r) {
   tr.draggable = true;
   tr.title = 'Drag onto another holding flight to re-sequence';
+  // a press in one of the row's inputs selects text there; the row is dragged from anywhere else
+  tr.addEventListener('mousedown', (e) => { tr.draggable = !e.target.closest('input'); });
   tr.addEventListener('dragstart', (e) => {
     _dragging = r.flightDataId;
     tr.classList.add('mb-dragging');
@@ -339,6 +383,52 @@ function _drawVacancy(v, canSequence) {
   return tr;
 }
 
+/** Marks the row holding `node` for a redraw on the next render (a sent figure is replaced by the server's, or put back). */
+function _redrawRowOf(node) {
+  const row = _rows.find((x) => x.tr.contains(node));
+  if (row) row.sig = '';
+}
+
+/**
+ * The table, row by row: a row is redrawn only when something it shows changed, so a click is never lost to a redraw. A row that
+ * holds the focused input, and the order while one does or a drag is on, wait for the next render once the input is left; every
+ * other row stays live.
+ */
+function _syncTable(board, shown, ctx) {
+  const want = [];
+  // a vacancy (a flight left and nobody closed up, decisions H28) is listed above the first holding row that sits over it
+  const placed = new Set();
+  for (const r of board.rows) {
+    if (r.kind === 'hold') {
+      for (const v of board.vacancies) {
+        if (!placed.has(v.slot) && v.slot < r.slot) {
+          placed.add(v.slot);
+          want.push({ key: `v:${v.slot}`, sig: ['v', v.slot, v.angels, ctx.canSequence ? 1 : 0].join('/'), draw: () => _drawVacancy(v, ctx.canSequence) });
+        }
+      }
+    }
+    const m = marksOf(r, shown);
+    want.push({ key: `f:${r.flightDataId}`, sig: _rowSignature(r, m, ctx), draw: () => _drawRow(r, m, ctx) });
+  }
+  const active = document.activeElement;
+  const typingIn = (tr) => !!active && active.tagName === 'INPUT' && tr.contains(active);
+  const sameOrder = want.length === _rows.length && want.every((w, i) => w.key === _rows[i].key);
+  if (!sameOrder) {
+    if (_dragging || _rows.some((x) => typingIn(x.tr))) return;
+    _els.tbody.textContent = '';
+    _rows = want.map((w) => { const tr = w.draw(); _els.tbody.appendChild(tr); return { key: w.key, sig: w.sig, tr }; });
+    return;
+  }
+  if (_dragging) return;
+  want.forEach((w, i) => {
+    const cur = _rows[i];
+    if (w.sig === cur.sig || typingIn(cur.tr)) return;
+    const tr = w.draw();
+    cur.tr.replaceWith(tr);
+    _rows[i] = { key: w.key, sig: w.sig, tr };
+  });
+}
+
 /** Draws the panel from the hull view and the Strips. Cheap; called on every carrier or Board change and once a second. */
 export function renderMarshal() {
   if (!_bodyEl) return;
@@ -375,25 +465,7 @@ export function renderMarshal() {
   _els.togoN.textContent = String(board.toGo);
   _els.empty.hidden = board.rows.length > 0;
 
-  // the table: rebuilt only when something it shows changed, so a click is never lost to a redraw
-  const ctx = { canSequence, caseValue, sequenced };
-  const sig = [caseValue, canSequence ? 1 : 0, board.rows.map((r) => _rowSignature(r, marksOf(r, shown), canSequence)).join('|'),
-    board.vacancies.map((v) => v.slot).join(',')].join('#');
-  const typing = _els.tbody.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
-  if (sig !== _tableSig && !_dragging && !typing) {
-    _tableSig = sig;
-    _els.tbody.textContent = '';
-    // a vacancy (a flight left and nobody closed up, decisions H28) is listed above the first holding row that sits over it
-    const placed = new Set();
-    for (const r of board.rows) {
-      if (r.kind === 'hold') {
-        for (const v of board.vacancies) {
-          if (!placed.has(v.slot) && v.slot < r.slot) { placed.add(v.slot); _els.tbody.appendChild(_drawVacancy(v, canSequence)); }
-        }
-      }
-      _els.tbody.appendChild(_drawRow(r, marksOf(r, shown), ctx));
-    }
-  }
+  _syncTable(board, shown, { canSequence, caseValue, sequenced });
 
   // the picture
   _els.picCol.hidden = !sequenced;
@@ -411,7 +483,7 @@ export function initMarshalPanel() {
   _emptyEl = document.getElementById('marshal-empty');
   _bodyEl = document.getElementById('marshal-body');
   _els = null;
-  _tableSig = '';
+  _rows = [];
   _pictureSig = '';
   renderMarshal();
   if (!_timer) {
