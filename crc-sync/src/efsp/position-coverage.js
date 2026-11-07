@@ -45,7 +45,8 @@ const ATC_CLASSES = new Set(['MILITARY_ATC', 'CIVIL_ATC']);
  * whatever mission is loaded, so a persisted id list would be the inclusion
  * list docs/adr/0041 condemned, in a new costume.
  */
-function selectorMatches(selector, radar, { ownCoalition = DEFAULT_OWN_COALITION } = {}) {
+function selectorMatches(selector, radar, opts = {}) {
+  const ownCoalition = opts.ownCoalition ?? DEFAULT_OWN_COALITION;
   if (!selector || selector.kind !== radar.type) return false;
 
   if (selector.airport) {
@@ -68,7 +69,7 @@ function selectorMatches(selector, radar, { ownCoalition = DEFAULT_OWN_COALITION
   // Approach Position sees the CVN's approach radar and not every ship's.
   if (selector.kind === 'carrier') {
     if (selector.radar && radar.carrierRadar !== selector.radar) return false;
-    if (selector.hull && !radarIsHull(selector.hull, radar)) return false;
+    if (selector.hull && !radarIsHull(selector.hull, radar, opts.radars, { ownCoalition })) return false;
   }
 
   return true;
@@ -82,6 +83,8 @@ function selectorMatches(selector, radar, { ownCoalition = DEFAULT_OWN_COALITION
  */
 function resolveSelectors(selectors, radars, opts) {
   const out = new Set();
+  // a hull selector is matched against the ships in this same list (hull-config.js radarIsHull)
+  opts = { ...opts, radars };
   for (const selector of selectors || []) {
     for (const radar of radars || []) {
       if (selectorMatches(selector, radar, opts)) out.add(radar.id);

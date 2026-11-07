@@ -17,7 +17,7 @@
 
 const fs = require('fs');
 const { readPath } = require('../../state-paths');
-const { validateHullConfig } = require('./ship-state');
+const { validateHullConfig, matchHullTrack } = require('./ship-state');
 const { anyOf, arrayOf, checkShape } = require('../../persisted-shape');
 
 const CARRIERS_FILE = 'efsp-carriers.json';
@@ -70,16 +70,25 @@ function getHull(hullId) { const h = hulls().find(x => x.hullId === hullId); ret
 /** The hull v1 runs (H29: one hull, one stack). */
 function getDefaultHull() { return JSON.parse(JSON.stringify(hulls()[0])); }
 
+/** The ship a carrier radar is on: its id after the prefix (`carrier:<id>`, `cvapp:<id>`, radars.js). */
+function _shipOf(radar) { const id = String(radar.id); return id.slice(id.indexOf(':') + 1); }
+
 /**
- * Does this radar belong to this hull? By DCS unit name when the hull names one,
- * else by type; never by track id (ids re-mint, docs/adr/0045). A radar record
- * carries `unitName` and `shipType` (radars.js).
+ * Does this radar belong to this hull? The hull is the ship matchHullTrack picks (ship-state.js), so the radars and the carrier
+ * panel always agree on which ship it is: by DCS unit name when the hull names one and a ship has it, else by type when exactly
+ * one ship has it. `radars` is the live radar list the ships are read from (each ship's carrier radars carry `unitName`,
+ * `shipType` and `coalition`); the match is made within that one list, never kept, so a re-minted track id does not matter.
  */
-function radarIsHull(hullId, radar) {
+function radarIsHull(hullId, radar, radars, { ownCoalition = null } = {}) {
   const hull = hulls().find(x => x.hullId === hullId);
-  if (!hull || !radar) return false;
-  if (hull.match.unitName) return radar.unitName === hull.match.unitName;
-  return !!hull.match.type && radar.shipType === hull.match.type;
+  if (!hull || !radar || radar.type !== 'carrier') return false;
+  const ships = new Map();
+  for (const r of radars || [radar]) {
+    if (!r || r.type !== 'carrier' || ships.has(_shipOf(r))) continue;
+    ships.set(_shipOf(r), { id: _shipOf(r), category: 4, name: r.unitName, type: r.shipType, coalition: r.coalition });
+  }
+  const ship = matchHullTrack(hull, ships.values(), { ownCoalition });
+  return !!ship && ship.id === _shipOf(radar);
 }
 
 function _key(s) { return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, ''); }

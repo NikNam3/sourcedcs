@@ -14,8 +14,9 @@ test('the shipped hull is CVN-72 UNION, one hull', () => {
   const hulls = hullConfig.getHulls();
   assert.equal(hulls.length, 1);
   assert.deepEqual(hulls[0].match, { unitName: 'UNION', type: 'CVN_72', coalition: 'own' });
-  assert.equal(hullConfig.radarIsHull('CVN-72', { unitName: 'UNION' }), true);
-  assert.equal(hullConfig.radarIsHull('CVN-72', { unitName: 'TARAWA' }), false);
+  const ship = (id, unitName, shipType) => ({ id: `carrier:${id}`, type: 'carrier', carrierRadar: 'search', unitName, shipType, coalition: 3 });
+  assert.equal(hullConfig.radarIsHull('CVN-72', ship(1, 'UNION', 'CVN_72'), null, { ownCoalition: 3 }), true);
+  assert.equal(hullConfig.radarIsHull('CVN-72', ship(2, 'TARAWA', 'LHA_Tarawa'), null, { ownCoalition: 3 }), false);
 });
 
 test('the sun: noon over Syria in June is day, local midnight is night, and an unknown position is unknown', () => {

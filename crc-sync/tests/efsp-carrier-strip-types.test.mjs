@@ -170,9 +170,10 @@ test('the NLA tables: Commence is Case- and lane-dependent; one next action per 
 
 test('a ship radar selector can name the radar and the hull', async () => {
   const { selectorMatches } = await import('../src/efsp/position-coverage.js');
-  const search = { type: 'carrier', carrierRadar: 'search', unitName: 'UNION', shipType: 'CVN_72', coalition: 2 };
-  const app = { ...search, carrierRadar: 'approach' };
-  const other = { ...search, unitName: 'TARAWA', shipType: 'LHA_Tarawa' };
+  // the hull is our coalition's ship (CRCSYNC_COALITION, default BLUE = 3), as the carrier panel matches it
+  const search = { id: 'carrier:1', type: 'carrier', carrierRadar: 'search', unitName: 'UNION', shipType: 'CVN_72', coalition: 3 };
+  const app = { ...search, id: 'cvapp:1', carrierRadar: 'approach' };
+  const other = { ...search, id: 'carrier:2', unitName: 'TARAWA', shipType: 'LHA_Tarawa' };
   assert.equal(selectorMatches({ kind: 'carrier' }, other), true, 'the bare selector still matches every ship');
   assert.equal(selectorMatches({ kind: 'carrier', hull: 'CVN-72' }, other), false);
   assert.equal(selectorMatches({ kind: 'carrier', hull: 'CVN-72' }, search), true);

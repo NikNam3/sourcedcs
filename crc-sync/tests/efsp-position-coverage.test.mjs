@@ -308,3 +308,21 @@ test('conflict alerting is for the ATC Positions only (docs/adr/0059)', () => {
   assert.equal(coverage.forController('c2').conflictAlert, true);
   assert.equal(coverage.forController('c3').conflictAlert, true);
 });
+
+// The carrier Positions' radars are the hull's ship as the carrier panel finds it (ship-state.js matchHullTrack): by unit name,
+// else the one ship of the hull's type. Before, a CVN-72 not named UNION had a carrier panel and no radar at any CV Position.
+test('a hull selector finds the carrier the panel finds: unit name first, else the one ship of its type', () => {
+  const cv = (id, unitName, shipType, coalition = USER_COALITION) => [
+    { id: `carrier:${id}`, type: 'carrier', carrierRadar: 'search', unitName, shipType, coalition },
+    { id: `cvapp:${id}`, type: 'carrier', carrierRadar: 'approach', unitName, shipType, coalition },
+  ];
+  const sel = [{ kind: 'carrier', coalition: 'own', hull: 'CVN-72' }];
+  const ids = (radars, selectors = sel) => [...resolveSelectors(selectors, radars, { ownCoalition: USER_COALITION })].sort();
+
+  assert.deepEqual(ids(cv(5, 'CVN-72 Harry S. Truman', 'CVN_72')), ['carrier:5', 'cvapp:5'], 'not named UNION: matched by type');
+  assert.deepEqual(ids(cv(5, 'UNION', 'CVN_72')), ['carrier:5', 'cvapp:5']);
+  assert.deepEqual(ids([...cv(6, 'UNION', 'CVN_72'), ...cv(7, 'Other', 'CVN_72')]), ['carrier:6', 'cvapp:6'], 'the named one of two');
+  assert.deepEqual(ids([...cv(6, 'A', 'CVN_72'), ...cv(7, 'B', 'CVN_72')]), [], 'two of the type and neither named: ambiguous');
+  assert.deepEqual(ids(cv(8, 'UNION', 'CVN_72', ENEMY_COALITION)), [], 'not our coalition');
+  assert.deepEqual(ids(cv(9, 'Lincoln', 'CVN_72'), [{ kind: 'carrier', coalition: 'own', hull: 'CVN-72', radar: 'search' }]), ['carrier:9']);
+});

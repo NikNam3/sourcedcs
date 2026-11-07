@@ -1,3 +1,6 @@
+### Fixed in 2.0.3
+- **The carrier Positions have radar again.** MARSHAL, PRI-FLY and the CV approach Positions now see the carrier's radars whenever the carrier panel finds the ship. Before, a CVN-72 whose DCS unit was not named exactly `UNION` had a working carrier panel but no radar at any carrier Position (a server fix: crc-sync is redeployed with this release)
+
 ### Fixed in 2.0.2
 - **MARSHAL: the fuel is a box you type in.** On a holding flight whose Strip you own, FUEL is always an input: type the low state in thousands (4.8) and press Enter. A figure that is not one is outlined and not sent; Escape puts the shown fuel back
 - MARSHAL: typing in a fuel, EAT or angels box no longer freezes the rest of the board, and the click after it (EAT, Commence, the next fuel box) is no longer lost
