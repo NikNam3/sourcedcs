@@ -109,7 +109,7 @@ test('01 a recovery in order: landing order, side numbers, HOLD, Commence on the
   await expect(row(page, s2).locator('[data-cell="status"]')).toHaveText('HOLD');
   await expect(row(page, s1).locator('[data-cell="ang"]')).toHaveText('6');
   await expect(row(page, s3).locator('[data-cell="ang"]')).toHaveText('8');
-  await expect(row(page, s1).locator('[data-part="fuel"]')).toHaveText('7.2');
+  await expect(row(page, s1).locator('[data-part="fuel"]')).toHaveValue('7.2');
   await expect(p.locator('[data-marshal-action="commence"]')).toHaveCount(1);
   await expect(row(page, s1).locator('[data-marshal-action="commence"]')).toBeVisible();
   await expect(p.locator('[data-marshal="togo"]')).toHaveText('3');
@@ -292,12 +292,10 @@ test('08 the Marshal types the fuel and assigns an EAT in the panel (U22, crc-sy
   const slotEat = (await eatOf()).t;
 
   // fuel: typed in thousands, as spoken; it is the Strip's LOW ST
-  await row(page, s2).locator('[data-part="fuel"]').click();
-  const fuelIn = panelOf(page).locator('input[data-marshal-input="fuel"]');
-  await expect(fuelIn).toBeFocused();
+  const fuelIn = row(page, s2).locator('input[data-marshal-input="fuel"]');
   await fuelIn.fill('4.8');
   await fuelIn.press('Enter');
-  await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveText('4.8');
+  await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveValue('4.8');
   await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveClass(/mb-fuel-attn/);
 
   // EAT: five minutes after the slot's, typed HHMM; shown set (underlined, not coloured) and amber until passed

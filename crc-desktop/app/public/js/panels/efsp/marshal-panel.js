@@ -192,13 +192,13 @@ function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
   tr.appendChild(_el('td', 'mb-type', r.type));
   const fe = _el('td', 'mb-fe');
   fe.dataset.cell = 'fuel-eat';
-  const fuel = _el('span', r.fuelLevel ? `mb-fuel-${r.fuelLevel}` : '', fuelText(r.fuelLb) || '--');
+  let fuel = _el('span', r.fuelLevel ? `mb-fuel-${r.fuelLevel}` : '', fuelText(r.fuelLb) || '--');
   fuel.dataset.part = 'fuel';
   const eat = _el('span', [m.eat ? 'mb-chg' : r.late ? 'mb-late' : '', r.eatSet ? 'mb-eat-set' : ''].filter(Boolean).join(' '), eatMinuteText(r.eatUtc) || '--');
   eat.dataset.part = 'eat';
   if (r.eatSet) eat.title = 'EAT assigned by the Marshal; clear it to use the slot\'s';
   if (canSequence && r.kind === 'hold') {
-    _editable(fuel, 'fuel', fuelText(r.fuelLb), 'k lb', (text) => _sendFuel(r, text));
+    fuel = _fuelInput(fuel, r, (text) => _sendFuel(r, text));
     if (sequenced) _editable(eat, 'eat', r.eatUtc != null ? carrierHhmm(r.eatUtc) : '', 'HHMM', (text) => _sendEat(r, text));
   }
   fe.append(fuel, document.createTextNode(':'), eat);
@@ -254,9 +254,37 @@ function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
   return tr;
 }
 
+/** A holding flight's LOW ST is an input in the board; fuel is not a read-only status figure. */
+function _fuelInput(span, row, send) {
+  const input = _el('input', `mb-input mb-fe-input${span.className ? ` ${span.className}` : ''}`);
+  input.type = 'text';
+  input.size = 4;
+  input.placeholder = 'k lb';
+  input.value = fuelText(row.fuelLb);
+  input.setAttribute('aria-label', 'Fuel low state in thousands of pounds');
+  input.dataset.part = 'fuel';
+  input.dataset.marshalInput = 'fuel';
+  input.addEventListener('click', (e) => e.stopPropagation());
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      send(input.value);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      input.blur();
+    }
+  });
+  input.addEventListener('blur', () => {
+    _tableSig = '';
+    renderMarshal();
+  });
+  span.replaceWith(input);
+  return input;
+}
+
 /**
- * A FUEL or EAT figure the Marshal may type over (crc-sync docs/adr/0137): a click turns it into an input, Enter sends, Escape or
- * leaving it puts the figure back. The table is not rebuilt while an input has the focus (renderMarshal's `typing`).
+ * An EAT figure the Marshal may type over (crc-sync docs/adr/0137): a click turns it into an input, Enter sends, Escape or leaving
+ * it puts the figure back. The table is not rebuilt while an input has the focus (renderMarshal's `typing`).
  */
 function _editable(span, part, value, placeholder, send) {
   span.classList.add('mb-edit');
