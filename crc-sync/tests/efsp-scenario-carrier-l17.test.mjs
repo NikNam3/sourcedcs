@@ -206,6 +206,11 @@ test('Case I has no radar service: the squawk and the heading, speed and altitud
   setCase(efsp, c, 'III');
   const b = recoveryCheckIn(efsp, c, '302');
   mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', b, { kind: 'SetBlock', blockId: '7A', value: '080' });
+  mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, b.stripId), { kind: 'SetBlock', blockId: '9A-VECTOR', value: '270' });
+  // Task 8: the assignments are the flight's clearance cells, which the conformance monitor checks for every correlated flight
+  const fd = efsp.flightDataStore.getFlightData(b.flightDataId);
+  const active = (f) => fd.clearance[f].entries.find(e => e.status === 'ACTIVE');
+  assert.deepEqual([active('altitude').parsed, active('heading').parsed], [8000, 270]);
 });
 
 test('the derived Blocks cannot be typed; the Marshal assigns angels, DME and EAT through the stack', () => {
