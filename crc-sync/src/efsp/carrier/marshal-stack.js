@@ -219,7 +219,9 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
     }
     const status = ENTRY_STATUSES.includes(e.status) ? e.status : 'HOLDING';
     const override = status === 'HOLDING' && Number.isFinite(e.eatOverrideUtc) && e.eatOverrideUtc >= 0 ? { eatOverrideUtc: e.eatOverrideUtc } : {};
-    if (e.angelsOverride != null && _validAngels(e.angelsOverride)) override.angelsOverride = e.angelsOverride;
+    // A snapshot from before docs/adr/0156 named a Case I altitude `caseIAngels`: it is the same assigned altitude.
+    const angels = e.angelsOverride != null ? e.angelsOverride : e.caseIAngels;
+    if (angels != null && _validAngels(angels)) override.angelsOverride = angels;
     if (e.dmeOverride != null && _validDme(e.dmeOverride)) override.dmeOverride = e.dmeOverride;
     cleaned.push({
       ...override,

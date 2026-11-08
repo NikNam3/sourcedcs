@@ -41,6 +41,9 @@ const PRE_0058_CLEARANCE_BLOCKS = {
   OVERFLIGHT: ['7A', '9A-VECTOR'],
 };
 
+/** Strip types an older build wrote that this one no longer has (docs/adr/0156): left out of a restored Board. */
+const RETIRED_STRIP_TYPES = new Set(['MARSHAL', 'PATTERN']);
+
 const REGISTRY = [
   {
     key: 'boards',
@@ -61,6 +64,15 @@ const REGISTRY = [
       for (const [facilityId, boardData] of Object.entries(data)) {
         const f = facilities.get(facilityId);
         if (!f) throw new Error(`[efsp] the Board snapshot holds a Board for "${facilityId}", which is not a configured Facility (${[...facilities.keys()].join(', ')})`);
+        // docs/adr/0156 retired the carrier's MARSHAL and PATTERN strip types. A snapshot written before it holds them: they are
+        // left out (the carrier's recovery starts again), so the rest of the Board survives the upgrade.
+        if (boardData && Array.isArray(boardData.strips)) {
+          const retired = boardData.strips.filter(s => RETIRED_STRIP_TYPES.has(s.stripType));
+          if (retired.length) {
+            log.warn(`the Board snapshot holds ${retired.length} ${facilityId} Strip(s) of a strip type retired by docs/adr/0156 (MARSHAL, PATTERN): left out`);
+            boardData.strips = boardData.strips.filter(s => !RETIRED_STRIP_TYPES.has(s.stripType));
+          }
+        }
         for (const strip of (boardData && boardData.strips) || []) {
           if (!f.rules.isValidState(strip.state, strip.stripType)) {
             throw new Error(`[efsp] the Board snapshot holds Strip ${strip.stripId} (${facilityId}) in state "${strip.state}", which a ${strip.stripType} Strip does not have: delete state/efsp-board.json to start clean`);
@@ -365,7 +377,7 @@ const ENTRY_SHAPES = {
     overrides: anyOf('altimeterInHg', 'brcDeg', 'ceilingFt', 'finalBearingDeg', 'firstFixDme', 'marshalRadialDeg', 'rampTimeUtc',
       'tankerAltitudeFt', 'tankerGiveKlb', 'tankerOnStation', 'tankerPatternSide', 'tankerSideNumber', 'visibilityNm', 'windOverDeckKt'),
     stacks: mapOf({ ...anyOf('deltaMs', 'hullId', 'stackId'),
-      entries: arrayOf(anyOf('angelsOverride', 'dmeOverride', 'eatOverrideUtc', 'eatUtc', 'flightDataId', 'pushedAtUtc', 'stackIndex', 'status', 'unpassed')) }),
+      entries: arrayOf(anyOf('angelsOverride', 'caseIAngels', 'dmeOverride', 'eatOverrideUtc', 'eatUtc', 'flightDataId', 'pushedAtUtc', 'stackIndex', 'status', 'unpassed')) }),
   }),
 };
 // The top level is the registry's keys plus the write stamp _persist adds; nothing else. A snapshot from before

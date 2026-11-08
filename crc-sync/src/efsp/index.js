@@ -25,6 +25,7 @@
 // accessors; there is no top-level `boardStore`/`positionStore` (ARCH-D5).
 
 const fs = require('fs');
+const { isCarrierStrip } = require('./carrier/strip-types');
 
 const { NLA_GUARD_MS } = require('./board/ops/invoke-nla');
 const airspaceSchema = require('./airspace-schema');
@@ -390,7 +391,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
  * that a live flight is already squawking is unambiguously right, and
  * leaving it free is unambiguously dangerous.
  */
-function _reconcileRestored(facilities, flightDataStore, correlationStore, marsaStore) {
+function _reconcileRestored(facilities, flightDataStore, correlationStore, marsaStore, carrierStore) {
   const allocator = flightDataStore.codeAllocator;
   // A MARSA relation whose participants' flight data are all gone has nothing left to
   // be about. Dropped rather than reported, on the same split the correlation
@@ -408,6 +409,16 @@ function _reconcileRestored(facilities, flightDataStore, correlationStore, marsa
   if (correlationStore) {
     const dropped = correlationStore.evictMissingFlightDataList();
     if (dropped) log.warn('dropped restored correlation records whose flight data is gone', { dropped });
+  }
+  // docs/adr/0156: a stack entry whose flight has no live carrier Strip (its MARSHAL Strip was left out of an older snapshot)
+  // leaves the stack, as a dropped Strip's does.
+  if (carrierStore) {
+    const live = new Set();
+    for (const { boardStore } of facilities.values()) for (const s of boardStore.getAll()) if (s.state !== 'DROPPED' && isCarrierStrip(s)) live.add(s.flightDataId);
+    const record = carrierStore.getRecord();
+    for (const stack of Object.values((record && record.stacks) || {})) {
+      for (const e of stack.entries) if (!live.has(e.flightDataId)) carrierStore.onFlightDataRetired(e.flightDataId, 'system');
+    }
   }
   for (const [facilityId, { boardStore }] of facilities.entries()) {
     for (const strip of boardStore.getAll()) {
@@ -559,7 +570,7 @@ function _restore({ facilities, stores, saved: data, mutationLog, clock }) {
     if (store) byKey.get(key).restore(store, key === 'boards' ? data.boards : data[key], all);
   }
   // After the Boards, not before — it has Strips to check against only now.
-  _reconcileRestored(facilities, stores.flightData, stores.correlations, stores.marsa);
+  _reconcileRestored(facilities, stores.flightData, stores.correlations, stores.marsa, stores.carriers);
   // docs/adr/0101: a snapshot whose HANDOFF record names a retired holder is repaired (InterfacilityControlRepair). Liveness
   // only: nobody has signed on yet at a restart, so no owner is staffed and staffing is not judged here.
   for (const { boardStore } of facilities.values()) boardStore.reconcileExchanges({ staffing: false });
