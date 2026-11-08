@@ -63,6 +63,11 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
     }
   }
 
+  if (row.assignsCode) {
+    const fd = ctx.flightDataStore.getFlightData(strip.flightDataId);
+    if (fd && !fd.identity.beaconAssigned) ctx.flightDataStore.assignDiscreteCode(strip.flightDataId, { by });
+  }
+
   const now = ctx.clock.now();
   const from = { stripType: strip.stripType, state: strip.state, ownerPositionId: strip.ownerPositionId };
   // A launch that becomes the recovery keeps its first leg on record, as ConvertToArrival does (traffic-count.js counts it once).

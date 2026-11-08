@@ -138,6 +138,7 @@ test('a flight keeps its Case: a ship Case change moves nobody; Abort sends a Ca
   assert.equal(stack(efsp, 'CASE_I').length, 0);
   const back = strip(efsp, b.stripId);
   assert.deepEqual([back.state, back.ownerPositionId], ['STACK', 'CV_MARSHAL']);
+  assert.ok(code(efsp, a) && code(efsp, b), 'a Case II/III flight gets the squawk Case I did not give it');
   assert.equal(efsp.carrierStore.caseOf(b.flightDataId), 'III');
   refused(handoff(efsp, c, 'CV_MARSHAL', lateIII, 'ABORT_TO_STACK'), 'VALIDATION_ERROR', /Case I flight/);
 });

@@ -20,6 +20,7 @@ const ANY_CASE = Object.freeze(['I', 'II', 'III']);
 
 const _row = (r) => Object.freeze({
   trigger: 'CONTROLLER_INITIATED', source: '[SOURCE-DEFINED]', guide: 'docs/adr/0156', stackEffect: null, clearsAssignments: false,
+  assignsCode: false, // a Case I flight going to Case II/III gets the squawk Case I did not give it
   ...r,
   from: Object.freeze(r.from), cases: Object.freeze(r.cases), states: Object.freeze(r.states),
   to: Array.isArray(r.to) ? Object.freeze(r.to) : r.to,
@@ -65,7 +66,7 @@ const CARRIER_HANDOFFS = Object.freeze({
     label: 'ABORT TO CASE II/III', from: ['CV_MARSHAL'], to: ['CV_MARSHAL'], cases: SEQUENCED, caseOf: 'SHIP',
     flightCases: ['I'],
     stripType: 'CV_RECOVERY', states: ['STACK', 'CV_PATTERN'], toStripType: 'CV_RECOVERY', toState: 'STACK',
-    stackEffect: 'RECASE_TO_STACK', clearsAssignments: true,
+    stackEffect: 'RECASE_TO_STACK', clearsAssignments: true, assignsCode: true,
   }),
 });
 
