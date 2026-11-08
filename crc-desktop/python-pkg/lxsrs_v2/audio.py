@@ -144,6 +144,50 @@ class OptionalOpusPlaybackSink(AudioSink):
         self._stop.set()
 
 
+class VoiceProcessor:
+    """The transmit chain between the microphone and the Opus encoder: gain, then a peak limiter.
+
+    There is no pre-emphasis. A pre-emphasis filter (y[n] = x[n] - 0.97 x[n-1]) only makes sense when the
+    receiver undoes it, and no SRS client does: it cut 200 Hz by about 20 dB and lifted 8 kHz by 6 dB, so the
+    voice arrived thin, high and harsh, and the lifted sibilance hit full scale and clipped. Opus shapes its
+    own spectrum.
+
+    The limiter keeps the peaks under LIMIT instead of hard-clipping them: the gain drops at once when a block
+    would go over (ramped across the block, so no click) and recovers slowly, and a soft knee catches what the
+    ramp lets through. Speech below the threshold passes unchanged.
+    """
+
+    LIMIT = 0.7               # about -3 dBFS
+    KNEE = 0.6                # soft clip starts here, never passes 1.0
+    RELEASE_DB_PER_S = 12.0   # how fast the gain comes back after a peak
+
+    def __init__(self, *, volume: float = 1.0, block_duration_ms: int = 20) -> None:
+        import numpy as np  # type: ignore
+        self._np = np
+        self._volume = volume
+        self._gain = 1.0
+        self._release = 10.0 ** (self.RELEASE_DB_PER_S * block_duration_ms / 1000.0 / 20.0)
+
+    def process(self, samples):  # type: ignore[no-untyped-def]
+        """float32 samples in [-1, 1] to s16le bytes."""
+        np = self._np
+        x = samples.astype(np.float32) * np.float32(self._volume)
+        if x.size == 0:
+            return b""
+        peak = float(np.max(np.abs(x)))
+        wanted = 1.0 if peak <= self.LIMIT else self.LIMIT / peak
+        new_gain = wanted if wanted < self._gain else min(wanted, self._gain * self._release, 1.0)
+        if self._gain != 1.0 or new_gain != 1.0:
+            x = x * np.linspace(self._gain, new_gain, num=x.size, dtype=np.float32)
+        self._gain = new_gain
+        over = np.abs(x) > self.KNEE
+        if over.any():
+            room = 1.0 - self.KNEE
+            mag = np.abs(x[over])
+            x[over] = np.sign(x[over]) * (self.KNEE + room * np.tanh((mag - self.KNEE) / room))
+        return (np.clip(x, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
+
+
 class MicrophoneCapture:
     def __init__(self, *, samplerate: int = 16000, block_duration_ms: int = 20, device: int | None = None, volume: float = 1.0) -> None:
         try:
@@ -164,6 +208,7 @@ class MicrophoneCapture:
         self._closed = threading.Event()
         self._stream = None
         self._filter_state = None
+        self._processor = VoiceProcessor(volume=volume, block_duration_ms=block_duration_ms)
 
     def _resolve_input_config(self) -> tuple[int, int]:
         LOG.debug("Resolving input config for device %s", self._device)
@@ -199,16 +244,6 @@ class MicrophoneCapture:
     def _resample_to_target(self, indata) -> bytes:  # type: ignore[no-untyped-def]
         np = self._np
         mono = indata[:, 0].astype(np.float32)
-
-        # Pre-emphasis: boost high frequencies for voice clarity (y[n] = x[n] - 0.97*x[n-1])
-        # This compensates for the natural low-frequency roll-off of speech and improves
-        # Opus compression efficiency. We track the last sample across blocks.
-        last = getattr(self, "_pre_emphasis_last", 0.0)
-        emphasized = np.empty_like(mono)
-        emphasized[0] = mono[0] - 0.97 * last
-        emphasized[1:] = mono[1:] - 0.97 * mono[:-1]
-        self._pre_emphasis_last = float(mono[-1])
-        mono = emphasized
 
         if self._device_samplerate == self._target_samplerate:
             samples = mono
@@ -252,10 +287,7 @@ class MicrophoneCapture:
                 dst_x = np.linspace(0.0, 1.0, num=dst_len, endpoint=False)
                 samples = np.interp(dst_x, src_x, mono).astype(np.float32)
 
-        if self._volume != 1.0:
-            samples = samples * self._volume
-
-        return (np.clip(samples, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
+        return self._processor.process(samples)
 
     def start(self) -> None:
         LOG.debug("MicrophoneCapture.start() called for device %s", self._device)
@@ -383,7 +415,7 @@ class MicrophoneCapture:
 class PulseMicrophoneCapture:
     """Microphone capture via PulseAudio/PipeWire — uses friendly source names.
 
-    Applies the same pre-emphasis and volume scaling as MicrophoneCapture but
+    Applies the same VoiceProcessor chain as MicrophoneCapture but
     avoids the PortAudio/ALSA layer entirely. PipeWire handles resampling
     internally so we receive the target sample rate directly.
     """
@@ -410,7 +442,7 @@ class PulseMicrophoneCapture:
             samplerate=samplerate,
             channels=1,
         )
-        self._pre_emphasis_last: float = 0.0
+        self._processor = VoiceProcessor(volume=volume, block_duration_ms=block_duration_ms)
 
     def start(self) -> None:
         self._recorder.start()
@@ -424,19 +456,7 @@ class PulseMicrophoneCapture:
     def _process(self, raw: bytes) -> bytes:
         np = self._np
         samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-
-        # Pre-emphasis across block boundaries
-        last = self._pre_emphasis_last
-        emphasized = np.empty_like(samples)
-        emphasized[0] = samples[0] - 0.97 * last
-        emphasized[1:] = samples[1:] - 0.97 * samples[:-1]
-        self._pre_emphasis_last = float(samples[-1])
-        samples = emphasized
-
-        if self._volume != 1.0:
-            samples = samples * self._volume
-
-        return (np.clip(samples, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
+        return self._processor.process(samples)
 
     def drain(self) -> None:
         """Discard buffered frames — call on PTT press to avoid sending stale audio."""

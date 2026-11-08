@@ -113,3 +113,53 @@ def test_resample_clamps_to_int16_range() -> None:
     result = resample_pcm16_mono(data, src_rate=48000, dst_rate=16000)
     samples = struct.unpack(f"<{len(result)//2}h", result)
     assert all(-32768 <= s <= 32767 for s in samples)
+
+
+# ---------------------------------------------------------------------------
+# VoiceProcessor (transmit chain)
+# ---------------------------------------------------------------------------
+
+np = pytest.importorskip("numpy")
+
+from lxsrs_v2.audio import VoiceProcessor  # noqa: E402
+
+
+def _tone(freq: float, amp: float, n: int = 320, rate: int = 16000):
+    t = np.arange(n, dtype=np.float32) / rate
+    return (amp * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+
+
+def _peak(pcm: bytes) -> float:
+    return float(np.max(np.abs(np.frombuffer(pcm, dtype=np.int16)))) / 32767.0
+
+
+def test_voice_processor_passes_quiet_speech_unchanged_at_every_frequency() -> None:
+    # No pre-emphasis: a 200 Hz and a 6 kHz tone of the same level come out at the same level.
+    for freq in (200.0, 6000.0):
+        out = VoiceProcessor().process(_tone(freq, 0.3))
+        assert abs(_peak(out) - 0.3) < 0.01, freq
+
+
+def test_voice_processor_applies_volume() -> None:
+    out = VoiceProcessor(volume=0.5).process(_tone(1000.0, 0.4))
+    assert abs(_peak(out) - 0.2) < 0.01
+
+
+def test_voice_processor_limits_hot_input_without_hard_clipping() -> None:
+    proc = VoiceProcessor()
+    outs = [proc.process(_tone(1000.0, 1.0)) for _ in range(5)]
+    for out in outs:
+        assert _peak(out) < 0.95
+    samples = np.frombuffer(outs[-1], dtype=np.int16)
+    assert np.count_nonzero(np.abs(samples) >= 32700) == 0
+    assert _peak(outs[-1]) <= VoiceProcessor.LIMIT + 0.01
+
+
+def test_voice_processor_gain_recovers_after_a_peak() -> None:
+    proc = VoiceProcessor()
+    proc.process(_tone(1000.0, 1.0))
+    first_quiet = _peak(proc.process(_tone(1000.0, 0.3)))
+    for _ in range(100):  # 2 s
+        last_quiet = _peak(proc.process(_tone(1000.0, 0.3)))
+    assert first_quiet < 0.3
+    assert abs(last_quiet - 0.3) < 0.01

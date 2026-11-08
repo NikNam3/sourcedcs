@@ -2,7 +2,7 @@ lxsrs_v2-0.1.0.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNu
 lxsrs_v2-0.1.0.dist-info/METADATA,sha256=nl-NM11ChkYzbISKFdZ2PSEa7ciIa8fss_H0hTPgelY,145
 lxsrs_v2-0.1.0.dist-info/RECORD,,
 lxsrs_v2-0.1.0.dist-info/REQUESTED,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
-lxsrs_v2-0.1.0.dist-info/WHEEL,sha256=YVMoNqKzERt-wjUZwJ33xBGAwnFl-4cqbYkTtWa4itE,91
+lxsrs_v2-0.1.0.dist-info/WHEEL,sha256=mOdXR9C3wMVov7cSY8PY-XCzo3SmmWCHvGQr5csJoao,91
 lxsrs_v2-0.1.0.dist-info/direct_url.json,sha256=Ld2YOnw0_qNB0WRWhQCo1XK--PrixlgJKbUULJx9IUo,76
 lxsrs_v2-0.1.0.dist-info/top_level.txt,sha256=24wmQDGn9hJy-LPLyIsbnU888xAigYe-mev97XbHQJg,9
 lxsrs_v2/AudioEffects/Ambient/A10.wav,sha256=8fIVehYBLJkpx7kHF-_ox6uno5WlaYcaMiWaE1j9ebk,2329004
@@ -91,7 +91,7 @@ lxsrs_v2/__pycache__/pulse.cpython-314.pyc,,
 lxsrs_v2/__pycache__/test_output.cpython-314.pyc,,
 lxsrs_v2/__pycache__/ui.cpython-314.pyc,,
 lxsrs_v2/api.py,sha256=PGtj3j3T7cqwVCuOomiA4NzXSOiRwVlR93RDnQczNN8,7624
-lxsrs_v2/audio.py,sha256=3h6L8QD-GUP5AMwT91UPJeloaiOFnMwNlVHVgLPGj6g,22474
+lxsrs_v2/audio.py,sha256=7Tr7aSVezu7L7uMv9X3NOPFXYF7QRZcVQ6EKm7gtDWI,23706
 lxsrs_v2/client.py,sha256=UwU7xKphA7JngZVtVDi-AlPZlaUrXIcJ1_bb693lg4I,38772
 lxsrs_v2/effects.py,sha256=ejXKn7klGajatVgmVwkuUxHIsBxBC6dOYQtMf3bI2co,7549
 lxsrs_v2/models.py,sha256=6DA8J2hp0nmxvkwuOk3Wl7apz82pKLy0BQq8R17dZdk,4903
@@ -103,7 +103,7 @@ lxsrs_v2/tests/__pycache__/test_default_frequency.cpython-314.pyc,,
 lxsrs_v2/tests/__pycache__/test_models.cpython-314.pyc,,
 lxsrs_v2/tests/__pycache__/test_protocol.cpython-314.pyc,,
 lxsrs_v2/tests/__pycache__/test_ptt_watchdog.cpython-314.pyc,,
-lxsrs_v2/tests/test_audio.py,sha256=7kqUecZZ8zhV-5Cr5r63Orb_L2_DhxBSmwNUSlBLQo8,3777
+lxsrs_v2/tests/test_audio.py,sha256=ivOB3r6-KBoZ-hmrpdIC5mXbc7T7pK8RKWd0vg26Nzk,5582
 lxsrs_v2/tests/test_default_frequency.py,sha256=3c8RlwYWdNe-fwdhGhLIWeSEbpgxb9Rd-I2c46UMyeY,3365
 lxsrs_v2/tests/test_models.py,sha256=lMmG7qaZICuGwsD6-rpXJz2r63RF-P9Yn8SI6VZj0xY,7388
 lxsrs_v2/tests/test_protocol.py,sha256=ZU4V9ENGUVPr5urENqrivzEou5aBP6CWsPuzkzgKFvg,5000
