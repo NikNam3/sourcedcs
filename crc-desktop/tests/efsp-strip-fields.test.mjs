@@ -213,6 +213,10 @@ test('carrier Strips: the ADR 0156 Blocks, side number first, no callsign on the
   assert.equal(fieldSpanFor('C18', true), fieldSpanFor('C1'), 'the side number takes the callsign\'s width');
   assert.equal(isCarrierStrip({ stripType: 'CV_RECOVERY' }), true);
   assert.equal(isCarrierStrip({ stripType: 'FINAL' }), false);
+  // handed to the Marshal from CTR with no side number: the callsign leads until one is typed
+  const handed = { identity: { callsign: 'VIPER11' }, military: { carrier: { sideNumber: null } } };
+  assert.equal(compactBlocksFor('CV_RECOVERY', 'CV_MARSHAL', handed)[0], 'C1');
+  assert.equal(compactBlocksFor('CV_RECOVERY', 'CV_MARSHAL', { ...handed, military: { carrier: { sideNumber: '301' } } })[0], 'C18');
 });
 
 test('a Case I carrier flight: no squawk, no EAT, no heading, speed or altitude on its face', async () => {

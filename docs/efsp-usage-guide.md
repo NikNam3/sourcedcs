@@ -1928,7 +1928,9 @@ An aircraft on the carrier is named by its **side number**. PriFly's New Strip (
 read it), the Marshal the **fuel** (`4.8` is 4,800 lb). No callsign is asked for and no flight plan is looked up. The
 callsign, when you learn it, is set from the Strip's **⋯ → Set callsign…**: that also joins the flight to the ATO
 mission tasked with that callsign, if exactly one waits for it (`adr/0109`). In Case II and III a new Strip gets a squawk;
-in **Case I it gets none** (no radar service). Departure control and the approach lanes create nothing.
+in **Case I it gets none** (no radar service). Departure control and the approach lanes create nothing. A flight handed to
+the Marshal from CTR or AP arrives with no side number: its Strip leads with the callsign until you type one (SIDE, in
+the Strip's expanded view).
 
 A carrier Strip carries only: the side number, the type, the departure radial (a launch) or the fuel, angels and EAT
 (a recovery), and in Case II and III the squawk and the assigned **HDG**, **SPD** and **ALT**. A Case I flight refuses

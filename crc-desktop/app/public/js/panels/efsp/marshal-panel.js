@@ -456,15 +456,16 @@ export function renderMarshal() {
   _els.ramp.textContent = st.rampTime.value != null ? `${carrierHhmm(st.rampTime.value)}Z` : '—';
   _els.clock.textContent = clockText(missionNow());
   const hasSequenced = board.sequenced.length > 0;
-  _els.delta.hidden = !(canSequence && hasSequenced);
-  if (!(canSequence && hasSequenced)) _els.deltaForm.hidden = true;
+  const showSequenced = hasSequenced || caseValue !== 'I'; // the Case II/III section is shown while it has flights or is the ship's Case
+  _els.delta.hidden = !(canSequence && showSequenced);
+  if (!(canSequence && showSequenced)) _els.deltaForm.hidden = true;
   _els.togoN.textContent = String(board.toGo);
   _els.empty.hidden = board.rows.length > 0;
 
   // A section is shown while it has flights, and the one of the ship's Case always (a flight keeps the Case it was given,
   // so a Case I flight finishes in its own table after the ship goes to Case III).
   const S = _els.sections;
-  S.sequenced.main.hidden = !(hasSequenced || caseValue !== 'I');
+  S.sequenced.main.hidden = !showSequenced;
   S.caseI.main.hidden = !(board.caseI.length > 0 || caseValue === 'I');
   _syncTable('sequenced', board.sequenced, board.vacancies, shown, { canSequence, section: 'sequenced' });
   _syncTable('caseI', board.caseI, [], shown, { canSequence, section: 'caseI' });

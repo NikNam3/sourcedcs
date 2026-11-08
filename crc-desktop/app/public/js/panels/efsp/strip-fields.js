@@ -139,6 +139,11 @@ export function compactBlocksFor(stripType, positionId, flightData, strip = null
   const facilityId = positionId ? facilityOfPosition(positionId) : null;
   // crc-sync docs/adr/0156: a Case I flight has no radar service: no squawk, no EAT, no assignments.
   if (strip && carrierFlightCase(strip) === 'I') out = out.filter(id => !CASE_I_HIDDEN_BLOCKS.includes(id));
+  // A carrier Strip that arrived with no side number (a flight handed to the Marshal from CTR or AP) leads with its callsign
+  // until the side number is typed, so a Strip is never led by an empty field.
+  if (CARRIER_STRIP_TYPES.has(stripType) && !_sideNumberOf(flightData) && flightData && flightData.identity && flightData.identity.callsign) {
+    out = out.map(id => (id === 'C18' ? 'C1' : id));
+  }
   if (stripType === 'VFR' && !(facilityId && (getAirportSurfacePositions()[facilityId] || []).includes(positionId))
     && !(flightData && flightData.filed && flightData.filed.departureRunway)) out = out.filter(id => id !== VFR_RUNWAY_BLOCK);
   return out;
@@ -152,6 +157,11 @@ export const CASE_I_HIDDEN_BLOCKS = Object.freeze(['5', '7A', '9A-VECTOR', '9A-S
 // The carrier names an aircraft by its side number: a carrier Strip (CV_LAUNCH, CV_RECOVERY) is created with one and
 // leads with it; the callsign is set later from the menu, if ever, and never takes its place.
 const CARRIER_STRIP_TYPES = new Set(['CV_LAUNCH', 'CV_RECOVERY']);
+
+function _sideNumberOf(flightData) {
+  const c = flightData && flightData.military && flightData.military.carrier;
+  return c ? String(c.sideNumber || '').trim() : '';
+}
 
 /** Is this a carrier Strip (crc-sync carrier/strip-types.js)? */
 export function isCarrierStrip(strip) {

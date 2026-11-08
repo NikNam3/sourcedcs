@@ -86,8 +86,8 @@ const CLIENT = path.join(import.meta.dirname, '../app/public/js/panels/efsp');
 // be excused by assertion.
 
 /** The compact Block list bay-view.js actually renders, read from the module rather than scraped out of its source. */
-function compactBlocksFor(stripType, positionId) {
-  return _compactBlocksFor(stripType, positionId);
+function compactBlocksFor(stripType, positionId, flightData) {
+  return _compactBlocksFor(stripType, positionId, flightData);
 }
 
 // Every (strip type, owning Position) pair the field lists distinguish, plus one
@@ -126,7 +126,7 @@ async function expandedBlocksFor(stripType, positionId = 'OPS') {
 for (const stripType of Object.keys(BLOCK_MAPS)) {
   test(`every writable ${stripType} Block is somewhere a controller can reach`, async () => {
     for (const positionId of positionsFor(stripType)) {
-      const compact = compactBlocksFor(stripType, positionId);
+      const compact = compactBlocksFor(stripType, positionId, FDR); // the flight the Strip is rendered with
       const expanded = await expandedBlocksFor(stripType, positionId);
       const unreachable = Object.keys(BLOCK_MAPS[stripType]).filter((blockId) => {
         const writable = isBlockEditable(blockId, stripType) || enumSelectOptionsFor(blockId) || isBooleanToggleBlock(blockId);
@@ -149,7 +149,7 @@ test('the expanded view shows what the chips do NOT, in Block Map order', async 
   // from a property that changes as the Strip is worked.
   for (const stripType of Object.keys(BLOCK_MAPS)) {
     for (const positionId of positionsFor(stripType)) {
-      const compact = compactBlocksFor(stripType, positionId);
+      const compact = compactBlocksFor(stripType, positionId, FDR); // the flight the Strip is rendered with
       const expanded = await expandedBlocksFor(stripType, positionId);
       const expected = Object.keys(BLOCK_MAPS[stripType]).filter(id => !compact.includes(id));
       assert.deepEqual(expanded, expected, `${stripType} at ${positionId}`);
@@ -2870,13 +2870,14 @@ test('a launch at KILO: DROP is the NLA and TO MARSHAL its own button, for depar
   assert.equal(descendants(notMine.el).filter(c => c.dataset && c.dataset.carrierHandoff === 'DEPARTURE_TO_MARSHAL').length, 0);
 });
 
-test('the carrier Strip\'s cells: angels read-only from the server, fuel and the assignments typed; no callsign on the face', async () => {
+test('the carrier Strip\'s cells: angels read-only from the server, fuel and the assignments typed; the callsign leads only while there is no side number', async () => {
   const r = await carrierRender(recoveryStrip(), { signedOn: ['CV_MARSHAL'], caseValue: 'III' });
   assert.equal(blockCell(r.el, 'C7').classList.contains('efsp-block-editable'), false);
   assert.equal(blockCell(r.el, 'C7').textContent, '6');
   assert.equal(blockCell(r.el, 'C12').classList.contains('efsp-block-editable'), true);
   assert.equal(blockCell(r.el, '9A-VECTOR').classList.contains('efsp-block-editable'), true);
-  assert.equal(blockCell(r.el, 'C1'), undefined, 'the callsign is set from the menu');
+  assert.ok(blockCell(r.el, 'C1'), 'no side number yet (a flight handed in from CTR): the callsign leads');
+  assert.equal(blockCell(r.el, 'C18'), undefined, 'and the empty side number is not drawn');
   for (const gone of ['C3', 'C4', 'C5', 'C6', 'C9', 'C10', 'C15']) assert.equal(blockCell(r.el, gone), undefined, gone);
 });
 
