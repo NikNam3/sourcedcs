@@ -411,6 +411,7 @@ function _refreshCarrierFields(origin) {
     if (carrier) {
       _createStripExtraEl.placeholder = CARRIER_CREATE_EXTRA[origin.stripType].placeholder;
       _createStripExtraEl.maxLength = CARRIER_CREATE_EXTRA[origin.stripType].maxLength;
+      _createStripExtraEl.title = CARRIER_CREATE_EXTRA[origin.stripType].title;
     }
   }
 }

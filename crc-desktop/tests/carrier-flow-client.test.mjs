@@ -46,6 +46,7 @@ test('the create seed: side number required (1-8), type upper-cased, radial 0-36
   assert.equal(carrierCreateSeed('CV_RECOVERY', { side: '' }).ok, false);
   assert.equal(carrierCreateSeed('CV_RECOVERY', { side: 'TOOLONG99' }).ok, false);
   assert.equal(carrierCreateSeed('CV_LAUNCH', { side: '301', extra: '400' }).ok, false);
+  assert.match(carrierCreateSeed('CV_LAUNCH', { side: '140', type: 'F14', extra: '13.8' }).msg, /departure radial.*not 13\.8: a launch has no fuel/);
   assert.equal(isCarrierOrigin({ stripType: 'CV_LAUNCH' }), true);
   assert.equal(isCarrierOrigin({ stripType: 'ARRIVAL' }), false);
 });

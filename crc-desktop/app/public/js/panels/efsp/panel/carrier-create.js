@@ -9,8 +9,8 @@ const KLB = 1000;
 
 /** The carrier strip types and the one extra field each origin's form asks for. */
 export const CARRIER_CREATE_EXTRA = Object.freeze({
-  CV_LAUNCH:   { placeholder: 'DEP RAD', maxLength: 3 },
-  CV_RECOVERY: { placeholder: 'FUEL', maxLength: 5 },
+  CV_LAUNCH:   { placeholder: 'DEP RAD', maxLength: 3, title: 'Departure radial, degrees magnetic (090)' },
+  CV_RECOVERY: { placeholder: 'FUEL', maxLength: 5, title: 'Fuel in thousands of pounds (4.8) or pounds (4800)' },
 });
 
 export function isCarrierOrigin(origin) {
@@ -29,7 +29,9 @@ export function carrierCreateSeed(stripType, { side = '', type = '', extra = '' 
   const flightData = { sideNumber, aircraftType: String(type).trim().toUpperCase() };
   const x = String(extra).trim();
   if (x !== '' && stripType === 'CV_LAUNCH') {
-    if (!/^\d{1,3}$/.test(x) || Number(x) > 360) return { ok: false, msg: 'The departure radial is 0 to 360' };
+    if (!/^\d{1,3}$/.test(x) || Number(x) > 360) {
+      return { ok: false, msg: `The third field of a launch is its departure radial (degrees, 000-360), not ${x}: a launch has no fuel` };
+    }
     flightData.departureRadialDeg = Number(x);
   }
   if (x !== '' && stripType === 'CV_RECOVERY') {
