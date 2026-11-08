@@ -1222,6 +1222,7 @@
    "marsaParticipantStripIds"
   ],
   "panels/efsp/marshal-board-model.js": [
+   "APPROACH_BUTTON",
    "KIND_OF_STATE",
    "KIND_RANK",
    "buildBoard",
@@ -1231,7 +1232,9 @@
    "eatMinuteText",
    "fuelBlockOp",
    "fuelText",
+   "headerParts",
    "marksOf",
+   "nextAvailable",
    "passClearanceOp",
    "setAngelsOp",
    "setDmeOp",

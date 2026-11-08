@@ -5,11 +5,12 @@ import { carrierBearingText, carrierHhmm, carrierStateOf, getEfspCarrier } from 
 import { carrierActingFor, sendCarrier, signedOnCarrierIds } from './carrier-send.js';
 import { shipBearingRangeOf } from './carrier-final-distance.js';
 import { getAllEfspStrips, getEfspFlightData, getEfspPosition, getEfspPositionLetter, getEfspStrip } from './efsp-state.js';
-import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
+import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from './efsp-ws.js';
+import { carrierCreateSeed } from './panel/carrier-create.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { nlaButtonLabel } from './efsp-nla.js';
 import {
-  buildBoard, clockText, dropSlot, eatMinuteText, fuelBlockOp, fuelText, marksOf, passClearanceOp, setAngelsOp, setDmeOp, setEatOp
+  buildBoard, clockText, dropSlot, eatMinuteText, fuelBlockOp, fuelText, headerParts, marksOf, nextAvailable, passClearanceOp, setAngelsOp, setDmeOp, setEatOp
 } from './marshal-board-model.js';
 import { pictureModel, renderMarshalPicture } from './marshal-picture.js';
 import { circleModel, renderMarshalCircle } from './marshal-circle.js';
@@ -102,22 +103,10 @@ function _build() {
   _bodyEl.textContent = '';
   _tables.sequenced = []; _tables.caseI = [];
   const hdr = _el('div', 'mb-hdr');
-  const cell = (k, id) => { const s = _el('span', 'mb-hcell'); s.appendChild(_el('span', 'mb-k', k)); const b = _el('b', null, ''); b.dataset.marshal = id; s.appendChild(b); hdr.appendChild(s); return b; };
-  const hull = _el('span', 'mb-hcell');
-  const hullK = _el('span', 'mb-k', '');
-  const caseB = _el('b', null, '');
-  caseB.dataset.marshal = 'case';
-  hull.append(hullK, document.createTextNode(' CASE '), caseB);
-  hdr.appendChild(hull);
-  const approach = cell('APPROACH', 'approach');
-  const brc = cell('BRC', 'brc');
-  const fb = cell('FB', 'fb');
-  const mar = _el('span', 'mb-hcell');
-  mar.appendChild(_el('span', 'mb-k', 'MARSHAL '));
-  const marPos = _el('b', null, ''); marPos.dataset.marshal = 'marshal-position'; mar.appendChild(marPos);
-  mar.appendChild(_el('span', 'mb-k', ' DME'));
-  hdr.appendChild(mar);
-  const ramp = cell('RAMP', 'ramp');
+  // the header line (headerParts): one space between every key and value, nothing else
+  const line = _el('span', 'mb-hline');
+  line.dataset.marshal = 'header';
+  hdr.appendChild(line);
   const delta = _el('button', 'mb-btn', 'Delta…');
   delta.type = 'button';
   delta.dataset.marshalAction = 'delta-open';
@@ -134,6 +123,21 @@ function _build() {
   deltaErr.dataset.marshal = 'delta-note';
   deltaForm.append(_el('span', 'mb-k', 'DELTA '), deltaIn, _el('span', 'mb-k', ' min '), deltaGo, deltaErr);
   hdr.appendChild(deltaForm);
+  // crc-sync docs/adr/0156: the Marshal checks a flight in here, by its side number (and the squawk it was given, Case II/III):
+  // it joins the stack with the next angels, DME and EAT the header shows.
+  const create = _el('span', 'mb-create');
+  const sideIn = _el('input', 'mb-input mb-create-input');
+  sideIn.type = 'text'; sideIn.maxLength = 8; sideIn.placeholder = 'SIDE'; sideIn.autocomplete = 'off';
+  sideIn.dataset.marshalInput = 'create-side';
+  const sqIn = _el('input', 'mb-input mb-create-input');
+  sqIn.type = 'text'; sqIn.maxLength = 4; sqIn.placeholder = 'SQUAWK'; sqIn.autocomplete = 'off'; sqIn.inputMode = 'numeric';
+  sqIn.dataset.marshalInput = 'create-squawk';
+  const createBtn = _el('button', 'mb-btn', '+ New Strip');
+  createBtn.type = 'button'; createBtn.dataset.marshalAction = 'create';
+  const createNote = _el('span', 'mb-delta-note');
+  createNote.dataset.marshal = 'create-note';
+  create.append(sideIn, sqIn, createBtn, createNote);
+  hdr.appendChild(create);
   const right = _el('span', 'mb-right');
   const clock = _el('b', null, ''); clock.dataset.marshal = 'clock';
   right.appendChild(clock);
@@ -149,7 +153,27 @@ function _build() {
   togo.appendChild(togoN);
   _bodyEl.append(sections.sequenced.main, sections.caseI.main, empty, togo);
 
-  _els = { hullK, caseB, approach, brc, fb, marPos, ramp, delta, deltaForm, deltaIn, deltaGo, deltaErr, clock, empty, togoN, sections };
+  _els = { line, delta, deltaForm, deltaIn, deltaGo, deltaErr, clock, empty, togoN, sections, create, sideIn, sqIn, createNote };
+  const submit = () => {
+    const seed = carrierCreateSeed({ side: sideIn.value });
+    const squawk = sqIn.hidden ? '' : sqIn.value.trim();
+    const bad = !seed.ok ? seed.msg : (squawk && !/^[0-7]{4}$/.test(squawk) ? 'a squawk is four digits 0-7' : '');
+    sideIn.classList.toggle('mb-input-bad', !seed.ok);
+    sqIn.classList.toggle('mb-input-bad', !!seed.ok && !!bad);
+    createNote.textContent = bad;
+    if (bad) return;
+    sendEfspCreateStrip('CV_MARSHAL', {
+      kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY',
+      flightData: { ...seed.flightData, ...(squawk ? { beaconCode: squawk } : {}) },
+    }, 'CARRIER');
+    sideIn.value = ''; sqIn.value = '';
+    sideIn.focus();
+  };
+  createBtn.addEventListener('click', submit);
+  for (const inp of [sideIn, sqIn]) {
+    inp.addEventListener('input', () => { inp.classList.remove('mb-input-bad'); createNote.textContent = ''; });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+  }
 
   delta.addEventListener('click', () => {
     deltaForm.hidden = !deltaForm.hidden;
@@ -442,19 +466,31 @@ export function renderMarshal() {
   const shown = { enabled: _marksShown() };
 
   // header (cheap text, set every time)
-  _els.hullK.textContent = view.hullId;
-  _els.caseB.textContent = caseValue || '—';
-  _els.approach.textContent = _approachText() || '—';
-  _els.brc.textContent = st.brc.value != null ? carrierBearingText(st.brc.display) : '—';
-  _els.fb.textContent = st.finalBearing.value != null ? carrierBearingText(st.finalBearing.display) : '—';
-  const holdFixes = board.sequenced.filter((r) => r.kind === 'hold' && r.marshalDme != null).map((r) => r.marshalDme);
+  const parts = headerParts({
+    hullId: view.hullId, caseValue, lanesText: _approachText(),
+    brcText: st.brc.value != null ? carrierBearingText(st.brc.display) : '',
+    fbText: st.finalBearing.value != null ? carrierBearingText(st.finalBearing.display) : '',
+    altimeterInHg: st.weather && st.weather.altimeter ? st.weather.altimeter.value : null,
+    radialText: st.radial.value != null ? carrierBearingText(st.radial.display) : '',
+    next: nextAvailable(view, getAllEfspStrips(), (p) => { const x = getEfspPosition(p); return !!(x && x.primary); }),
+  });
+  const sig = JSON.stringify(parts);
+  if (_els.line.dataset.sig !== sig) {
+    _els.line.dataset.sig = sig;
+    _els.line.textContent = '';
+    parts.forEach((p, i) => {
+      if (i) _els.line.appendChild(document.createTextNode(' '));
+      if (p.k) _els.line.append(_el('span', 'mb-k', p.k), document.createTextNode(' '));
+      const b = _el('b', null, p.v);
+      b.dataset.marshal = p.id;
+      _els.line.appendChild(b);
+    });
+  }
   const first = st.firstFix && st.firstFix.value != null ? st.firstFix.value : null;
-  const top = Math.max(first ?? 0, ...holdFixes);
-  _els.marPos.textContent = st.radial.value != null
-    ? `${carrierBearingText(st.radial.display)} ${first == null ? '—' : (top > first ? `${first}–${top}` : String(first))}`
-    : '—';
-  _els.ramp.textContent = st.rampTime.value != null ? `${carrierHhmm(st.rampTime.value)}Z` : '—';
   _els.clock.textContent = clockText(missionNow());
+  // the check-in row: the Marshal's (it sequences the stack); no squawk box in Case I (no radar service)
+  _els.create.hidden = !canSequence;
+  _els.sqIn.hidden = caseValue === 'I';
   const hasSequenced = board.sequenced.length > 0;
   const showSequenced = hasSequenced || caseValue !== 'I'; // the Case II/III section is shown while it has flights or is the ship's Case
   _els.delta.hidden = !(canSequence && showSequenced);

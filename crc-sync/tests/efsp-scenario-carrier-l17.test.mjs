@@ -309,3 +309,18 @@ test('a Strip dropped out of the recovery leaves the stack with a vacancy, never
 });
 
 void wait;
+
+test('the MARSHAL panel\'s create: a squawk typed with the side number is the flight\'s (II/III); Case I is given the next altitude from 2', () => {
+  const { efsp, c } = fresh();
+  const a = recoveryCheckIn(efsp, c, '301', { beaconCode: '4521' });
+  assert.equal(code(efsp, a), '4521');
+  refused(act(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, { kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY',
+    flightData: { sideNumber: '302', beaconCode: '4589' } }), 'VALIDATION_ERROR', /four digits 0-7/);
+  setCase(efsp, c, 'I');
+  refused(act(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, { kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY',
+    flightData: { sideNumber: '303', beaconCode: '4522' } }), 'VALIDATION_ERROR', /Case I/);
+  const one = recoveryCheckIn(efsp, c, '304');
+  const two = recoveryCheckIn(efsp, c, '305');
+  const angels = (s) => view(efsp).derived.CASE_I.find(e => e.flightDataId === s.flightDataId).angels;
+  assert.deepEqual([angels(one), angels(two)], [2, 3]);
+});

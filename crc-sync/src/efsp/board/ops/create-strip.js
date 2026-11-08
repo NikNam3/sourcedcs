@@ -69,10 +69,12 @@ function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } 
   const newFlight = (op.flightDataId === undefined || op.flightDataId === null) && op.flightData;
   // docs/adr/0156: a carrier Strip is made by its side number; its carrier fields are checked here, before anything is minted.
   let carrierFields = [];
+  let carrierCode = null;
   if (carrierStrip && newFlight) {
     const prep = prepareCarrierSeed(stripType, op.flightData, ctx.rules.carrierCase());
     if (!prep.ok) return { ok: false, reason: prep.reason, detail: prep.detail };
     carrierFields = prep.fields;
+    carrierCode = prep.beaconCode;
     op = { ...op, flightData: prep.seed };
   }
   // docs/adr/0109: a carrier Strip typed with a callsign meets its ATO mission line when exactly one
@@ -120,7 +122,12 @@ function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } 
   }
   if (!created.ok) return { ok: false, reason: created.reason, detail: created.detail };
   for (const [field, value] of carrierFields) ctx.flightDataStore.setCarrier(created.flightData.flightDataId, field, value, { by });
-  if (carrierFields.length) created = { ...created, flightData: ctx.flightDataStore.getFlightData(created.flightData.flightDataId) };
+  let codeWarning = null;
+  if (carrierCode) {
+    const r = ctx.flightDataStore.setBeaconAssigned(created.flightData.flightDataId, carrierCode, { by });
+    if (!r.ok) codeWarning = warn('CODE_NOT_SET', `squawk ${carrierCode} not set (${r.detail || r.reason}): the flight keeps ${created.flightData.identity.beaconAssigned}`);
+  }
+  if (carrierFields.length || carrierCode) created = { ...created, flightData: ctx.flightDataStore.getFlightData(created.flightData.flightDataId) };
 
   const stripId = crypto.randomUUID();
   const rackStrips = ctx.state.rack(op.bayId, op.rackId);
@@ -182,6 +189,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } 
     if (a && a.ok === false) warnings = [...(warnings || []), warn('NOT_IN_MARSHAL_STACK', `not in the Marshal stack: ${a.detail || a.reason}`)];
     else if (a && a.changed && a.changed.length) carrierChanged = true;
   }
+  if (codeWarning) warnings = [...(warnings || []), codeWarning];
   return { ok: true, strip, flightData: created.flightData, warnings, carrierChanged };
 }
 

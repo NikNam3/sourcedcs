@@ -198,3 +198,78 @@ export function dropSlot(rows, draggedId, targetId) {
   if (!target || target.kind !== 'hold') return null;
   return target.slot;
 }
+
+// ── the header: what the next flight checking in is given (the human's layout, 2026-11-09) ─────────────
+
+/** The approach button each lane is worked on: APP 1 on 15, APP 2 on 17 ([SOURCE-DEFINED], the squadron's). */
+export const APPROACH_BUTTON = Object.freeze({ CV_APP1: 15, CV_APP2: 17 });
+const LANES = Object.freeze(['CV_APP1', 'CV_APP2']);
+const CASE_I_FIRST_ANGELS = 2;
+
+/**
+ * What the next flight to check in would be given, from the server's hull view: in Case II/III the stack's next free slot
+ * (its angels, holding DME and EAT, as `view.slots.MAIN` derives them; angels 6 at the first fix on an empty stack), in
+ * Case I the next altitude above the highest one assigned (from 2). And the lane the next flight goes to on TO APPR: the
+ * lane of the first flight not yet handed to an approach, else the one the next check-in would get (push-order
+ * alternation, the other lane when that one is unstaffed, handoffs.js `laneFor`).
+ *
+ * @param {object} view                      the hull view
+ * @param {object[]} strips                  every Strip the client holds
+ * @param {(positionId:string)=>boolean} isStaffed
+ * @returns {{angels:number|null, dme:number|null, eatUtc:number|null, lane:string|null}}
+ */
+export function nextAvailable(view, strips, isStaffed = () => true) {
+  const caseValue = view && view.recoveryCase ? view.recoveryCase.value : null;
+  const derived = (view && view.derived) || {};
+  if (caseValue === 'I') {
+    const assigned = (derived.CASE_I || []).map((e) => e.angels).filter(Number.isFinite);
+    return { angels: assigned.length ? Math.max(...assigned) + 1 : CASE_I_FIRST_ANGELS, dme: null, eatUtc: null, lane: null };
+  }
+  const slots = (view && view.slots && view.slots.MAIN) || [];
+  const slot = slots.length ? slots[slots.length - 1] : null; // the slot above the top of the stack (slot 0 when empty)
+  const main = (derived.MAIN || []).slice().sort((a, b) => a.stackIndex - b.stackIndex);
+  const stateOf = new Map();
+  for (const s of strips || []) if (s && s.stripType === 'CV_RECOVERY' && s.state !== 'DROPPED') stateOf.set(s.flightDataId, s.state);
+  const lanes = new Map(((view && view.lanes && view.lanes.MAIN) || []).map((l) => [l.flightDataId, l.lane]));
+  const waiting = main.find((e) => ['STACK', 'COMMENCED'].includes(stateOf.get(e.flightDataId)));
+  let lane = waiting ? lanes.get(waiting.flightDataId) || null : null;
+  if (!waiting) {
+    const preferred = LANES[main.length % 2];
+    const other = LANES[(main.length + 1) % 2];
+    lane = isStaffed(preferred) ? preferred : isStaffed(other) ? other : null;
+  }
+  return {
+    angels: slot && Number.isFinite(slot.angels) ? slot.angels : null,
+    dme: slot && Number.isFinite(slot.marshalDme) ? slot.marshalDme : null,
+    eatUtc: slot && Number.isFinite(slot.pushTimeUtc) ? slot.pushTimeUtc : null,
+    lane,
+  };
+}
+
+/**
+ * The header line, as key/value parts in order, every one separated by a single space when drawn:
+ * `CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 04 APPR 15`. Case I has no marshal
+ * fix, EAT or approach: `… ALTIMETER 30.06 ANG 2`. An unknown value is a dash.
+ * @returns {{k:string, v:string, id:string}[]}
+ */
+export function headerParts({ hullId, caseValue, lanesText, brcText, fbText, altimeterInHg, radialText, next }) {
+  const dash = (v) => (v == null || v === '' ? '—' : String(v));
+  const parts = [
+    { k: '', v: dash(hullId), id: 'hull' },
+    { k: 'CASE', v: dash(caseValue), id: 'case' },
+    { k: '', v: dash(lanesText), id: 'approach' },
+    { k: 'BRC', v: dash(brcText), id: 'brc' },
+    { k: 'FB', v: dash(fbText), id: 'fb' },
+    { k: 'ALTIMETER', v: Number.isFinite(altimeterInHg) ? altimeterInHg.toFixed(2) : '—', id: 'altimeter' },
+  ];
+  if (caseValue !== 'I') {
+    parts.push({ k: 'MARSHAL', v: dash(radialText ? radialText.replace(/[MTG]$/, '') : ''), id: 'radial' });
+    parts.push({ k: '', v: next && Number.isFinite(next.dme) ? `${next.dme}NM` : '—', id: 'next-dme' });
+  }
+  parts.push({ k: 'ANG', v: dash(next && next.angels), id: 'next-angels' });
+  if (caseValue !== 'I') {
+    parts.push({ k: 'EAT', v: next && Number.isFinite(next.eatUtc) ? eatMinuteText(next.eatUtc) : '—', id: 'next-eat' });
+    parts.push({ k: 'APPR', v: dash(next && next.lane ? APPROACH_BUTTON[next.lane] : null), id: 'next-appr' });
+  }
+  return parts;
+}

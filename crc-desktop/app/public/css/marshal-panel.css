@@ -108,3 +108,10 @@
 .mb-caption { margin: 2px 0 4px; letter-spacing: 0.05em; }
 .mb-main[hidden] { display: none; }
 .mb-picture .mp-ship { fill: none; stroke: currentColor; }
+/* the header line: one space between every key and value (headerParts) */
+.mb-hline { white-space: pre-wrap; }
+/* the Marshal's check-in row (crc-sync docs/adr/0156): the panel's own inputs, a little wider */
+.mb-create { display: inline-flex; align-items: center; gap: 6px; }
+.mb-create[hidden], .mb-create-input[hidden] { display: none; }
+.mb-create-input { width: 64px; height: 22px; border-radius: 3px; text-transform: uppercase; }
+.mb-create-input::placeholder { color: var(--efsp-muted, #8c9aa6); }

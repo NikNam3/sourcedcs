@@ -274,7 +274,7 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   const board = await openMarshalPanel(marshal);
   const eatOf = (n) => board.locator(`tr.mb-hold[data-seq="${n}"] [data-part="eat"]`);
   const dmeOf = (i) => marshal.evaluate((k) => crc.carrier.carrierDerivedStack()[k].marshalDme, i);
-  await expect(board.locator('[data-marshal="ramp"]')).toHaveText('—');
+  await expect(board.locator('[data-marshal="next-eat"]')).toHaveText('—');
   await expect(eatOf(1)).toHaveText('--');
   await marshal.screenshot({ path: test.info().outputPath('06-before.png') });
 
@@ -293,7 +293,9 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   await expect(lp.locator('[data-carrier-value="rampTime"]')).toHaveText('2040');
   await expect(lp.locator('[data-carrier-field="rampTime"]')).toBeHidden();
   await expect(lp.locator('[data-carrier-reset="firstFix"]')).toBeHidden(); // the lanes only read
-  await expect(board.locator('[data-marshal="ramp"]')).toHaveText('2040Z');
+  // the header gives the next check-in's slot: angels 8, its holding DME and EAT (2040Z ramp + 2 min - 6 min)
+  await expect(board.locator('[data-marshal="next-angels"]')).toHaveText('8');
+  await expect(board.locator('[data-marshal="next-eat"]')).toHaveText('36');
   // the first fix moved every slot's DME, and an EAT now exists, worked back from the ramp time
   expect([await dmeOf(0), await dmeOf(1)]).toEqual([24, 25]);
   await expect(eatOf(1)).toHaveText(/^\d\d$/);
@@ -315,7 +317,7 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   await ceiling.fill(''); await ceiling.press('Enter');
   await expect(pp.locator('[data-carrier-source="ceiling"]')).toHaveText('not known');
   await ramp.fill(''); await ramp.press('Enter');
-  await expect(board.locator('[data-marshal="ramp"]')).toHaveText('—');
+  await expect(board.locator('[data-marshal="next-eat"]')).toHaveText('—');
   await expect(eatOf(1)).toHaveText('--');
 
   // the tanker: a select and a number

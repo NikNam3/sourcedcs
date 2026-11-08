@@ -1,4 +1,7 @@
 ### Changed in 2.1.2
+- **MARSHAL: check a flight in from the panel.** Type the side number (and the squawk, Case II/III) beside **+ New Strip** in the MARSHAL header: the flight joins the stack at the next slot
+- **MARSHAL header** reads as one line: `CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 04 APPR 15`, where the NM, ANG and EAT are what the next flight to check in gets and APPR the approach the next flight goes to (15 for APP 1, 17 for APP 2). In Case I it ends at ANG, the next altitude from 2
+- **Case I**: a flight checking in is given the next altitude, one above the highest (from 2)
 - **A carrier Strip is created by its side number alone.** The TYPE and DEP RAD / FUEL boxes beside New Strip are gone: type the side number, press New Strip, and type the type, the departure radial or the fuel on the Strip as on any Strip
 
 ### Fixed in 2.1.1

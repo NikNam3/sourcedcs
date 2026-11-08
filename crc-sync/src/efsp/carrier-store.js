@@ -573,7 +573,14 @@ class CarrierStore extends SyncedStore {
     if (this.inStack(flightDataId, hullId)) return { ok: true, changed: [], already: true };
     const before = deepClone(record);
     // docs/adr/0156: the flight takes the ship's Case now, and keeps it: the stack it joins is its Case.
-    const r = this._stackOp(record, { kind: 'Append', flightDataId, stackId: carrier.stackIdForCase(record.recoveryCase.value) }, by, false);
+    const stackId = carrier.stackIdForCase(record.recoveryCase.value);
+    const r = this._stackOp(record, { kind: 'Append', flightDataId, stackId }, by, false);
+    // Case I: the flight is given the next altitude, one above the highest assigned, from 2 (the human's rule, 2026-11-09).
+    if (r.ok && stackId === carrier.CASE_I_STACK_ID) {
+      const assigned = record.stacks[stackId].entries.map(e => e.angelsOverride).filter(Number.isInteger);
+      const angels = assigned.length ? Math.max(...assigned) + 1 : carrier.MIN_ASSIGNED_ANGELS;
+      if (angels <= carrier.MAX_ASSIGNED_ANGELS) this._stackOp(record, { kind: 'SetAngels', flightDataId, angels }, by, true);
+    }
     this._audit({ clientMutationId, op: { kind: 'Stack:Append' }, hullId }, actingPositionId, by, before, r);
     return r;
   }

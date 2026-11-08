@@ -31,9 +31,16 @@ function prepareCarrierSeed(stripType, seed, shipCase) {
     if (!v.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: v.detail };
     fields.push([field, v.value]);
   }
+  // A squawk the controller already gave (the MARSHAL panel's box): four octal digits, Case II/III only.
+  let beaconCode = null;
+  if (src.beaconCode !== undefined && src.beaconCode !== null && String(src.beaconCode).trim() !== '') {
+    beaconCode = String(src.beaconCode).trim();
+    if (!/^[0-7]{4}$/.test(beaconCode)) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'a squawk is four digits 0-7' };
+    if (shipCase === 'I') return { ok: false, reason: 'VALIDATION_ERROR', detail: 'Case I: no radar service, no squawk' };
+  }
   const rest = { ...src };
-  for (const field of CARRIER_SEED_FIELDS[stripType] || []) delete rest[field];
-  return { ok: true, seed: { ...rest, ...(shipCase === 'I' ? { noCode: true } : {}) }, fields };
+  for (const field of [...(CARRIER_SEED_FIELDS[stripType] || []), 'beaconCode']) delete rest[field];
+  return { ok: true, seed: { ...rest, ...(shipCase === 'I' ? { noCode: true } : {}) }, fields, beaconCode };
 }
 
 module.exports = { prepareCarrierSeed, CARRIER_SEED_FIELDS };

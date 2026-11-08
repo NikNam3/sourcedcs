@@ -2015,6 +2015,13 @@ the Case II/III stack at the next free slot. Offered only on a Case I flight, an
   **overhead circle** (ship-up, each aircraft at its bearing and range from the ship, labelled side number and angels; a
   Case I flight with no track bound is not drawn). A Case I flight still finishing after the ship goes to Case III stays
   in the Case I table. Departures are not on it.
+- **The header** reads `CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 04 APPR 15`: the
+  staffed approach lanes, then what the **next flight to check in** gets (its holding DME, angels and EAT, the stack's next
+  slot; angels 6 at the first fix on an empty stack) and the approach button of the lane the next flight goes to on TO APPR
+  (**15** for APP 1, **17** for APP 2, ours). In Case I it ends at **ANG**, the next altitude: one above the highest, from 2,
+  which a Case I check-in is given.
+- **Checking a flight in from the panel**: the Marshal types the side number, and in Case II/III the squawk the pilot was
+  given, beside **+ New Strip** in the header (Enter sends). The flight joins the stack at the next slot.
 - **The Marshal and both approach controllers look at the same panel.** Each row's button is the flight's state
   (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, TO PATTERN, DROP) and is live only for the controller who holds the Strip;
   everyone else sees it greyed as the status. The next flight to push has the blue COMMENCE.
