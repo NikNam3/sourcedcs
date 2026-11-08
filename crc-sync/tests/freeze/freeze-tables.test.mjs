@@ -37,7 +37,7 @@ test('freeze tables: permission tables', () => {
   const rows = [];
   for (const k of ['PERMISSIONS', 'CREATE_STRIP_TYPE_PERMISSIONS', 'STATE_OWNERS_BY_STRIP_TYPE', 'OP_KINDS', 'COORDINATION_OP_KINDS', 'AP_CTR_ONLY_OP_KINDS',
     'TOFI_OP_KINDS', 'AIRSPACE_ENTRY_OP_KINDS', 'TOFI_COUNTERPARTS', 'NO_STRIP_OP_CLASSES', 'RUNWAY_STATUS_OP_OWNERS', 'TACTICAL_CAPABILITIES',
-    'READ_SCOPES', 'CARRIER_CAPABILITIES', 'MARSHAL_STATE_OWNERS', 'FINAL_STATE_OWNERS', 'PATTERN_STATE_OWNERS']) {
+    'READ_SCOPES', 'CARRIER_CAPABILITIES', 'LAUNCH_STATE_OWNERS', 'RECOVERY_STATE_OWNERS', 'FINAL_STATE_OWNERS']) {
     rows.push({ id: `permission.${k}`, v: canonical(plain(k === 'PERMISSIONS' ? classPermission.PERMISSIONS : permission[k])) });
   }
   checkGolden(assert, 'tables-permission-data', { rows }, units);
@@ -60,7 +60,7 @@ test('freeze tables: permission decisions (Position x op kind, Position x role x
 
 test('freeze tables: NLA state sets, coordination effects, block maps, facility defaults', () => {
   const rows = [];
-  for (const k of ['STATES', 'DEPARTURE_STATES', 'ARRIVAL_STATES', 'OVERFLIGHT_STATES', 'MISSION_STATES', 'STATES_BY_STRIP_TYPE', 'MARSHAL_STATES', 'FINAL_STATES', 'PATTERN_STATES', 'REQUIRED_FOR_CLEARANCE', 'CLEARANCE_BLOCK_LABELS']) {
+  for (const k of ['STATES', 'DEPARTURE_STATES', 'ARRIVAL_STATES', 'OVERFLIGHT_STATES', 'MISSION_STATES', 'STATES_BY_STRIP_TYPE', 'LAUNCH_STATES', 'RECOVERY_STATES', 'FINAL_STATES', 'REQUIRED_FOR_CLEARANCE', 'CLEARANCE_BLOCK_LABELS']) {
     rows.push({ id: `nla.${k}`, v: canonical(plain(nla[k])) });
   }
   for (const k of ['COORDINATION_PRIMITIVES', 'COORDINATION_EFFECTS', 'COORDINATION_ELIGIBLE_STATES', 'TOFI_EFFECTS', 'TOFI_ELIGIBLE_STATES']) {
