@@ -7,12 +7,13 @@ import assert from 'node:assert/strict';
 
 import { BLOCK_MAPS, blockLabelFor, cutRemarksToFit, isBlockEditable, remarksBlockFor, remarksOf } from '../app/public/js/panels/efsp/strip-template.js';
 
-test('every strip type has one remarks Block, labelled RMKS: 9E, and M8 on MISSION', () => {
+test('every strip type but the carrier\'s (crc-sync docs/adr/0156) has one remarks Block, labelled RMKS: 9E, and M8 on MISSION', () => {
   for (const type of Object.keys(BLOCK_MAPS)) {
+    if (type === 'CV_LAUNCH' || type === 'CV_RECOVERY') { assert.equal(remarksBlockFor(type), null, type); continue; }
     const id = remarksBlockFor(type);
     assert.equal(id, type === 'MISSION' ? 'M8' : '9E', type);
     assert.equal(blockLabelFor(id, type), 'RMKS', type);
-    assert.equal(isBlockEditable(id, type, type === 'FINAL' ? 'CARRIER' : null), true, `${type}: an ordinary SetBlock`);
+    assert.equal(isBlockEditable(id, type, null), true, `${type}: an ordinary SetBlock`);
   }
   assert.equal(remarksBlockFor('NOPE'), null);
 });

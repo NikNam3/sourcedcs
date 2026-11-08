@@ -91,12 +91,12 @@ lxsrs_v2/__pycache__/pulse.cpython-314.pyc,,
 lxsrs_v2/__pycache__/test_output.cpython-314.pyc,,
 lxsrs_v2/__pycache__/ui.cpython-314.pyc,,
 lxsrs_v2/api.py,sha256=PGtj3j3T7cqwVCuOomiA4NzXSOiRwVlR93RDnQczNN8,7624
-lxsrs_v2/audio.py,sha256=7Tr7aSVezu7L7uMv9X3NOPFXYF7QRZcVQ6EKm7gtDWI,23706
-lxsrs_v2/client.py,sha256=UwU7xKphA7JngZVtVDi-AlPZlaUrXIcJ1_bb693lg4I,38772
+lxsrs_v2/audio.py,sha256=4qzDscMJ0S-7ViAq6AxAYpMun4dLW9hQhEhW287C0_U,23755
+lxsrs_v2/client.py,sha256=QCKNLm02ToNxatWrdNFE_M6hBz6MS3cuY2bdbhgkgNY,38964
 lxsrs_v2/effects.py,sha256=ejXKn7klGajatVgmVwkuUxHIsBxBC6dOYQtMf3bI2co,7549
 lxsrs_v2/models.py,sha256=6DA8J2hp0nmxvkwuOk3Wl7apz82pKLy0BQq8R17dZdk,4903
 lxsrs_v2/protocol.py,sha256=ckj2Uv308rGl28U7n9kg1Pb7gi2ed3sAtPXjnDsamiM,3553
-lxsrs_v2/pulse.py,sha256=aNAogHZTsJ1zsRu9KWdDATY2skA6YSq9W2gZDPMo7-Q,12025
+lxsrs_v2/pulse.py,sha256=byp51qhfSRjGV-yzmkoKZw1a3pVvvvyi9NoCVt_63oQ,12107
 lxsrs_v2/test_output.py,sha256=FTBJ1h9EB6GNf3lQBQ6ukeLh_c0dJoFclKAeNU40QOw,2419
 lxsrs_v2/tests/__pycache__/test_audio.cpython-314.pyc,,
 lxsrs_v2/tests/__pycache__/test_default_frequency.cpython-314.pyc,,

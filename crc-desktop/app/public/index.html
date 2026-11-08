@@ -221,6 +221,10 @@
          canned route could seed. -->
     <select id="efsp-create-strip-stereo" hidden></select>
     <select id="efsp-create-strip-bind" hidden></select>
+    <!-- crc-sync docs/adr/0156: a carrier Strip is created by its side number (the input above), its type and one more field
+         (PriFly the departure radial, the Marshal the fuel). Shown only for a carrier origin. -->
+    <input type="text" id="efsp-new-strip-actype" placeholder="TYPE" maxlength="8" autocomplete="off" hidden />
+    <input type="text" id="efsp-new-strip-extra" placeholder="" maxlength="5" autocomplete="off" hidden />
     <button id="efsp-create-strip-btn">+ New Strip</button>
     <!-- crc-sync docs/adr/0143: the VFR departure form's toggle, shown only at a Position that makes one (CD). -->
     <span id="efsp-create-strip-msg"></span>

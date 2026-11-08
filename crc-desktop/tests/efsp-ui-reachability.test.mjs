@@ -2844,55 +2844,40 @@ async function carrierRender(strip, { signedOn, caseValue = 'II' }) {
   r.el = r.sandbox._buildStripEl(strip);
   return r;
 }
-const marshalStrip = (extra = {}) => stripAt({
-  stripType: 'MARSHAL', state: 'IN_STACK', ownerPositionId: 'CV_MARSHAL', bayId: 'cv-marshal-stack',
-  nla: { toState: 'COMMENCED', transferTo: 'CV_APP1', carrierHandoff: 'MARSHAL_TO_APPROACH' }, ...extra,
+const recoveryStrip = (extra = {}) => stripAt({
+  stripType: 'CV_RECOVERY', state: 'STACK', ownerPositionId: 'CV_MARSHAL', bayId: 'cv-marshal-stack',
+  nla: { toState: 'COMMENCED', carrierHandoff: 'COMMENCE' }, ...extra,
 });
 
-test('a MARSHAL Strip in Case II: Commence is the NLA, See you is its own button, each carrying its own trigger type', async () => {
-  const r = await carrierRender(marshalStrip(), { signedOn: ['CV_MARSHAL'] });
+test('a CV_RECOVERY Strip (crc-sync docs/adr/0156): its button is its state, COMMENCE, the recorded carrier handoff', async () => {
+  const r = await carrierRender(recoveryStrip(), { signedOn: ['CV_MARSHAL'] });
   const buttons = descendants(r.el).filter(c => c.dataset && c.dataset.carrierHandoff);
-  assert.deepEqual(buttons.map(b => [b.textContent, b.dataset.carrierHandoff, b.dataset.carrierTrigger]), [
-    ['Commence', 'MARSHAL_TO_APPROACH', 'CONTROLLER_INITIATED'],
-    ['See you', 'MARSHAL_TO_PRIFLY', 'PILOT_SEE_YOU'],
-  ]);
+  assert.deepEqual(buttons.map(b => [b.textContent, b.dataset.carrierHandoff, b.dataset.carrierTrigger]), [['COMMENCE', 'COMMENCE', 'CONTROLLER_INITIATED']]);
   click(buttons[0]);
   assert.deepEqual(JSON.parse(JSON.stringify(r.sent[0].op)), { kind: 'InvokeNla' });
-  click(buttons[1]);
-  assert.equal(r.sent[1].actingPositionId, 'CV_MARSHAL');
-  assert.deepEqual(JSON.parse(JSON.stringify(r.sent[1].op)), { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_PRIFLY' });
 });
 
-test('"See you" is Case II only, and only for the Marshal who owns the Strip', async () => {
-  const caseIII = await carrierRender(marshalStrip(), { signedOn: ['CV_MARSHAL'], caseValue: 'III' });
-  assert.equal(descendants(caseIII.el).filter(c => c.dataset && c.dataset.carrierHandoff === 'MARSHAL_TO_PRIFLY').length, 0);
-  const notMine = await carrierRender(marshalStrip(), { signedOn: ['CV_PRIFLY'] });
-  assert.equal(descendants(notMine.el).filter(c => c.dataset && c.dataset.carrierHandoff === 'MARSHAL_TO_PRIFLY').length, 0);
+test('a launch at KILO: DROP is the NLA and TO MARSHAL its own button, for departure control only', async () => {
+  const kilo = stripAt({ stripType: 'CV_LAUNCH', state: 'KILO', ownerPositionId: 'CV_DEP', bayId: 'cv-dep-departures',
+    nla: { toState: 'DROPPED', alsoHandoff: 'DEPARTURE_TO_MARSHAL' } });
+  const r = await carrierRender(kilo, { signedOn: ['CV_DEP'] });
+  const extra = descendants(r.el).find(c => c.dataset && c.dataset.carrierHandoff === 'DEPARTURE_TO_MARSHAL');
+  assert.equal(extra.textContent, 'TO MARSHAL');
+  click(extra);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.sent.at(-1).op)), { kind: 'CarrierHandoff', transfer: 'DEPARTURE_TO_MARSHAL' });
+  assert.ok(descendants(r.el).some(c => c.classList && c.classList.contains('efsp-nla-btn') && c.textContent === 'DROP'));
+  const notMine = await carrierRender(kilo, { signedOn: ['CV_MARSHAL'] });
+  assert.equal(descendants(notMine.el).filter(c => c.dataset && c.dataset.carrierHandoff === 'DEPARTURE_TO_MARSHAL').length, 0);
 });
 
-test('the derived carrier Blocks are read-only cells showing the server\'s values; the flight\'s own Blocks are editable', async () => {
-  const r = await carrierRender(marshalStrip(), { signedOn: ['CV_MARSHAL'] });
-  for (const id of ['C3', 'C5', 'C6', 'C7', 'C8', 'C9']) {
-    const cell = blockCell(r.el, id);
-    if (!cell) continue; // C5/C8/C9 may be blank and still drawn; a cell that exists must not be editable
-    assert.equal(cell.classList.contains('efsp-block-editable'), false, `${id} must not be editable`);
-  }
+test('the carrier Strip\'s cells: angels read-only from the server, fuel and the assignments typed; no callsign on the face', async () => {
+  const r = await carrierRender(recoveryStrip(), { signedOn: ['CV_MARSHAL'], caseValue: 'III' });
+  assert.equal(blockCell(r.el, 'C7').classList.contains('efsp-block-editable'), false);
   assert.equal(blockCell(r.el, 'C7').textContent, '6');
-  assert.equal(blockCell(r.el, 'C6').textContent, '21');
-  assert.equal(blockCell(r.el, 'C10').classList.contains('efsp-block-editable'), true, 'the approach button is typed by the Marshal');
-  assert.equal(blockCell(r.el, 'C15').classList.contains('efsp-block-editable'), true, 'EEAT is typed on the Strip');
-  assert.ok(blockCell(r.el, 'C4'), 'the approach type picker is on the Strip');
-});
-
-test('a carrier FINAL Strip has no editable cell and no input at all: HDG and ALT are the PAR final\'s (ADR 0116/H125; LT-PAR-MISSED ruling)', async () => {
-  const strip = stripAt({ stripType: 'FINAL', state: 'ON_FINAL', ownerPositionId: 'CV_APP1', bayId: 'cv-app1-final', nla: { toState: 'BALL', carrierHandoff: 'FINAL_TO_LSO' } });
-  const r = await carrierRender(strip, { signedOn: ['CV_APP1'] });
-  assert.deepEqual(descendants(r.el).filter(c => c.classList && c.classList.contains('efsp-block-editable')).map(c => c.dataset.block), []);
-  assert.equal(descendants(r.el).filter(c => c.dataset && (c.dataset.block === '7A' || c.dataset.block === '9A-VECTOR')).length, 0, 'not shown either');
-  assert.equal(descendants(r.el).filter(c => c.tagName === 'INPUT' || c.tagName === 'SELECT').length, 0);
-  const ball = descendants(r.el).find(c => c.dataset && c.dataset.carrierHandoff === 'FINAL_TO_LSO');
-  assert.equal(ball.textContent, 'Ball');
-  assert.equal(ball.dataset.carrierTrigger, 'PILOT_BALL_CALL');
+  assert.equal(blockCell(r.el, 'C12').classList.contains('efsp-block-editable'), true);
+  assert.equal(blockCell(r.el, '9A-VECTOR').classList.contains('efsp-block-editable'), true);
+  assert.equal(blockCell(r.el, 'C1'), undefined, 'the callsign is set from the menu');
+  for (const gone of ['C3', 'C4', 'C5', 'C6', 'C9', 'C10', 'C15']) assert.equal(blockCell(r.el, gone), undefined, gone);
 });
 
 test('an airfield FINAL Strip is the PAR controller\'s interface (H138 U10): HDG and ALT cells, Landed the NLA, the next call beside it, the rest in ⋯', async () => {

@@ -3,7 +3,8 @@ import { NM_M, projectPos } from '../../geo.js';
 import { getLatestTrack } from '../../picture.js';
 import { correlatedTrackIdForStrip, getEfspStrip } from './efsp-state.js';
 import { CARRIER_HANDOFFS } from './efsp-nla.js';
-import { carrierBannerParts, carrierCaseValue, carrierDerivedFor, carrierStateOf, getEfspCarrier } from './carrier-state.js';
+import { isCarrierStrip } from './strip-fields.js';
+import { carrierBannerParts, carrierDerivedFor, carrierStateOf, getEfspCarrier } from './carrier-state.js';
 import { getActingPositions, sendEfspMutation, settleEfspAck } from './efsp-ws.js';
 import { signedOnCarrierIds } from './carrier-send.js';
 import { renderCarrierManagement } from './carrier-management-panel.js';
@@ -91,21 +92,23 @@ export function carrierDecorateNlaButton(btn, strip) {
   btn.title = btn.title || `${t.label} — ${t.trigger.replace(/_/g, ' ').toLowerCase()}`;
 }
 
-/** The second handoff button a Strip may carry: "See you" beside Commence, Case II only (a Strip has one NLA, §3.5 rule 1). */
+/**
+ * The second handoff button a Strip may carry (crc-sync docs/adr/0156): TO MARSHAL beside a launch's DROP, the handoff the
+ * server names in `strip.nla.alsoHandoff` (a Strip has one NLA, §3.5 rule 1, so this is its own button).
+ */
 export function carrierExtraNlaButtons(strip) {
-  if (!strip || strip.stripType !== 'MARSHAL' || strip.state !== 'IN_STACK' || carrierCaseValue() !== 'II') return [];
-  if (!getActingPositions('CARRIER').includes(strip.ownerPositionId)) return [];
-  const t = CARRIER_HANDOFFS.MARSHAL_TO_PRIFLY;
-  if (!t.from.includes(strip.ownerPositionId)) return [];
-  const btn = _cel('button', `efsp-sbtn efsp-nla-btn efsp-carrier-handoff efsp-carrier-trigger-${t.trigger.toLowerCase().replace(/_/g, '-')}`, t.label);
-  btn.dataset.carrierHandoff = 'MARSHAL_TO_PRIFLY';
+  const key = strip && strip.nla && strip.nla.alsoHandoff;
+  const t = key && CARRIER_HANDOFFS[key];
+  if (!t || !getActingPositions('CARRIER').includes(strip.ownerPositionId) || !t.from.includes(strip.ownerPositionId)) return [];
+  const btn = _cel('button', 'efsp-sbtn efsp-sbtn-go efsp-nla-btn efsp-carrier-handoff', t.label);
+  btn.dataset.carrierHandoff = key;
   btn.dataset.carrierTrigger = t.trigger;
-  btn.title = 'See you: the pilot has the ship visual. Hands the flight to PriFly, leaving a gap in the stack.';
+  btn.title = 'Hands the flight to the Marshal as its recovery: it joins the stack.';
   btn.addEventListener('pointerdown', (e) => e.stopPropagation());
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     const live = getEfspStrip(strip.stripId) || strip;
-    sendEfspMutation(strip.ownerPositionId, live, { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_PRIFLY' });
+    sendEfspMutation(strip.ownerPositionId, live, { kind: 'CarrierHandoff', transfer: key });
     btn.disabled = true;
   });
   return [btn];
@@ -113,13 +116,13 @@ export function carrierExtraNlaButtons(strip) {
 
 /** A signature of everything derived that a carrier Strip draws, for the keyed reconciler (bay-view.js's _stripRenderSignature). */
 export function carrierSignatureFor(strip) {
-  if (!strip || !['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.stripType)) return '';
+  if (!isCarrierStrip(strip)) return '';
   const view = getEfspCarrier();
   if (!view) return '';
   const d = carrierDerivedFor(strip.flightDataId);
   const s = view.shipState || {};
   const fb = carrierStateOf(view) ? carrierStateOf(view).finalBearing.value : null;
-  return [view.recoveryCase && view.recoveryCase.value, d ? `${d.stackIndex}/${d.angels}/${d.marshalDme}/${d.pushTimeUtc}/${d.status}/${(d.marshalRadialDisplay || {}).value}/${(d.expectedFinalBearingDisplay || {}).value}` : '',
+  return [view.recoveryCase && view.recoveryCase.value, d ? `${d.caseValue}/${d.stackIndex}/${d.angels}/${d.marshalDme}/${d.pushTimeUtc}/${d.status}/${(d.marshalRadialDisplay || {}).value}/${(d.expectedFinalBearingDisplay || {}).value}` : '',
     fb, s.found ? 1 : 0].join('|');
 }
 

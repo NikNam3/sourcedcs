@@ -158,67 +158,49 @@ test('14E is the alert status on DEPARTURE on both sides, and on no other strip 
   }
 });
 
-// crc-sync's docs/adr/0074 (ADR 0064 B3): the carrier's three strip types. The generic sweep above
-// holds required, writability and (now) the dedicated kind and `field` of every Block; these
-// say what the design promises, on BOTH sides.
-test('the carrier Block Maps agree on both sides (MARSHAL, FINAL, PATTERN)', () => {
-  for (const stripType of ['MARSHAL', 'FINAL', 'PATTERN']) {
+// crc-sync's docs/adr/0156: the carrier's two strip types, and PAR's FINAL. The generic sweep above holds required,
+// writability and the dedicated kind and `field` of every Block; these say what the design promises, on BOTH sides.
+const CARRIER = ['CV_LAUNCH', 'CV_RECOVERY'];
+test('the carrier Block Maps agree on both sides (CV_LAUNCH, CV_RECOVERY) and FINAL is PAR\'s', () => {
+  for (const stripType of [...CARRIER, 'FINAL']) {
     assertBlockMapParity(stripType, server.BLOCK_MAPS[stripType], client.BLOCK_MAPS[stripType]);
   }
+  for (const gone of ['MARSHAL', 'PATTERN']) assert.equal(client.BLOCK_MAPS[gone], undefined, gone);
 });
 
-test('derived carrier Blocks are display-only on both sides, and the writable ones route to the flight', () => {
-  const DERIVED = ['C3', 'C5', 'C6', 'C7', 'C8', 'C9'];
+test('carrier Blocks: only what the controller needs; angels and EAT display-only; the side number and type required', () => {
   for (const [side, maps] of [['server', server.BLOCK_MAPS], ['client', client.BLOCK_MAPS]]) {
-    for (const id of DERIVED) {
-      assert.equal(maps.MARSHAL[id].target.kind, 'carrier-derived', `${side} MARSHAL/${id}`);
-      assert.equal(maps.MARSHAL[id].required, false, `${side} MARSHAL/${id}`);
-    }
-    for (const id of ['C4', 'C10', 'C12', 'C13', 'C14', 'C15']) assert.equal(maps.MARSHAL[id].target.kind, 'carrier', `${side} MARSHAL/${id}`);
-    // FINAL: nothing a controller could type but the talk-down's HDG and ALT, the flight's clearance (crc-sync docs/adr/0117),
-    // and the flight's remarks, which every strip type carries (H138 U2)
-    for (const [id, def] of Object.entries(maps.FINAL)) {
-      if (id === '7A' || id === '9A-VECTOR') assert.equal(def.target.kind, 'clearance', `${side} FINAL/${id}`);
-      else if (id === '9E') assert.deepEqual(def.target, { kind: 'flightData', path: 'filed.remarks' }, `${side} FINAL/${id}`);
-      else assert.ok(!['flightData', 'annotation', 'carrier', 'frequency', 'clearance'].includes(def.target.kind), `${side} FINAL/${id}`);
-    }
+    assert.deepEqual(Object.keys(maps.CV_LAUNCH).filter(id => /^C|^7|^9/.test(id)).sort(), ['7A', '9A-SPEED', '9A-VECTOR', 'C1', 'C18', 'C2', 'C20'], side);
+    assert.deepEqual(Object.keys(maps.CV_RECOVERY).filter(id => /^C|^7|^9/.test(id)).sort(), ['7A', '9A-SPEED', '9A-VECTOR', 'C1', 'C12', 'C18', 'C2', 'C7', 'C8'], side);
+    for (const id of ['C7', 'C8']) assert.equal(maps.CV_RECOVERY[id].target.kind, 'carrier-derived', `${side} ${id}`);
+    for (const t of CARRIER) for (const id of ['C2', 'C18']) assert.equal(maps[t][id].required, true, `${side} ${t}/${id}`);
+    for (const t of CARRIER) assert.equal(maps[t].C1.required, false, `${side} ${t}: the callsign comes later`);
   }
-  assert.equal(client.isBlockEditable('C7', 'MARSHAL'), false);
-  assert.equal(client.isBlockEditable('C10', 'MARSHAL'), true);
-  assert.equal(client.isBlockEditable('C1', 'FINAL'), false);
+  assert.equal(client.isBlockEditable('C7', 'CV_RECOVERY'), false);
+  assert.equal(client.isBlockEditable('C12', 'CV_RECOVERY'), true);
+  assert.equal(client.isBlockEditable('9A-VECTOR', 'CV_RECOVERY'), true);
+  assert.deepEqual([...server.CARRIER_RADAR_SERVICE_BLOCKS].sort(), ['5', '7A', '9A-SPEED', '9A-VECTOR']);
 });
 
-test('HDG and ALT are typed on an airfield\'s PAR final only: the carrier FINAL has nothing to type (ADR 0116/H125; LT-PAR-MISSED), on both sides', () => {
-  assert.deepEqual([...client.PAR_FINAL_ONLY_BLOCKS], [...server.PAR_FINAL_ONLY_BLOCKS]);
-  for (const id of server.PAR_FINAL_ONLY_BLOCKS) {
-    assert.equal(client.isBlockEditable(id, 'FINAL', 'INCIRLIK'), true, `${id} on PAR's final`);
-    assert.equal(client.isBlockEditable(id, 'FINAL', 'CARRIER'), false, `${id} on the carrier final`);
+test('PAR\'s FINAL: HDG and ALT are the flight\'s clearance, on both sides', () => {
+  for (const id of ['7A', '9A-VECTOR']) {
+    assert.equal(client.isBlockEditable(id, 'FINAL', 'INCIRLIK'), true, id);
     assert.deepEqual(server.resolveBlockTarget('FINAL', id, 'INCIRLIK'), { kind: 'clearance', field: id === '7A' ? 'altitude' : 'heading' });
-    assert.equal(server.resolveBlockTarget('FINAL', id, 'CARRIER'), null);
-    // the other strip types are not gated by the Facility
-    assert.ok(server.resolveBlockTarget('OVERFLIGHT', id, 'CARRIER'));
-    assert.equal(client.isBlockEditable(id, 'OVERFLIGHT', 'CARRIER'), true);
-  }
-  for (const id of Object.keys(client.BLOCK_MAPS.FINAL).filter(x => x !== '9E')) { // the remarks are every strip type's (H138 U2)
-    assert.equal(client.isBlockEditable(id, 'FINAL', 'CARRIER'), false, `carrier FINAL/${id}`);
-    assert.equal(server.resolveBlockTarget('FINAL', id, 'CARRIER'), null, `server carrier FINAL/${id}`);
   }
 });
 
-test('every strip type carries the flight\'s remarks, on both sides, as one Block (H138 U2)', () => {
+test('every strip type but the carrier\'s carries the flight\'s remarks, on both sides, as one Block (H138 U2; docs/adr/0156)', () => {
   for (const [side, maps] of [['server', server.BLOCK_MAPS], ['client', client.BLOCK_MAPS]]) {
     for (const [type, map] of Object.entries(maps)) {
       const ids = Object.entries(map).filter(([, d]) => d.target.kind === 'flightData' && d.target.path === 'filed.remarks').map(([id]) => id);
-      assert.equal(ids.length, 1, `${side} ${type}: ${ids}`);
-      assert.equal(client.remarksBlockFor(type), ids[0], `${side} ${type}`);
+      assert.equal(ids.length, CARRIER.includes(type) ? 0 : 1, `${side} ${type}: ${ids}`);
+      assert.equal(client.remarksBlockFor(type), ids[0] || null, `${side} ${type}`);
     }
   }
-  assert.equal(client.isBlockEditable('9E', 'FINAL', 'CARRIER'), true);
-  assert.deepEqual(server.resolveBlockTarget('FINAL', '9E', 'CARRIER'), { kind: 'flightData', path: 'filed.remarks' });
 });
 
 test('the carrier Blocks carry unique labels of at most eight characters within a strip type', () => {
-  for (const stripType of ['MARSHAL', 'FINAL', 'PATTERN']) {
+  for (const stripType of [...CARRIER, 'FINAL']) {
     const labels = Object.values(client.BLOCK_MAPS[stripType]).map(d => d.label);
     assert.equal(new Set(labels).size, labels.length, stripType);
     for (const l of labels) assert.ok(l && l.length <= 8, `${stripType}/${l}`);

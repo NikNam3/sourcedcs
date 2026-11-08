@@ -34,10 +34,9 @@ test('the cells are the Strip\'s own clearance cells, read from the Block Map, i
   }
 });
 
-test('a carrier FINAL offers no HDG or ALT, as its Strip has nothing to type there', () => {
-  const fields = assignmentCellsFor('FINAL', 'CARRIER').map(c => c.field);
-  assert.equal(fields.includes('heading'), false);
-  assert.equal(fields.includes('altitude'), false);
+test('a carrier Strip offers HDG, SPD and ALT (crc-sync docs/adr/0156); PAR\'s FINAL its HDG and ALT', () => {
+  assert.deepEqual(assignmentCellsFor('CV_RECOVERY', 'CARRIER').map(c => c.field).sort(), ['altitude', 'heading', 'speed']);
+  assert.deepEqual(assignmentCellsFor('CV_LAUNCH', 'CARRIER').map(c => c.field).sort(), ['altitude', 'heading', 'speed']);
   assert.deepEqual(assignmentCellsFor('FINAL', 'INCIRLIK').map(c => c.field).filter(f => f !== 'speed'), ['heading', 'altitude']);
 });
 

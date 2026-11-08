@@ -71,8 +71,6 @@
 .mb-edit:hover { text-decoration: underline dotted; }
 .mb-eat-set { text-decoration: underline; text-underline-offset: 2px; }
 .mb-fe-input { width: 4.5em; }
-.mb-fuel-attn { color: var(--efsp-attn, #e0a83c); }
-.mb-fuel-danger { color: var(--efsp-danger, #ff5c5c); }
 
 .mb-commence {
   font: inherit; font-size: 11.5px; color: #fff; background: var(--efsp-go, #4a7dbf); border: 1px solid #6b9be0;
@@ -101,10 +99,12 @@
 .mb-picture .mp-fix { stroke: #c9d1d7; stroke-width: 1.6; }
 .mb-picture .mp-fixlabel { fill: var(--efsp-text, #d8e0e6); font-size: 12px; }
 .mb-picture .mp-radial { fill: var(--efsp-faint, #56616c); font-size: 11px; }
-.mb-picture .mp-attn { fill: var(--efsp-attn, #e0a83c); }
-.mb-picture .mp-danger { fill: var(--efsp-danger, #ff5c5c); }
 
 @media (max-width: 900px) {
   .mb-main { grid-template-columns: 1fr; }
   .mb-tablecol { border-right: none; border-bottom: 1px solid var(--efsp-line, #2e3740); }
 }
+/* crc-sync docs/adr/0156: one table per Case, a caption over each; an assigned angels/DME is underlined like an assigned EAT */
+.mb-caption { margin: 2px 0 4px; letter-spacing: 0.05em; }
+.mb-main[hidden] { display: none; }
+.mb-picture .mp-ship { fill: none; stroke: currentColor; }

@@ -141,6 +141,7 @@ class PulseSimpleRecorder:
         *,
         samplerate: int = 16000,
         channels: int = 1,
+        block_duration_ms: int = 20,
         app_name: str = "lxsrs_v2",
         stream_name: str = "SRS Mic",
     ) -> None:
@@ -154,8 +155,8 @@ class PulseSimpleRecorder:
         self._queue: queue.Queue[bytes] = queue.Queue(maxsize=100)
         self._closed      = threading.Event()
         self._thread: threading.Thread | None = None
-        # bytes per 20 ms frame
-        self._frame_bytes = 2 * channels * (samplerate // 50)
+        # bytes per frame (one Opus frame's worth)
+        self._frame_bytes = 2 * channels * (samplerate * block_duration_ms // 1000)
         # startup handshake
         self._ready       = threading.Event()
         self._start_error: Exception | None = None
@@ -175,7 +176,7 @@ class PulseSimpleRecorder:
         # Create pa_simple HERE, in the same thread that will call pa_simple_read/free.
         error = c_int()
         device = self._source_name.encode("utf-8") if self._source_name else None
-        # Request a small fragment size so PA delivers audio in 20 ms chunks
+        # Request a small fragment size so PA delivers audio one frame at a time
         # rather than accumulating a large buffer (which would cause a 1-4 s
         # startup delay before the first frames arrive).
         buf_attr = _PaBufferAttr(

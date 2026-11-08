@@ -30,6 +30,21 @@ export function shipDistanceNm(strip) {
   return 2 * NM_EARTH_R * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
+/**
+ * True bearing (degrees) and range (nm) from the ship to the flight's correlated contact, or null when either is unknown
+ * (crc-sync docs/adr/0156: the Case I circle puts each aircraft there).
+ */
+export function shipBearingRangeOf(strip) {
+  const rangeNm = shipDistanceNm(strip);
+  if (rangeNm == null) return null;
+  const s = getEfspCarrier().shipState;
+  const track = getLatestTrack(correlatedTrackIdForStrip(strip));
+  const y = Math.sin((track.lon - s.lon) * RAD) * Math.cos(track.lat * RAD);
+  const x = Math.cos(s.lat * RAD) * Math.sin(track.lat * RAD) - Math.sin(s.lat * RAD) * Math.cos(track.lat * RAD) * Math.cos((track.lon - s.lon) * RAD);
+  const bearingDeg = ((Math.atan2(y, x) / RAD) + 360) % 360;
+  return { bearingDeg, rangeNm };
+}
+
 /** The DIST figure: the ship's range on a carrier Strip, the PAR's range to the threshold elsewhere; null when unknown. */
 export function carrierDistanceNm(strip) {
   if (!strip) return null;

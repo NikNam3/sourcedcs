@@ -162,13 +162,13 @@ test('a VFR strip has no state owners: its holder works it, on both sides (crc-s
   assert.equal(canActOnState('AP', 'VFR', 'DROPPED'), false);
 });
 
-// crc-sync's docs/adr/0074: the carrier's strip types. The server tables are authoritative; these are the mirrors.
+// crc-sync's docs/adr/0156: the carrier's strip types. The server tables are authoritative; these are the mirrors.
 test('the carrier state owners and handoff table mirror the server exactly', () => {
   const server = serverConfig.permission;
   const transfers = require('../../crc-sync/src/efsp/carrier/handoffs.js');
-  assert.deepEqual(c.MARSHAL_STATE_OWNERS, server.MARSHAL_STATE_OWNERS);
-  assert.deepEqual(c.FINAL_STATE_OWNERS, server.FINAL_STATE_OWNERS);
-  assert.deepEqual(c.PATTERN_STATE_OWNERS, server.PATTERN_STATE_OWNERS);
+  assert.deepEqual(c.LAUNCH_STATE_OWNERS, server.LAUNCH_STATE_OWNERS);
+  assert.deepEqual(c.RECOVERY_STATE_OWNERS, server.RECOVERY_STATE_OWNERS);
+  assert.deepEqual(c.FINAL_STATE_OWNERS, server.STATE_OWNERS_BY_STRIP_TYPE.FINAL);
   assert.deepEqual(Object.keys(c.CARRIER_HANDOFFS).sort(), Object.keys(transfers.CARRIER_HANDOFFS).sort());
   for (const [kind, row] of Object.entries(transfers.CARRIER_HANDOFFS)) {
     const m = c.CARRIER_HANDOFFS[kind];
@@ -176,31 +176,38 @@ test('the carrier state owners and handoff table mirror the server exactly', () 
     assert.equal(m.trigger, row.trigger, kind);
     assert.deepEqual(m.from, [...row.from], kind);
     assert.deepEqual(m.cases, [...row.cases], kind);
+    assert.equal(m.caseOf, row.caseOf, kind);
   }
 });
 
-test('every carrier state has an NLA label (or is terminal), and a Case I handoff names itself', () => {
+test('every carrier state has its plain button label (docs/adr/0156); a drop reads DROP; a handoff names itself', () => {
   const nlaServer = require('../../crc-sync/src/efsp/nla.js');
-  for (const stripType of ['MARSHAL', 'FINAL', 'PATTERN']) {
+  for (const stripType of ['CV_LAUNCH', 'CV_RECOVERY']) {
     for (const state of nlaServer.STATES_BY_STRIP_TYPE[stripType]) {
       if (state === 'DROPPED') continue;
       assert.ok(c.nlaLabelFor(state, stripType), `${stripType}/${state}`);
     }
   }
-  assert.equal(c.nlaButtonLabel({ stripType: 'MARSHAL', state: 'IN_STACK', nla: { toState: 'IN_PATTERN', carrierHandoff: 'MARSHAL_TO_PATTERN_CASE_I' } }), 'To pattern');
-  assert.equal(c.nlaButtonLabel({ stripType: 'MARSHAL', state: 'IN_STACK', nla: { toState: 'COMMENCED', carrierHandoff: 'MARSHAL_TO_APPROACH' } }), 'Commence');
-  assert.equal(c.nlaButtonLabel({ stripType: 'DEPARTURE', state: 'CLEARED', nla: { toState: 'PUSHBACK' } }), 'Approve Pushback');
+  const L = (stripType, state, nla) => c.nlaButtonLabel({ stripType, state, nla });
+  assert.equal(L('CV_RECOVERY', 'STACK', { toState: 'COMMENCED', carrierHandoff: 'COMMENCE' }), 'COMMENCE');
+  assert.equal(L('CV_RECOVERY', 'COMMENCED', { toState: 'FINAL_APPROACH', carrierHandoff: 'TO_APPROACH' }), 'TO APPR');
+  assert.equal(L('CV_RECOVERY', 'FINAL_APPROACH', { toState: 'DIRTY' }), 'DIRTY UP');
+  assert.equal(L('CV_RECOVERY', 'DIRTY', { toState: 'BULLSEYE' }), 'FLY BULLS');
+  assert.equal(L('CV_RECOVERY', 'BULLSEYE', { toState: 'CV_PATTERN' }), 'TO PATTERN');
+  assert.equal(L('CV_RECOVERY', 'STACK', { toState: 'CV_PATTERN', carrierHandoff: 'CASE_I_TO_PRIFLY' }), 'TO PATTERN');
+  assert.equal(L('CV_RECOVERY', 'CV_PATTERN', { toState: 'DROPPED' }), 'DROP');
+  assert.equal(L('CV_LAUNCH', 'ON_DECK', { toState: 'DROPPED', alsoHandoff: 'LAUNCH_TO_MARSHAL' }), 'DROP', 'Case I on deck');
+  assert.equal(L('CV_LAUNCH', 'ON_DECK', { toState: 'CV_AIRBORNE', carrierHandoff: 'LAUNCH_TO_DEPARTURE' }), 'LAUNCHED');
+  assert.equal(L('CV_LAUNCH', 'CV_AIRBORNE', { toState: 'KILO' }), 'KILO');
+  assert.equal(L('DEPARTURE', 'CLEARED', { toState: 'PUSHBACK' }), 'Approve Pushback');
 });
 
-test('FINAL BOLTER_WAVEOFF: the carrier goes back on final, an airfield\'s missed approach goes back to AP (H137 LT-PQ1 a); parity with crc-sync final.js', async () => {
+test('FINAL BOLTER_WAVEOFF: an airfield\'s missed approach goes back to AP (H137 LT-PQ1 a); parity with crc-sync final.js', async () => {
   const c = await import('../app/public/js/panels/efsp/efsp-nla.js');
   const { computeFinalNla } = require('../../crc-sync/src/efsp/authority/strip-types/final.js');
   const airfield = computeFinalNla({ state: 'BOLTER_WAVEOFF' }, null, 0, { facilityId: 'INCIRLIK' });
-  const carrier = computeFinalNla({ state: 'BOLTER_WAVEOFF' }, null, 0, { facilityId: 'CARRIER' });
   assert.deepEqual(airfield, { toState: 'INBOUND', transferTo: 'AP' });
-  assert.equal(carrier.transferTo, undefined);
   assert.equal(c.nlaButtonLabel({ stripType: 'FINAL', state: 'BOLTER_WAVEOFF', nla: airfield }), 'Back to AP');
-  assert.equal(c.nlaButtonLabel({ stripType: 'FINAL', state: 'BOLTER_WAVEOFF', nla: carrier }), 'Back on final');
   assert.equal(c.nlaButtonLabel({ stripType: 'FINAL', state: 'ON_FINAL', nla: { toState: 'TAXI_IN', transferTo: 'GC' } }), 'Landed');
   for (const state of Object.keys(c.FINAL_TRANSFER_LABELS)) {
     assert.ok(computeFinalNla({ state }, null, 0, { facilityId: 'INCIRLIK' }).transferTo, `${state} is a transfer at an airfield`);

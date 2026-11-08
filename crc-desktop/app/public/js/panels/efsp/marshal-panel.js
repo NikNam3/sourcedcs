@@ -3,40 +3,38 @@ import { missionNow } from '../../mission-clock.js';
 import { registerSettingsTab, getSetting } from '../../settings-registry.js';
 import { carrierBearingText, carrierHhmm, carrierStateOf, getEfspCarrier } from './carrier-state.js';
 import { carrierActingFor, sendCarrier, signedOnCarrierIds } from './carrier-send.js';
-import { carrierDistanceNm } from './carrier-final-distance.js';
+import { shipBearingRangeOf } from './carrier-final-distance.js';
 import { getAllEfspStrips, getEfspFlightData, getEfspPosition, getEfspPositionLetter, getEfspStrip } from './efsp-state.js';
-import { sendEfspMutation } from './efsp-ws.js';
+import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { onEfspChanged } from './efsp-change-bus.js';
+import { nlaButtonLabel } from './efsp-nla.js';
 import {
-  buildBoard, clockText, dropSlot, eatMinuteText, fuelBlockOp, fuelText, marksOf, passClearanceOp, setEatOp
+  buildBoard, clockText, dropSlot, eatMinuteText, fuelBlockOp, fuelText, marksOf, passClearanceOp, setAngelsOp, setDmeOp, setEatOp
 } from './marshal-board-model.js';
 import { pictureModel, renderMarshalPicture } from './marshal-picture.js';
+import { circleModel, renderMarshalCircle } from './marshal-circle.js';
 
-// The MARSHAL panel: the recovery board (crc-sync docs/adr/0114; mockup docs/mockups/marshal-stack-panel.html, revision 7). Every
-// recovering aircraft in landing order, next to land at the top, beside the Case III picture. An ordinary dockable panel.
+// The MARSHAL panel: the one panel for arriving traffic (crc-sync docs/adr/0156; ADR 0114's board). Every recovery from STACK to
+// its drop, in its own Case's table (a flight keeps the Case it was given): Case II/III as SEQ SIDE TYPE FUEL EAT ANG DME beside the
+// Case III picture, Case I as SEQ SIDE TYPE FUEL ANG beside the overhead circle. The Marshal and both approach controllers look at
+// it; each row's button is its state (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, TO PATTERN, DROP), live only for the Strip's owner.
 //
-// Dark cockpit (memory feedback_dark_cockpit_ui): grey while the recovery is in order. Amber is "look at this now": fuel within the
-// margin of bingo, a flight past its EAT that has not pushed, an angels or EAT changed and not yet passed. Red is fuel at or below
-// bingo. The one blue button is the action due, Commence on the next flight to push. Nothing here tells the Marshal what to do, there
-// is no countdown, no checklist, no required call; everything is named by the side number, never a callsign.
+// Dark cockpit (memory feedback_dark_cockpit_ui): grey while the recovery is in order. Amber is "look at this now": a flight past
+// its EAT that has not pushed, an angels or EAT changed and not yet passed. There is no fuel rule. Nothing here tells anyone what
+// to do; everything is named by the side number.
 //
-// Who can do what: the Marshal (CV_MARSHAL) drags a HOLD row to re-sequence, Commences, sends a commenced flight Back to stack, sends
-// a Delta and closes up a vacancy; on a holding flight it types the fuel (the Strip's LOW ST, a standing input when it owns the
-// Strip) and assigns an EAT by clicking the EAT figure (crc-sync docs/adr/0137: an assigned EAT is underlined until cleared with an
-// empty entry); every other carrier Position reads. The ramp time, the marshal radial and the first fix are the
-// ship's and are typed in the carrier panel; here they are shown. No arithmetic of the recovery is done here: angels, DME and the
-// EATs are the server's (hull view), see marshal-board-model.js.
+// The Marshal drags a holding row to re-sequence, sends a Delta, closes up a vacancy, and on the rows it owns types the fuel, the
+// EAT, the angels and the holding fix DME (an assigned value is underlined until cleared with an empty entry). No arithmetic of the
+// recovery is done here: angels, DME and the EATs are the server's (hull view), see marshal-board-model.js.
 
 registerSettingsTab('marshal', [
-  { key: 'marshalLowStateMarginKlb', type: 'number', label: 'Low-state margin above bingo', unit: 'k lb', default: 1.0, min: 0, max: 5, step: 0.1, onChange: () => renderMarshal() },
   { key: 'marshalMarkChanged', type: 'toggle', label: 'Mark changed clearances until passed', default: true, onChange: () => renderMarshal() },
 ], { label: 'Marshal' });
 
 let _emptyEl = null;
 let _bodyEl = null;
 let _els = null;
-let _rows = []; // the table's rows in tbody order: { key, sig, tr }
-let _pictureSig = '';
+const _tables = { sequenced: [], caseI: [] }; // each table's rows in tbody order: { key, sig, tr }
 let _lastBoard = null;
 let _dragging = null;
 let _timer = null;
@@ -61,19 +59,48 @@ function _approachText() {
 
 function _sendStackOp(op) { return sendCarrier('sequencesStack', op); }
 
-function _commence(row) {
+/** The row's button: its Strip's next step (the server's NLA), live only for the controller who holds the Strip. */
+function _advance(row) {
   const strip = row.stripId ? getEfspStrip(row.stripId) : null;
-  if (strip) sendEfspMutation('CV_MARSHAL', strip, { kind: 'InvokeNla' });
+  if (strip && getActingPositions('CARRIER').includes(strip.ownerPositionId)) sendEfspMutation(strip.ownerPositionId, strip, { kind: 'InvokeNla' });
 }
 
-function _backToStack(row) {
-  const strip = row.stripId ? getEfspStrip(row.stripId) : null;
-  if (strip) sendEfspMutation('CV_MARSHAL', strip, { kind: 'CarrierHandoff', transfer: 'COMMENCED_TO_MARSHAL' });
+const COLUMNS = Object.freeze({
+  sequenced: ['SEQ', 'SIDE', 'TYPE', 'FUEL', 'EAT', 'ANG', 'DME', ''],
+  caseI: ['SEQ', 'SIDE', 'TYPE', 'FUEL', 'ANG', ''],
+});
+
+function _section(name, caption, svgLabel) {
+  const main = _el('div', 'mb-main');
+  main.dataset.marshalSection = name;
+  const tableCol = _el('div', 'mb-tablecol');
+  const wrap = _el('div', 'mb-tw');
+  tableCol.appendChild(_el('div', 'mb-k mb-caption', caption));
+  const table = _el('table', 'mb-table');
+  table.dataset.marshal = name === 'caseI' ? 'board-case-i' : 'board';
+  const thead = _el('thead');
+  const hr = _el('tr');
+  for (const h of COLUMNS[name]) hr.appendChild(_el('th', null, h));
+  thead.appendChild(hr);
+  const tbody = _el('tbody');
+  table.append(thead, tbody);
+  wrap.appendChild(table);
+  tableCol.appendChild(wrap);
+  const picCol = _el('div', 'mb-patcol');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'mb-picture');
+  svg.setAttribute('viewBox', name === 'caseI' ? '0 0 360 360' : '0 0 360 640');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', svgLabel);
+  svg.dataset.marshal = name === 'caseI' ? 'circle' : 'picture';
+  picCol.appendChild(svg);
+  main.append(tableCol, picCol);
+  return { main, tbody, svg, sig: '' };
 }
 
 function _build() {
   _bodyEl.textContent = '';
-  _rows = [];
+  _tables.sequenced = []; _tables.caseI = [];
   const hdr = _el('div', 'mb-hdr');
   const cell = (k, id) => { const s = _el('span', 'mb-hcell'); s.appendChild(_el('span', 'mb-k', k)); const b = _el('b', null, ''); b.dataset.marshal = id; s.appendChild(b); hdr.appendChild(s); return b; };
   const hull = _el('span', 'mb-hcell');
@@ -113,38 +140,16 @@ function _build() {
   hdr.appendChild(right);
   _bodyEl.appendChild(hdr);
 
-  const main = _el('div', 'mb-main');
-  const tableCol = _el('div', 'mb-tablecol');
-  const wrap = _el('div', 'mb-tw');
-  const table = _el('table', 'mb-table');
-  table.dataset.marshal = 'board';
-  const thead = _el('thead');
-  const hr = _el('tr');
-  for (const h of ['SEQ', 'SIDE', 'TYPE', 'FUEL:EAT', 'ANG', 'STATUS', '']) hr.appendChild(_el('th', null, h));
-  thead.appendChild(hr);
-  const tbody = _el('tbody');
-  table.append(thead, tbody);
-  wrap.appendChild(table);
+  const sections = { sequenced: _section('sequenced', 'CASE II / III', 'Case III picture'), caseI: _section('caseI', 'CASE I', 'Case I stack') };
   const empty = _el('div', 'mb-none', 'No flight in the recovery.');
   empty.dataset.marshal = 'none';
-  tableCol.append(wrap, empty);
   const togo = _el('div', 'mb-togo');
   togo.append(_el('span', null, 'TO GO'));
   const togoN = _el('b', null, '0'); togoN.dataset.marshal = 'togo';
   togo.appendChild(togoN);
-  tableCol.appendChild(togo);
-  const picCol = _el('div', 'mb-patcol');
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'mb-picture');
-  svg.setAttribute('viewBox', '0 0 360 640');
-  svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', 'Case III picture');
-  svg.dataset.marshal = 'picture';
-  picCol.appendChild(svg);
-  main.append(tableCol, picCol);
-  _bodyEl.appendChild(main);
+  _bodyEl.append(sections.sequenced.main, sections.caseI.main, empty, togo);
 
-  _els = { hullK, caseB, approach, brc, fb, marPos, ramp, delta, deltaForm, deltaIn, deltaGo, deltaErr, clock, tbody, empty, togoN, svg, picCol };
+  _els = { hullK, caseB, approach, brc, fb, marPos, ramp, delta, deltaForm, deltaIn, deltaGo, deltaErr, clock, empty, togoN, sections };
 
   delta.addEventListener('click', () => {
     deltaForm.hidden = !deltaForm.hidden;
@@ -167,86 +172,79 @@ function _build() {
 }
 
 function _collect(view) {
-  const now = missionNow();
-  const margin = getSetting('marshalLowStateMarginKlb');
-  return buildBoard({
-    view, strips: getAllEfspStrips(), flightDataOf: getEfspFlightData, dmeOf: carrierDistanceNm, now,
-    marginKlb: Number.isFinite(margin) ? margin : 1.0,
-  });
+  return buildBoard({ view, strips: getAllEfspStrips(), flightDataOf: getEfspFlightData, posOf: shipBearingRangeOf, now: missionNow() });
 }
 
-function _rowSignature(r, m, { canSequence, caseValue }) {
-  return [r.flightDataId, r.seq, r.kind, r.status, r.side, r.callsign, r.type, r.fuelLb, r.fuelLevel, r.eatUtc, r.eatSet ? 1 : 0, r.angels, r.slot,
-    r.late ? 1 : 0, r.next ? 1 : 0, m.angels ? 1 : 0, m.eat ? 1 : 0, canSequence ? 1 : 0, caseValue, _fuelTypable(r, canSequence) ? 1 : 0].join('/');
+/** The row's button: its label (the Strip's NLA, the button being the status) and whether this controller may press it. */
+function _actionOf(r) {
+  const strip = r.stripId ? getEfspStrip(r.stripId) : null;
+  const label = strip ? nlaButtonLabel(strip) : null;
+  const inhibited = strip && strip.nla && strip.nla.inhibited;
+  const mine = !!strip && getActingPositions('CARRIER').includes(strip.ownerPositionId);
+  return { label, live: mine && !inhibited, title: inhibited || (mine ? '' : `${strip ? strip.ownerPositionId : '—'} has it`) };
 }
 
-function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
+/** The Marshal types FUEL, EAT, ANG and DME on the rows the Marshal holds (crc-sync docs/adr/0156); everyone else reads. */
+function _marshalEdits(r, canSequence) { return canSequence && r.ownerPositionId === 'CV_MARSHAL' && _ownsStrip(r); }
+
+function _rowSignature(r, m, ctx) {
+  const a = _actionOf(r);
+  return [r.flightDataId, r.seq, r.state, r.side, r.type, r.fuelLb, r.eatUtc, r.eatSet ? 1 : 0, r.angels, r.angelsSet ? 1 : 0,
+    r.marshalDme, r.dmeSet ? 1 : 0, r.slot, r.late ? 1 : 0, m.angels ? 1 : 0, m.eat ? 1 : 0, ctx.canSequence ? 1 : 0, ctx.section,
+    a.label, a.live ? 1 : 0, _marshalEdits(r, ctx.canSequence) ? 1 : 0].join('/');
+}
+
+/** A figure the Marshal may type over on a holding row it holds; plain text otherwise. `set` underlines an assigned value. */
+function _figure(r, part, text, { set = false, chg = false, late = false, edit = null } = {}) {
+  const span = _el('span', [chg ? 'mb-chg' : late ? 'mb-late' : '', set ? 'mb-eat-set' : ''].filter(Boolean).join(' '), text || '--');
+  span.dataset.part = part;
+  if (set) span.title = 'Assigned by the Marshal; clear it to use the slot\'s';
+  if (edit) _editable(span, part, edit.value, edit.placeholder, edit.bad, edit.send);
+  return span;
+}
+
+function _drawRow(r, m, ctx) {
+  const { canSequence, section } = ctx;
   const tr = _el('tr', `mb-row mb-${r.kind}`);
   tr.dataset.flight = r.flightDataId;
   tr.dataset.kind = r.kind;
+  tr.dataset.state = r.state;
   tr.dataset.seq = String(r.seq);
   tr.appendChild(_el('td', 'mb-seq', String(r.seq)));
-  const side = _el('td', `mb-side${r.sideMissing ? ' mb-side-missing' : ''}`, r.side || r.callsign || '—');
-  if (r.sideMissing) side.title = 'No side number typed yet; the callsign is shown';
+  const side = _el('td', 'mb-side', r.side || '—');
   side.dataset.cell = 'side';
   tr.appendChild(side);
   tr.appendChild(_el('td', 'mb-type', r.type));
-  const fe = _el('td', 'mb-fe');
-  fe.dataset.cell = 'fuel-eat';
-  const fuelClass = r.fuelLevel ? `mb-fuel-${r.fuelLevel}` : '';
-  // the fuel is a standing input on a holding flight whose Strip this controller can write (the LOW ST is the owner's Block)
-  const fuel = _fuelTypable(r, canSequence)
-    ? _panelInput({
-      part: 'fuel', value: fuelText(r.fuelLb), placeholder: 'k lb', className: `mb-fe-input ${fuelClass}`, size: 4,
-      label: 'Fuel low state in thousands of pounds', bad: 'the fuel in thousands of pounds (4.8), or empty to clear it',
-      send: (text) => _sendFuel(r, text), onLeave: (inp, sent) => { if (sent) _redrawRowOf(inp); },
-    })
-    : _el('span', fuelClass, fuelText(r.fuelLb) || '--');
-  fuel.dataset.part = 'fuel';
-  const eat = _el('span', [m.eat ? 'mb-chg' : r.late ? 'mb-late' : '', r.eatSet ? 'mb-eat-set' : ''].filter(Boolean).join(' '), eatMinuteText(r.eatUtc) || '--');
-  eat.dataset.part = 'eat';
-  if (r.eatSet) eat.title = 'EAT assigned by the Marshal; clear it to use the slot\'s';
-  if (canSequence && r.kind === 'hold' && sequenced) {
-    _editable(eat, 'eat', r.eatUtc != null ? carrierHhmm(r.eatUtc) : '', 'HHMM', 'a Zulu time as HHMM, or empty for the slot\'s EAT',
-      (text) => _sendEat(r, text));
+  const edits = _marshalEdits(r, canSequence) && r.kind === 'hold';
+  const cell = (name, child) => { const td = _el('td', `mb-${name}`); td.dataset.cell = name; td.appendChild(child); tr.appendChild(td); };
+  cell('fuel', _figure(r, 'fuel', fuelText(r.fuelLb), { edit: _marshalEdits(r, canSequence) ? {
+    value: fuelText(r.fuelLb), placeholder: 'k lb', bad: 'the fuel in thousands of pounds (4.8), or empty to clear it', send: (t) => _sendFuel(r, t),
+  } : null }));
+  if (section === 'sequenced') {
+    cell('eat', _figure(r, 'eat', eatMinuteText(r.eatUtc), { set: r.eatSet, chg: m.eat, late: r.late, edit: edits ? {
+      value: r.eatUtc != null ? carrierHhmm(r.eatUtc) : '', placeholder: 'HHMM', bad: 'a Zulu time as HHMM, or empty for the slot\'s EAT',
+      send: (t) => _sendOp(setEatOp(r, t)),
+    } : null }));
   }
-  fe.append(fuel, document.createTextNode(':'), eat);
-  tr.appendChild(fe);
-  const ang = _el('td', `mb-ang${m.angels ? ' mb-chg' : ''}`);
-  ang.dataset.cell = 'ang';
-  if (!sequenced && r.inStack && canSequence) {
-    // Case I: the stack is a list of squadron-assigned altitudes, not a timed stack (guide 9.12 rule 3); the Marshal types the angels.
-    ang.appendChild(_panelInput({
-      part: 'angels', value: r.angels != null ? String(r.angels) : '', placeholder: r.angels != null ? String(r.angels) : 'angels',
-      className: 'mb-ang-input', size: 3, bad: 'whole angels (6), or empty to clear them',
-      send: (text) => {
-        const raw = text.trim();
-        if (raw !== '' && !/^\d+$/.test(raw)) return false;
-        return _sendStackOp({ kind: 'SetCaseIAngels', flightDataId: r.flightDataId, caseIAngels: raw === '' ? null : Number(raw) });
-      },
-      onLeave: (inp, sent) => { if (sent) _redrawRowOf(inp); },
-    }));
-  } else {
-    ang.textContent = r.angels != null ? String(r.angels) : '';
+  cell('ang', _figure(r, 'angels', r.angels != null ? String(r.angels) : '', { set: r.angelsSet, chg: m.angels, edit: edits ? {
+    value: r.angels != null ? String(r.angels) : '', placeholder: 'angels', bad: 'whole angels (6), or empty for the slot\'s',
+    send: (t) => _sendOp(setAngelsOp(r, t)),
+  } : null }));
+  if (section === 'sequenced') {
+    cell('dme', _figure(r, 'dme', r.marshalDme != null ? String(r.marshalDme) : '', { set: r.dmeSet, edit: edits ? {
+      value: r.marshalDme != null ? String(r.marshalDme) : '', placeholder: 'DME', bad: 'a whole DME (21), or empty for the slot\'s',
+      send: (t) => _sendOp(setDmeOp(r, t)),
+    } : null }));
   }
-  tr.appendChild(ang);
-  const st = _el('td', 'mb-st', r.status);
-  st.dataset.cell = 'status';
-  tr.appendChild(st);
   const act = _el('td', 'mb-act');
-  if (canSequence && sequenced) {
-    if (r.next && r.kind === 'hold') {
-      const b = _el('button', 'mb-commence', 'Commence');
-      b.type = 'button'; b.dataset.marshalAction = 'commence';
-      b.addEventListener('click', (e) => { e.stopPropagation(); _commence(r); });
-      act.appendChild(b);
-    }
-    if (r.kind === 'comm') {
-      const b = _el('button', 'mb-btn', 'Back to stack');
-      b.type = 'button'; b.dataset.marshalAction = 'back-to-stack';
-      b.addEventListener('click', (e) => { e.stopPropagation(); _backToStack(r); });
-      act.appendChild(b);
-    }
+  const a = _actionOf(r);
+  if (a.label) {
+    const b = _el('button', a.live && r.next ? 'mb-commence' : 'mb-btn', a.label);
+    b.type = 'button'; b.dataset.marshalAction = 'advance';
+    b.disabled = !a.live;
+    if (a.title) b.title = a.title;
+    b.addEventListener('click', (e) => { e.stopPropagation(); _advance(r); });
+    act.appendChild(b);
   }
   tr.appendChild(act);
 
@@ -257,10 +255,12 @@ function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
       const op = canSequence ? passClearanceOp(r, { enabled: _marksShown() }) : null;
       if (op) _sendStackOp(op);
     });
-    if (canSequence) _wireDrag(tr, r);
+    if (canSequence && section === 'sequenced') _wireDrag(tr, r);
   }
   return tr;
 }
+
+function _sendOp(op) { return op ? _sendStackOp(op) : false; }
 
 /**
  * An input in the board (crc-sync docs/adr/0137). Enter sends and leaves it; a figure `send` refuses (it returns false) stays,
@@ -318,22 +318,13 @@ function _ownsStrip(row) {
   return !!strip && signedOnCarrierIds().includes(strip.ownerPositionId);
 }
 
-/** The fuel is typed by a Marshal on a holding flight whose Strip one of this controller's carrier Positions owns. */
-function _fuelTypable(row, canSequence) { return canSequence && row.kind === 'hold' && _ownsStrip(row); }
-
-/** The fuel as the holding flight's Strip LOW ST Block, sent as the Strip's owner when this controller holds it. */
+/** The fuel as the Strip's FUEL Block (C12), sent as the Strip's owner when this controller holds it. */
 function _sendFuel(row, text) {
   const op = fuelBlockOp(text);
   const strip = row.stripId ? getEfspStrip(row.stripId) : null;
   if (!op || !strip || !_ownsStrip(row)) return false;
   sendEfspMutation(strip.ownerPositionId, strip, op);
   return true;
-}
-
-function _sendEat(row, text) {
-  const op = setEatOp(row, text);
-  if (!op) return false;
-  return _sendStackOp(op);
 }
 
 function _wireDrag(tr, r) {
@@ -356,7 +347,7 @@ function _wireDrag(tr, r) {
     const dragged = _dragging;
     _dragging = null;
     if (!dragged || !_lastBoard) return;
-    const toIndex = dropSlot(_lastBoard.rows, dragged, r.flightDataId);
+    const toIndex = dropSlot(_lastBoard.sequenced, dragged, r.flightDataId);
     if (toIndex != null) _sendStackOp({ kind: 'Move', flightDataId: dragged, toIndex });
   });
 }
@@ -368,9 +359,10 @@ function _drawVacancy(v, canSequence) {
   tr.appendChild(_el('td', 'mb-seq', ''));
   tr.appendChild(_el('td', 'mb-side', '—'));
   tr.appendChild(_el('td', 'mb-type', ''));
-  tr.appendChild(_el('td', 'mb-fe', ''));
+  tr.appendChild(_el('td', 'mb-fuel', ''));
+  tr.appendChild(_el('td', 'mb-eat', 'vacant'));
   tr.appendChild(_el('td', 'mb-ang', v.angels != null ? String(v.angels) : ''));
-  tr.appendChild(_el('td', 'mb-st', 'vacant'));
+  tr.appendChild(_el('td', 'mb-dme', v.marshalDme != null ? String(v.marshalDme) : ''));
   const act = _el('td', 'mb-act');
   if (canSequence) {
     const b = _el('button', 'mb-btn', 'Close up');
@@ -385,8 +377,10 @@ function _drawVacancy(v, canSequence) {
 
 /** Marks the row holding `node` for a redraw on the next render (a sent figure is replaced by the server's, or put back). */
 function _redrawRowOf(node) {
-  const row = _rows.find((x) => x.tr.contains(node));
-  if (row) row.sig = '';
+  for (const rows of Object.values(_tables)) {
+    const row = rows.find((x) => x.tr.contains(node));
+    if (row) row.sig = '';
+  }
 }
 
 /**
@@ -394,13 +388,15 @@ function _redrawRowOf(node) {
  * holds the focused input, and the order while one does or a drag is on, wait for the next render once the input is left; every
  * other row stays live.
  */
-function _syncTable(board, shown, ctx) {
+function _syncTable(section, list, vacancies, shown, ctx) {
+  const tbody = _els.sections[section].tbody;
+  const current = _tables[section];
   const want = [];
   // a vacancy (a flight left and nobody closed up, decisions H28) is listed above the first holding row that sits over it
   const placed = new Set();
-  for (const r of board.rows) {
+  for (const r of list) {
     if (r.kind === 'hold') {
-      for (const v of board.vacancies) {
+      for (const v of vacancies) {
         if (!placed.has(v.slot) && v.slot < r.slot) {
           placed.add(v.slot);
           want.push({ key: `v:${v.slot}`, sig: ['v', v.slot, v.angels, ctx.canSequence ? 1 : 0].join('/'), draw: () => _drawVacancy(v, ctx.canSequence) });
@@ -412,20 +408,20 @@ function _syncTable(board, shown, ctx) {
   }
   const active = document.activeElement;
   const typingIn = (tr) => !!active && active.tagName === 'INPUT' && tr.contains(active);
-  const sameOrder = want.length === _rows.length && want.every((w, i) => w.key === _rows[i].key);
+  const sameOrder = want.length === current.length && want.every((w, i) => w.key === current[i].key);
   if (!sameOrder) {
-    if (_dragging || _rows.some((x) => typingIn(x.tr))) return;
-    _els.tbody.textContent = '';
-    _rows = want.map((w) => { const tr = w.draw(); _els.tbody.appendChild(tr); return { key: w.key, sig: w.sig, tr }; });
+    if (_dragging || current.some((x) => typingIn(x.tr))) return;
+    tbody.textContent = '';
+    _tables[section] = want.map((w) => { const tr = w.draw(); tbody.appendChild(tr); return { key: w.key, sig: w.sig, tr }; });
     return;
   }
   if (_dragging) return;
   want.forEach((w, i) => {
-    const cur = _rows[i];
+    const cur = current[i];
     if (w.sig === cur.sig || typingIn(cur.tr)) return;
     const tr = w.draw();
     cur.tr.replaceWith(tr);
-    _rows[i] = { key: w.key, sig: w.sig, tr };
+    current[i] = { key: w.key, sig: w.sig, tr };
   });
 }
 
@@ -440,7 +436,6 @@ export function renderMarshal() {
   if (!_els) _build();
 
   const caseValue = view.recoveryCase ? view.recoveryCase.value : null;
-  const sequenced = caseValue === 'II' || caseValue === 'III';
   const canSequence = _canSequence();
   const board = _collect(view);
   _lastBoard = board;
@@ -452,7 +447,7 @@ export function renderMarshal() {
   _els.approach.textContent = _approachText() || '—';
   _els.brc.textContent = st.brc.value != null ? carrierBearingText(st.brc.display) : '—';
   _els.fb.textContent = st.finalBearing.value != null ? carrierBearingText(st.finalBearing.display) : '—';
-  const holdFixes = board.rows.filter((r) => r.kind === 'hold' && r.marshalDme != null).map((r) => r.marshalDme);
+  const holdFixes = board.sequenced.filter((r) => r.kind === 'hold' && r.marshalDme != null).map((r) => r.marshalDme);
   const first = st.firstFix && st.firstFix.value != null ? st.firstFix.value : null;
   const top = Math.max(first ?? 0, ...holdFixes);
   _els.marPos.textContent = st.radial.value != null
@@ -460,22 +455,32 @@ export function renderMarshal() {
     : '—';
   _els.ramp.textContent = st.rampTime.value != null ? `${carrierHhmm(st.rampTime.value)}Z` : '—';
   _els.clock.textContent = clockText(missionNow());
-  _els.delta.hidden = !(canSequence && sequenced);
-  if (!(canSequence && sequenced)) _els.deltaForm.hidden = true;
+  const hasSequenced = board.sequenced.length > 0;
+  _els.delta.hidden = !(canSequence && hasSequenced);
+  if (!(canSequence && hasSequenced)) _els.deltaForm.hidden = true;
   _els.togoN.textContent = String(board.toGo);
   _els.empty.hidden = board.rows.length > 0;
 
-  _syncTable(board, shown, { canSequence, caseValue, sequenced });
+  // A section is shown while it has flights, and the one of the ship's Case always (a flight keeps the Case it was given,
+  // so a Case I flight finishes in its own table after the ship goes to Case III).
+  const S = _els.sections;
+  S.sequenced.main.hidden = !(hasSequenced || caseValue !== 'I');
+  S.caseI.main.hidden = !(board.caseI.length > 0 || caseValue === 'I');
+  _syncTable('sequenced', board.sequenced, board.vacancies, shown, { canSequence, section: 'sequenced' });
+  _syncTable('caseI', board.caseI, [], shown, { canSequence, section: 'caseI' });
 
-  // the picture
-  _els.picCol.hidden = !sequenced;
-  if (sequenced) {
-    const model = pictureModel(board.rows, {
+  if (!S.sequenced.main.hidden) {
+    const model = pictureModel(board.sequenced, {
       firstFix: first == null ? 21 : first,
       radialText: st.radial.value != null ? carrierBearingText(st.radial.display) : '',
     });
     const psig = JSON.stringify(model);
-    if (psig !== _pictureSig) { _pictureSig = psig; renderMarshalPicture(_els.svg, model); }
+    if (psig !== S.sequenced.sig) { S.sequenced.sig = psig; renderMarshalPicture(S.sequenced.svg, model); }
+  }
+  if (!S.caseI.main.hidden) {
+    const model = circleModel(board.caseI, { brcDeg: st.brc && st.brc.ref !== 'GRID' && Number.isFinite(st.brc.value) ? st.brc.value : null });
+    const csig = JSON.stringify(model);
+    if (csig !== S.caseI.sig) { S.caseI.sig = csig; renderMarshalCircle(S.caseI.svg, model); }
   }
 }
 
@@ -483,8 +488,8 @@ export function initMarshalPanel() {
   _emptyEl = document.getElementById('marshal-empty');
   _bodyEl = document.getElementById('marshal-body');
   _els = null;
-  _rows = [];
-  _pictureSig = '';
+  _tables.sequenced = [];
+  _tables.caseI = [];
   renderMarshal();
   if (!_timer) {
     // the clock and "past EAT" move without any frame: a light redraw once a second, only while the panel is in the document

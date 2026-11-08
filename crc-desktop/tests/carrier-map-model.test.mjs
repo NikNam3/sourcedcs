@@ -103,41 +103,37 @@ test('the tanker racetrack: 10 nm ahead to 6 nm astern, 4 nm abeam on its patter
   }
 });
 
-test('occupied: from the Strip state; geometry only tells a spin from the landing pattern', () => {
+test('occupied: from the Strip state, each flight in its own Case (crc-sync docs/adr/0156); geometry only tells a spin from the landing pattern', () => {
   const none = m.occupancy({ caseValue: 'III', rows: [], tankerOnStation: false });
   assert.deepEqual(none, { bolterTurns: [], portHolding: false, landing: false, spin: false, tanker: false, approach: false });
-  const c3 = m.occupancy({ caseValue: 'III', rows: [{ kind: 'hold' }, { kind: 'comm' }, { kind: 'approach' }, { kind: 'bolter', turnNm: 8 }, { kind: 'bolter', turnNm: 4 }, { kind: 'bolter', turnNm: null }], tankerOnStation: true });
-  assert.deepEqual(c3.bolterTurns, [4, 6, 8], 'one racetrack per assigned approach turn; none assigned is drawn at 6');
+  const c3 = m.occupancy({ caseValue: 'III', rows: [{ kind: 'hold' }, { kind: 'comm' }, { kind: 'approach' }], tankerOnStation: true });
+  assert.deepEqual(c3.bolterTurns, [], 'no bolter state since ADR 0156');
   assert.equal(c3.portHolding, false, 'Case III holds in marshal, not port holding');
   assert.equal(c3.tanker, true);
-  assert.equal(c3.approach, true, 'the path after marshal while anyone recovers in Case III (crc-sync docs/adr/0137)');
-  assert.equal(c3.landing, false, 'Case III flies no landing pattern from marshal');
+  assert.equal(c3.approach, true);
+  assert.equal(c3.landing, false);
   const c1 = m.occupancy({ caseValue: 'I', rows: [{ kind: 'hold' }], tankerOnStation: false });
   assert.equal(c1.portHolding, true);
-  assert.deepEqual([c1.landing, c1.approach], [true, false], 'Case I: the pattern a holding flight flies next, no marshal path');
+  assert.deepEqual([c1.landing, c1.approach], [true, false]);
+  // a Case I flight still holding after the ship went to Case III keeps its own Case
+  const mixed = m.occupancy({ caseValue: 'III', rows: [{ kind: 'hold', caseValue: 'I' }, { kind: 'hold', caseValue: 'III' }] });
+  assert.deepEqual([mixed.portHolding, mixed.approach], [true, true]);
   const at = (e, n, altFt) => () => ({ at: { e, n }, altFt });
   assert.equal(m.occupancy({ caseValue: 'I', rows: [{ kind: 'pattern' }], contactOf: () => null }).landing, true, 'no contact: the landing pattern');
   const spin = m.occupancy({ caseValue: 'I', rows: [{ kind: 'pattern' }], contactOf: at(1, 2, 1200) });
   assert.deepEqual([spin.spin, spin.landing], [true, false], 'within 3.5 nm at 1,200 ft: spinning');
   const low = m.occupancy({ caseValue: 'I', rows: [{ kind: 'pattern' }], contactOf: at(-1.2, -0.5, 600) });
   assert.deepEqual([low.spin, low.landing], [false, true], 'the downwind at 600 ft');
-  const far = m.occupancy({ caseValue: 'I', rows: [{ kind: 'pattern' }], contactOf: at(0, -6, 1500) });
-  assert.deepEqual([far.spin, far.landing], [false, true]);
 });
 
-test('occupied follows the Strips through a recovery: pattern appears with the Strip and is gone after it', () => {
-  const fd = { identity: { callsign: 'A' }, military: { carrier: { sideNumber: '201', approachTurnNm: 8 } } };
+test('occupied follows the Strips through a recovery: the pattern appears with the Strip and is gone after it', () => {
+  const fd = { identity: { callsign: 'A' }, military: { carrier: { sideNumber: '201' } } };
   const view = { derived: { MAIN: [] }, slots: { MAIN: [] } };
-  const rowsOf = (strips) => board.buildBoard({ view, strips, flightDataOf: () => fd, dmeOf: null, now: 0 }).rows;
-  const s = (state, type = 'FINAL', facilityId = 'CARRIER') => ({ stripId: 's1', flightDataId: 'f1', stripType: type, state, facilityId, ownerPositionId: 'CV_APP1' });
-  const occ = (strips) => m.occupancy({ caseValue: 'III', rows: rowsOf(strips), tankerOnStation: false });
-  assert.deepEqual(occ([s('ON_FINAL')]).bolterTurns, []);
-  assert.deepEqual(occ([s('BOLTER_WAVEOFF')]).bolterTurns, [8]);
-  assert.deepEqual(occ([s('ON_FINAL')]).bolterTurns, [], 'back on final: gone');
-  assert.deepEqual(occ([{ ...s('BOLTER_WAVEOFF'), state: 'DROPPED' }]).bolterTurns, []);
-  assert.equal(m.occupancy({ caseValue: 'I', rows: rowsOf([s('IN_PATTERN', 'PATTERN', 'INCIRLIK')]) }).landing, false,
-    'an airfield\'s PATTERN Strip is not in the carrier\'s pattern');
-  assert.equal(m.occupancy({ caseValue: 'I', rows: rowsOf([s('IN_PATTERN', 'PATTERN')]) }).landing, true);
+  const rowsOf = (strips) => board.buildBoard({ view, strips, flightDataOf: () => fd, now: 0 }).rows;
+  const s = (state, type = 'CV_RECOVERY') => ({ stripId: 's1', flightDataId: 'f1', stripType: type, state, ownerPositionId: 'CV_APP1' });
+  assert.equal(m.occupancy({ caseValue: 'I', rows: rowsOf([s('CV_PATTERN')]) }).landing, true);
+  assert.equal(m.occupancy({ caseValue: 'I', rows: rowsOf([s('DROPPED')]) }).landing, false, 'dropped: gone');
+  assert.equal(m.occupancy({ caseValue: 'I', rows: rowsOf([s('ON_FINAL', 'FINAL')]) }).landing, false, 'PAR\'s FINAL is not the carrier\'s');
 });
 
 test('declutter: labels that would overlap are moved, the first keeps its place, a moved label is marked', () => {

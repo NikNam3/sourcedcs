@@ -4,7 +4,7 @@ import { clearEfspArrival, consumeEfspArrivalFlash, efspArrivalFlashElapsed, efs
 import { blockLabelFor, blockTitleFor } from './strip-template.js';
 import { nlaButtonLabel } from './efsp-nla.js';
 import { isMarsaHighlighted, marsaBadgeFor } from './marsa-badge.js';
-import { compactBlocksFor, fieldSpanFor, sideNumberLeads } from './strip-fields.js';
+import { compactBlocksFor, fieldSpanFor, isCarrierStrip } from './strip-fields.js';
 import { carrierDecorateNlaButton, carrierExtraNlaButtons } from './carrier-panel.js';
 import { finalHandoffButtons, parCallButtons } from './bay-views.js';
 import { _invokeNla, _resolveActingPositionId } from './bay/dispatch.js';
@@ -65,7 +65,7 @@ function _buildLifeBlock(strip) {
   let inhibited = null;
   if (nlaLabel) {
     // Drop is the terminal step, not the one filled "go" button.
-    const btn = _stripEl('button', `efsp-sbtn${nlaLabel === 'Drop' ? '' : ' efsp-sbtn-go'} efsp-nla-btn`, nlaLabel);
+    const btn = _stripEl('button', `efsp-sbtn${/^drop$/i.test(nlaLabel) ? '' : ' efsp-sbtn-go'} efsp-nla-btn`, nlaLabel);
     inhibited = (nlaStatus && nlaStatus.inhibited) || null;
     if (inhibited) {
       btn.disabled = true;
@@ -83,7 +83,7 @@ function _buildLifeBlock(strip) {
     carrierDecorateNlaButton(btn, strip);
     life.appendChild(btn);
   }
-  // The carrier's second handoff, beside the NLA (crc-sync docs/adr/0074): "See you" in Case II.
+  // The carrier's second handoff, beside the NLA (crc-sync docs/adr/0156): TO MARSHAL beside a launch's DROP.
   for (const extra of carrierExtraNlaButtons(strip)) life.appendChild(extra);
   // The single frequency approach (crc-sync docs/adr/0117): "Hand off to PAR" beside the NLA on AP's arrival on a rotating frequency.
   for (const extra of finalHandoffButtons(strip)) life.appendChild(extra);
@@ -112,8 +112,8 @@ function _buildStripTab(strip, arrival) {
 function _buildStripFields(strip) {
   const grid = _stripEl('div', 'efsp-strip-fields');
   const flightData = getEfspFlightData(strip.flightDataId);
-  const sideLeads = sideNumberLeads(strip.stripType, strip.ownerPositionId, flightData); // H122: on a carrier Strip the side number has the callsign's slot
-  for (const id of compactBlocksFor(strip.stripType, strip.ownerPositionId, flightData)) {
+  const sideLeads = isCarrierStrip(strip); // H122, crc-sync docs/adr/0156: a carrier Strip leads with its side number
+  for (const id of compactBlocksFor(strip.stripType, strip.ownerPositionId, flightData, strip)) {
     const span = fieldSpanFor(id, sideLeads);
     const chip = _stripEl('span', `efsp-block-chip efsp-field${span > 1 ? ' efsp-field-w' + span : ''}`);
     const label = blockLabelFor(id, strip.stripType);

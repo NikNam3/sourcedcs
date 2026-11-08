@@ -3,17 +3,21 @@
 // The recovery board's rows, from what the client already holds (crc-sync docs/adr/0114; mockup docs/mockups/marshal-stack-panel.html).
 // A leaf: it imports nothing, so node:test imports it directly and no panel module has to be loaded to test the rules.
 //
-// No arithmetic of the recovery lives here. Angels, DME, EAT and the push time come from the server's hull view; this module
-// only chooses the order they are listed in, names the status, and compares fuel with bingo for the colour. Colour is the
-// dark-cockpit rule (memory feedback_dark_cockpit_ui): a row is grey while it is in order; amber means look now (fuel within
-// the margin of bingo, a flight past its EAT that has not pushed, a clearance changed and not yet passed, which the server
-// marks); red is fuel at or below bingo. Nothing here tells the controller what to do.
+// No arithmetic of the recovery lives here. Angels, DME and EAT come from the server's hull view; this module only chooses
+// the order they are listed in and which table a flight is in. crc-sync docs/adr/0156: every arrival is on this board from
+// STACK to its drop, in its own Case's table (a flight keeps the Case it was given); there is no fuel rule. Colour is the
+// dark-cockpit rule (memory feedback_dark_cockpit_ui): grey while in order, amber for a flight past its EAT that has not
+// pushed and for a clearance changed and not yet passed, which the server marks. Nothing here tells the controller what to do.
 
-const LANE_LETTER = Object.freeze({ CV_APP1: 'A', CV_APP2: 'B' });
 const KLB = 1000;
 
 /** The kinds, in landing order: the ones on the approach first, then the commenced, then the holding. */
-export const KIND_RANK = Object.freeze({ approach: 0, bolter: 0, ball: 0, pattern: 0, comm: 1, hold: 2 });
+export const KIND_RANK = Object.freeze({ pattern: 0, approach: 0, comm: 1, hold: 2 });
+
+/** A recovery state's kind (crc-sync authority/strip-types/cv-recovery.js). */
+export const KIND_OF_STATE = Object.freeze({
+  STACK: 'hold', COMMENCED: 'comm', FINAL_APPROACH: 'approach', DIRTY: 'approach', BULLSEYE: 'approach', CV_PATTERN: 'pattern',
+});
 
 /** Fuel in thousands of pounds, one decimal; '' when none was typed. */
 export function fuelText(lb) {
@@ -34,127 +38,79 @@ export function clockText(ms) {
 }
 
 /**
- * How far above bingo a flight is, in thousands of pounds, or null when either figure was not typed.
- * @param {number|null} fuelLb
- * @param {number|null} bingoLb
- */
-export function marginKlb(fuelLb, bingoLb) {
-  return Number.isFinite(fuelLb) && Number.isFinite(bingoLb) ? (fuelLb - bingoLb) / KLB : null;
-}
-
-/** 'danger' (at or below bingo), 'attn' (within the margin of bingo) or '' (in order, or not enough typed to say). */
-export function fuelLevel(fuelLb, bingoLb, marginSetting) {
-  const m = marginKlb(fuelLb, bingoLb);
-  if (m == null) return '';
-  if (m <= 0) return 'danger';
-  return m <= marginSetting ? 'attn' : '';
-}
-
-/** Status and kind from the flight's live carrier Strip (and, failing one, the stack entry). */
-export function statusOf(strip, entry) {
-  if (strip) {
-    const lane = LANE_LETTER[strip.ownerPositionId] || '';
-    if (strip.stripType === 'MARSHAL') {
-      if (strip.state === 'IN_STACK') return { kind: 'hold', text: 'HOLD', lane };
-      if (strip.state === 'COMMENCED') return { kind: 'comm', text: 'COMM', lane };
-    }
-    if (strip.stripType === 'FINAL') {
-      if (strip.state === 'ON_FINAL') return { kind: 'approach', text: lane ? `APP ${lane}` : 'APP', lane };
-      if (strip.state === 'BOLTER_WAVEOFF') return { kind: 'bolter', text: 'BOLTER', lane };
-      if (strip.state === 'BALL') return { kind: 'ball', text: 'BALL', lane };
-    }
-    // A recovered aircraft (trapped, or landed from the pattern) has left the recovery: not on the board (docs/adr/0137).
-    if (strip.stripType === 'PATTERN') return strip.state === 'RECOVERED' ? null : { kind: 'pattern', text: 'PATTERN', lane: '' };
-  }
-  if (entry) return entry.status === 'PUSHED' ? { kind: 'comm', text: 'COMM', lane: '' } : { kind: 'hold', text: 'HOLD', lane: '' };
-  return null;
-}
-
-/**
- * The rows of the board, in landing order (next to land at the top).
+ * The rows of the board, in landing order (next to land at the top), split by the flight's Case.
  *
  * @param {object} a
  * @param {object} a.view          the hull view (carrier-state.js `getEfspCarrier()`)
- * @param {object[]} a.strips      every Strip the client holds (the carrier Strips are picked out here)
+ * @param {object[]} a.strips      every Strip the client holds (the live CV_RECOVERY ones are picked out here)
  * @param {(id:string)=>object|null} a.flightDataOf
- * @param {(strip:object)=>number|null} a.dmeOf   nautical miles from the ship to the flight's contact, or null
+ * @param {(strip:object)=>{bearingDeg:number, rangeNm:number}|null} [a.posOf]  true bearing and range from the ship to the
+ *   flight's contact, or null (an unbound Case I flight has none)
  * @param {number} a.now           the mission clock, ms
- * @param {number} a.marginKlb     the controller's low-state margin
- * @returns {{rows:object[], vacancies:object[], toGo:number}}
+ * @returns {{rows:object[], caseI:object[], sequenced:object[], vacancies:object[], toGo:number, holding:number}}
  */
-export function buildBoard({ view, strips, flightDataOf, dmeOf, now, marginKlb: margin = 1.0 }) {
-  const derived = (view && view.derived && view.derived.MAIN) || [];
-  const byFd = new Map(derived.map((e) => [e.flightDataId, e]));
-  // One live carrier Strip per flight: the one furthest along its landing (FINAL before MARSHAL before PATTERN is not an order
-  // anyone relies on: a flight has one live carrier Strip at a time, because a handoff changes the Strip in place).
-  const stripByFd = new Map();
-  for (const s of strips || []) {
-    if (!s || s.state === 'DROPPED' || !['MARSHAL', 'FINAL', 'PATTERN'].includes(s.stripType) || !s.flightDataId) continue;
-    // PATTERN is also an airfield's Strip type (Incirlik's TWR): only the carrier's Strips are in the recovery.
-    if (s.facilityId && s.facilityId !== 'CARRIER') continue;
-    // A launch Strip (on deck or airborne, docs/adr/0154) is not the flight's recovery.
-    if (s.stripType === 'MARSHAL' && (s.state === 'LAUNCH' || s.state === 'LAUNCHED')) continue;
-    if (!stripByFd.has(s.flightDataId)) stripByFd.set(s.flightDataId, s);
+export function buildBoard({ view, strips, flightDataOf, posOf, now }) {
+  const entries = new Map();
+  for (const [stackId, list] of Object.entries((view && view.derived) || {})) {
+    for (const e of list || []) entries.set(e.flightDataId, { ...e, stackId });
   }
-  const ids = new Set([...byFd.keys(), ...stripByFd.keys()]);
   const rows = [];
-  let nextHold = null;
-  for (const id of ids) {
-    const entry = byFd.get(id) || null;
-    const strip = stripByFd.get(id) || null;
-    const st = statusOf(strip, entry);
-    if (!st) continue;
-    // A MARSHAL launch Strip (state LAUNCH) is not recovering: it is not on this board.
-    if (strip && strip.stripType === 'MARSHAL' && strip.state === 'LAUNCH' && !entry) continue;
-    const fd = flightDataOf ? flightDataOf(id) : null;
+  for (const s of strips || []) {
+    if (!s || s.state === 'DROPPED' || s.stripType !== 'CV_RECOVERY' || !s.flightDataId) continue;
+    const kind = KIND_OF_STATE[s.state];
+    if (!kind) continue;
+    const entry = entries.get(s.flightDataId) || null;
+    const fd = flightDataOf ? flightDataOf(s.flightDataId) : null;
     const identity = (fd && fd.identity) || {};
     const carrier = (fd && fd.military && fd.military.carrier) || {};
-    const dme = strip && st.kind !== 'hold' && dmeOf ? dmeOf(strip) : null;
-    const fuelLb = Number.isFinite(carrier.lowStateLb) ? carrier.lowStateLb : null;
-    const bingoLb = Number.isFinite(carrier.bingoFuelLb) ? carrier.bingoFuelLb : null;
+    const pos = posOf ? posOf(s) : null;
     const row = {
-      flightDataId: id,
-      stripId: strip ? strip.stripId : null,
-      kind: st.kind,
-      status: st.text,
-      lane: st.lane,
-      side: carrier.sideNumber || '',
-      // A flight with no side number typed yet is listed by its callsign, marked, so a row is never anonymous.
-      sideMissing: !carrier.sideNumber,
+      flightDataId: s.flightDataId,
+      stripId: s.stripId,
+      ownerPositionId: s.ownerPositionId,
+      state: s.state,
+      kind,
+      caseValue: entry && entry.caseValue ? entry.caseValue : null,
+      side: carrier.sideNumber || identity.callsign || '',
       callsign: identity.callsign || '',
       type: identity.aircraftType || '',
-      fuelLb, bingoLb,
-      fuelLevel: fuelLevel(fuelLb, bingoLb, margin),
+      fuelLb: Number.isFinite(carrier.lowStateLb) ? carrier.lowStateLb : null,
       angels: entry ? entry.angels : null,
+      angelsSet: !!(entry && entry.angelsSet),
       marshalDme: entry && entry.marshalDme != null ? entry.marshalDme : null,
+      dmeSet: !!(entry && entry.dmeSet),
       slot: entry ? entry.stackIndex : null,
       eatUtc: entry && entry.pushTimeUtc != null ? entry.pushTimeUtc : null,
-      // an EAT the Marshal assigned by hand (crc-sync docs/adr/0137): shown set until cleared
       eatSet: !!(entry && entry.eatSet),
       pushWindowEndUtc: entry && entry.pushWindowUtc ? entry.pushWindowUtc[1] : null,
       pushedAtUtc: entry && entry.pushedAtUtc != null ? entry.pushedAtUtc : null,
       // the angels / EAT changed and not yet passed to the pilot, as the server keeps them (docs/adr/0115)
       unpassed: entry && Array.isArray(entry.unpassed) ? entry.unpassed : [],
-      turnNm: [4, 6, 8].includes(carrier.approachTurnNm) ? carrier.approachTurnNm : null,
-      dme: Number.isFinite(dme) ? dme : null,
+      bearingDeg: pos && Number.isFinite(pos.bearingDeg) ? pos.bearingDeg : null,
+      dme: pos && Number.isFinite(pos.rangeNm) ? pos.rangeNm : null, // live range from the ship (the graphic, the order)
       inStack: !!entry,
     };
     row.late = row.kind === 'hold' && row.eatUtc != null && Number.isFinite(now) && now > (row.pushWindowEndUtc ?? row.eatUtc);
     rows.push(row);
   }
   rows.sort(compareLanding);
-  for (const r of rows) if (r.kind === 'hold' && (nextHold === null || r.slot < nextHold.slot)) nextHold = r;
+  const seqOf = (list) => list.forEach((r, i) => { r.seq = i + 1; });
+  const caseI = rows.filter((r) => r.caseValue === 'I');
+  const sequenced = rows.filter((r) => r.caseValue !== 'I');
+  seqOf(caseI); seqOf(sequenced);
+  let nextHold = null;
+  for (const r of sequenced) if (r.kind === 'hold' && (nextHold === null || r.slot < nextHold.slot)) nextHold = r;
   if (nextHold) nextHold.next = true;
-  rows.forEach((r, i) => { r.seq = i + 1; });
-  // Vacant slots below the top of the stack (a flight left and nobody closed up, decisions H28): the Marshal closes them up.
-  const holding = rows.filter((r) => r.kind === 'hold' || r.kind === 'comm');
-  const taken = new Set((derived || []).map((e) => e.stackIndex));
-  const top = Math.max(-1, ...derived.map((e) => e.stackIndex));
+  // Vacant slots below the top of the Case II/III stack (a flight left and nobody closed up, decisions H28).
+  const main = (view && view.derived && view.derived.MAIN) || [];
+  const taken = new Set(main.map((e) => e.stackIndex));
+  const top = Math.max(-1, ...main.map((e) => e.stackIndex));
   const vacancies = [];
   for (const slot of (view && view.slots && view.slots.MAIN) || []) {
     if (slot.stackIndex < top && !taken.has(slot.stackIndex)) vacancies.push({ slot: slot.stackIndex, angels: slot.angels, marshalDme: slot.marshalDme });
   }
-  return { rows, vacancies, toGo: rows.length, holding: holding.length };
+  const holding = rows.filter((r) => r.kind === 'hold' || r.kind === 'comm').length;
+  return { rows, caseI, sequenced, vacancies, toGo: rows.length, holding };
 }
 
 /** Landing order: on the approach by DME (nearest first), then the commenced by when they left, then the holding by slot. */
@@ -162,12 +118,7 @@ export function compareLanding(a, b) {
   const ra = KIND_RANK[a.kind];
   const rb = KIND_RANK[b.kind];
   if (ra !== rb) return ra - rb;
-  if (ra === 0) {
-    // a bolter is on the downwind: it comes after the flights still inbound on final
-    const da = a.kind === 'bolter' ? 6 : (a.dme ?? 99);
-    const db = b.kind === 'bolter' ? 6 : (b.dme ?? 99);
-    return da - db || (a.callsign < b.callsign ? -1 : 1);
-  }
+  if (ra === 0) return (a.dme ?? 99) - (b.dme ?? 99) || (a.side < b.side ? -1 : 1);
   if (ra === 1) return (a.pushedAtUtc ?? 0) - (b.pushedAtUtc ?? 0) || (a.slot ?? 0) - (b.slot ?? 0);
   return (a.slot ?? 0) - (b.slot ?? 0);
 }
@@ -206,6 +157,20 @@ export function fuelBlockOp(text) {
   if (!/^\d+(\.\d+)?$/.test(t)) return null;
   const v = Number(t);
   return { kind: 'SetBlock', blockId: 'C12', value: String(Math.round(v < 100 ? v * KLB : v)) };
+}
+
+/** The stack op for angels typed in the ANG cell (crc-sync docs/adr/0156): a whole number, or empty to use the slot's. */
+export function setAngelsOp(row, text) {
+  const t = String(text == null ? '' : text).trim();
+  if (t !== '' && !/^\d{1,2}$/.test(t)) return null;
+  return { kind: 'SetAngels', flightDataId: row.flightDataId, angels: t === '' ? null : Number(t) };
+}
+
+/** The stack op for the holding fix DME typed in the DME cell (Case II/III): a whole number, or empty to use the slot's. */
+export function setDmeOp(row, text) {
+  const t = String(text == null ? '' : text).trim();
+  if (t !== '' && !/^\d{1,2}$/.test(t)) return null;
+  return { kind: 'SetDme', flightDataId: row.flightDataId, dme: t === '' ? null : Number(t) };
 }
 
 /** The stack op for an EAT typed in the EAT cell: a Zulu HHMM the server dates on the mission clock, or empty to use the slot's. */

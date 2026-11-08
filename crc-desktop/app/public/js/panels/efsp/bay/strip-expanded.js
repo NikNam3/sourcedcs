@@ -2,7 +2,7 @@
 import { nlaLabelFor } from '../efsp-nla.js';
 import { sendEfspMutation } from '../efsp-ws.js';
 import { getAllEfspAirspaces, getEfspFlightData, getEfspStrip } from '../efsp-state.js';
-import { BLOCK_MAPS, blockLabelFor, isParFinalOnlyOnCarrier, blockTitleFor, remarksBlockFor, remarksOf, supersededAnnotationEntries } from '../strip-template.js';
+import { BLOCK_MAPS, blockLabelFor, blockTitleFor, remarksBlockFor, remarksOf, supersededAnnotationEntries } from '../strip-template.js';
 import { compactBlocksFor } from '../strip-fields.js';
 import { mtrLostCommsAdvisory } from '../mtr-advisory.js';
 import { mtrRouteNote } from '../mtr-route-note.js';
@@ -240,11 +240,10 @@ export function _appendExpandButton(container, strip) {
  */
 function _expandedBlockIdsFor(strip, map) {
   const flightData = getEfspFlightData(strip.flightDataId);
-  const onStrip = new Set(compactBlocksFor(strip.stripType, strip.ownerPositionId, flightData));
+  const onStrip = new Set(compactBlocksFor(strip.stripType, strip.ownerPositionId, flightData, strip));
   // H138 U2: remarks that are there have the face's own row (strip-remarks.js), which opens the whole text.
   if (remarksOf(flightData)) onStrip.add(remarksBlockFor(strip.stripType));
   return Object.keys(map).filter((blockId) => {
-    if (isParFinalOnlyOnCarrier(strip.stripType, blockId, strip.facilityId)) return false; // the PAR final's HDG/ALT, not the carrier's
     if (!onStrip.has(blockId)) return true;
     return supersededAnnotationEntries(strip, blockId).length > CHIP_HISTORY_LIMIT;
   });

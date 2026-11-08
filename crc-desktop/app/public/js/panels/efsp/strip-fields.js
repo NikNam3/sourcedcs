@@ -22,7 +22,8 @@
 // Filtered by the strip type's own Block Map before use (compactBlocksFor), so a
 // Block listed here that a strip type does not have is dropped rather than drawn
 // as an unlabelled field.
-import { BLOCK_MAPS, isParFinalOnlyOnCarrier } from './strip-template.js';
+import { BLOCK_MAPS } from './strip-template.js';
+import { carrierFlightCase } from './carrier-state.js';
 import { hasMtrData } from './mtr-advisory.js';
 import { facilityOfPosition } from './facility-topology.js';
 import { getAirportSurfacePositions } from '../../airport-surface.js';
@@ -41,17 +42,12 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
   // '7' stays as the FILED request here; '7A' is the assignment beside it.
   OVERFLIGHT: [...COMPACT_BLOCKS_SHARED, '7A', '9A-VECTOR', '9A-SPEED'],
   MISSION:    ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7'],
-  // The carrier (crc-sync's docs/adr/0074, guide §9.12). MARSHAL shows the
-  // marshal message: the derived stack fields first (CASE, ANGELS, DME,
-  // EAT/PUSH, RADIAL, FINAL BEARING: read, never typed), then what the Marshal
-  // enters for the flight (approach, button, low state, bingo, EEAT). EEAT is on
-  // the face because it is "the field most likely to be missed" (§9.12 rule 7).
-  // FINAL: callsign, type, final bearing, deck, distance, and the two the final controller types, HDG and ALT
-  // (crc-sync docs/adr/0117), on PAR's final only: compactBlocksFor() leaves them off the carrier's.
-  // PATTERN's SIDE (C18) is read-only and drawn only once it leads (SIDE_ONLY_WHEN_LEADING).
-  MARSHAL:    ['C1', 'C2', 'C18', 'C3', 'C7', 'C6', 'C8', 'C5', 'C9', 'C4', 'C10', 'C12', 'C13', 'C14', 'C15', 'C19'],
-  FINAL:      ['C1', 'C2', 'C18', 'C9', 'C16', 'C17', 'C19', '9A-VECTOR', '7A'],
-  PATTERN:    ['C1', 'C2', 'C18', 'C24'],
+  // The carrier (crc-sync's docs/adr/0156): only what its controller needs, the side number leading. The callsign (C1)
+  // is never on the face (set from the menu). compactBlocksFor() drops the squawk and the assignments for a Case I flight.
+  CV_LAUNCH:   ['C18', 'C2', 'C20', '5', '9A-VECTOR', '9A-SPEED', '7A'],
+  CV_RECOVERY: ['C18', 'C2', 'C12', 'C7', 'C8', '5', '9A-VECTOR', '9A-SPEED', '7A'],
+  // PAR's FINAL (crc-sync docs/adr/0117): callsign, type, and the two the final controller types, HDG and ALT.
+  FINAL:      ['C1', 'C2', '9A-VECTOR', '7A'],
   // crc-sync docs/adr/0146: the minimal VFR strip, everything it has on its face: callsign, type, code (if any), "VFR" and
   // the assigned altitude, heading, speed, and the runway (RUNWAY_WHERE_FIELD).
   VFR:        ['1', '3', '5', '7A', '9A-VECTOR', '9A-SPEED', '8A'],
@@ -127,7 +123,7 @@ function _blockMapFor(stripType) {
  * order. The per-Position list if there is one, else the strip type's; either way
  * only Blocks the strip type's Block Map actually has.
  */
-export function compactBlocksFor(stripType, positionId, flightData) {
+export function compactBlocksFor(stripType, positionId, flightData, strip = null) {
   const byPosition = COMPACT_BLOCKS_BY_POSITION[stripType];
   let list = (byPosition && positionId && byPosition[positionId])
     || COMPACT_BLOCKS_BY_STRIP_TYPE[stripType] || COMPACT_BLOCKS_SHARED;
@@ -140,56 +136,37 @@ export function compactBlocksFor(stripType, positionId, flightData) {
   if (mtr) list = [...list, ...mtr];
   const map = _blockMapFor(stripType);
   let out = map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
-  // HDG and ALT are the PAR final's: hidden on the carrier's FINAL (supervisor ruling, LT-PAR-MISSED).
   const facilityId = positionId ? facilityOfPosition(positionId) : null;
-  out = out.filter(id => !isParFinalOnlyOnCarrier(stripType, id, facilityId));
+  // crc-sync docs/adr/0156: a Case I flight has no radar service: no squawk, no EAT, no assignments.
+  if (strip && carrierFlightCase(strip) === 'I') out = out.filter(id => !CASE_I_HIDDEN_BLOCKS.includes(id));
   if (stripType === 'VFR' && !(facilityId && (getAirportSurfacePositions()[facilityId] || []).includes(positionId))
     && !(flightData && flightData.filed && flightData.filed.departureRunway)) out = out.filter(id => id !== VFR_RUNWAY_BLOCK);
-  const sideLeads = sideNumberLeads(stripType, positionId, flightData);
-  if (!sideLeads && SIDE_ONLY_WHEN_LEADING.includes(stripType)) out = out.filter(id => id !== 'C18');
-  return sideLeads ? _swapSideAndCallsign(out) : out;
+  return out;
 }
 
-// ── The carrier's side number (decisions.md H122, H117; crc-sync's docs/adr/0114) ──
-//
-// The carrier regime names an aircraft by its side number, so on a carrier Strip
-// the side number (C18) takes the callsign's slot (C1's place and width) and the
-// callsign takes the side number's. Only once a side number is typed: until then
-// the callsign keeps the big slot, so a Strip is never led by an empty field.
-// A carrier Strip is one owned by a CARRIER Position (MARSHAL, FINAL, PATTERN):
-// FINAL is also Incirlik's strip type (PAR), which never swaps.
-// PATTERN's SIDE is read-only, so it is on the face only while it leads: a carrier
-// Strip with no side number looks as it always did.
-export const SIDE_ONLY_WHEN_LEADING = ['PATTERN'];
+/** The Blocks a Case I carrier flight does not show (crc-sync block-map.js CARRIER_RADAR_SERVICE_BLOCKS, plus the EAT). */
+export const CASE_I_HIDDEN_BLOCKS = Object.freeze(['5', '7A', '9A-VECTOR', '9A-SPEED', 'C8']);
 
-export function sideNumberLeads(stripType, positionId, flightData) {
-  const map = _blockMapFor(stripType);
-  if (!map || !map.C1 || !map.C18) return false;
-  if (facilityOfPosition(positionId) !== 'CARRIER') return false;
-  const carrier = flightData && flightData.military && flightData.military.carrier;
-  return !!(carrier && String(carrier.sideNumber || '').trim());
+// ── The carrier's side number (decisions.md H122, H124; crc-sync's docs/adr/0156) ──
+//
+// The carrier names an aircraft by its side number: a carrier Strip (CV_LAUNCH, CV_RECOVERY) is created with one and
+// leads with it; the callsign is set later from the menu, if ever, and never takes its place.
+const CARRIER_STRIP_TYPES = new Set(['CV_LAUNCH', 'CV_RECOVERY']);
+
+/** Is this a carrier Strip (crc-sync carrier/strip-types.js)? */
+export function isCarrierStrip(strip) {
+  return !!strip && CARRIER_STRIP_TYPES.has(strip.stripType);
 }
 
 /**
- * The name a carrier view gives a flight (decisions H124: "on every carrier operation the side number is more important than
- * the callsign"): the side number when it leads on the Strip (`sideNumberLeads`), else the callsign. Every view off the Strip
- * that names a flight (the PriFly pattern chip, the MARSHAL board, the FINAL Bay line, toasts and menus) uses this, so it
- * agrees with the Strip face; Incirlik's Strips name the callsign as before.
+ * The name a view gives a flight (decisions H124: "on every carrier operation the side number is more important than the
+ * callsign"): a carrier Strip's side number (the callsign while none is known), any other Strip's callsign.
  */
 export function leadingFlightName(strip, flightData) {
   const callsign = (flightData && flightData.identity && flightData.identity.callsign) || '';
-  if (!strip || !sideNumberLeads(strip.stripType, strip.ownerPositionId, flightData)) return callsign;
-  return String(flightData.military.carrier.sideNumber).trim();
-}
-
-function _swapSideAndCallsign(list) {
-  const c1 = list.indexOf('C1');
-  const c18 = list.indexOf('C18');
-  if (c1 < 0 || c18 < 0) return list;
-  const out = [...list];
-  out[c1] = 'C18';
-  out[c18] = 'C1';
-  return out;
+  if (!isCarrierStrip(strip)) return callsign;
+  const side = flightData && flightData.military && flightData.military.carrier && flightData.military.carrier.sideNumber;
+  return String(side || '').trim() || callsign;
 }
 
 // ── Ordnance (guide §9.5, crc-sync's docs/adr/0069) ────────────────────────

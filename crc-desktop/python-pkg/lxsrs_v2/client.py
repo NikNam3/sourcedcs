@@ -24,7 +24,9 @@ LOG = logging.getLogger(__name__)
 DEFAULT_VERSION = "2.3.3.3"
 UDP_PING_INTERVAL = 15.0
 MIC_SAMPLE_RATE = 16000
-MIC_FRAME_MS = 20
+# 40 ms frames, what the SRS client itself sends (Common/Constants.cs MIC_INPUT_AUDIO_LENGTH_MS): its receive
+# jitter buffer reads 40 ms at a time, so a sender's packets should be that long.
+MIC_FRAME_MS = 40
 # The web UI re-sends /api/ptt/start every 400 ms while the key is held. If none arrives for this long (renderer crashed,
 # window lost, network between them cut) the radio is un-keyed here, so a stuck client can never hold the frequency open.
 PTT_KEEPALIVE_TIMEOUT_S = 1.5

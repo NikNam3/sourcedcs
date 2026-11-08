@@ -293,8 +293,7 @@ export const MISSION_BLOCK_MAP = {
   '3G': { required: false, label: 'ORDNANCE', target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
 };
 
-// The carrier's three Block Maps (crc-sync's docs/adr/0064 B3, docs/adr/0074;
-// guide §9.12) — a literal duplicate of crc-sync's block-map.js, held by
+// The carrier's Block Maps (crc-sync's docs/adr/0156) — a literal duplicate of crc-sync's block-map.js, held by
 // efsp-block-map-parity.test.mjs. `carrier-derived` Blocks are DISPLAY ONLY:
 // the server derives them (angels from the stack index, DME from angels, push
 // time from the Charlie time, the final bearing from the ship's heading) and
@@ -310,51 +309,45 @@ const _CARRIER_CHROME = {
   '26': { required: true,  label: 'NLA',    target: { kind: 'nla' } },
 };
 
-export const MARSHAL_BLOCK_MAP = {
-  'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
+// crc-sync docs/adr/0156: a carrier Strip carries only what its controller needs (mirrors block-map.js). The side number
+// leads; the callsign (C1) is set from the Strip's menu and never drawn on its face; the squawk and the assignments are a
+// Case II/III flight's only (strip-fields.js drops them for a Case I flight, the server refuses them).
+const _CARRIER_ASSIGNMENTS = {
+  '7A': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, label: 'HDG', target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '9A-SPEED': { required: false, label: 'SPD', target: { kind: 'clearance', field: 'speed' } },
+};
+const _CARRIER_IDENTITY = {
+  'C1':  { required: false, label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
   'C2':  { required: true,  label: 'TYPE',     target: { kind: 'flightData', path: 'identity.aircraftType' } },
-  'C3':  { required: false, label: 'CASE',     target: { kind: 'carrier-derived', field: 'case' } },
-  'C4':  { required: false, label: 'APPR',     target: { kind: 'carrier', field: 'approachType' } },
-  'C5':  { required: false, label: 'RADIAL',   target: { kind: 'carrier-derived', field: 'marshalRadial' } },
-  'C6':  { required: false, label: 'DME',      target: { kind: 'carrier-derived', field: 'marshalDme' } },
-  'C7':  { required: false, label: 'ANGELS',   target: { kind: 'carrier-derived', field: 'angels' } },
-  'C8':  { required: false, label: 'EAT/PUSH', target: { kind: 'carrier-derived', field: 'eatPush' } },
-  'C9':  { required: false, label: 'FNL BRG',  target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
-  'C10': { required: false, label: 'BUTTON',   target: { kind: 'carrier', field: 'approachButton' } },
-  'C12': { required: false, label: 'LOW ST',   target: { kind: 'carrier', field: 'lowStateLb' } },
-  'C13': { required: false, label: 'BINGO',    target: { kind: 'carrier', field: 'bingoField' } },
-  'C14': { required: false, label: 'BNG FUEL', target: { kind: 'carrier', field: 'bingoFuelLb' } },
-  'C15': { required: false, label: 'EEAT',     target: { kind: 'carrier', field: 'eeatUtc' } },
-  'C18': { required: false, label: 'SIDE',     target: { kind: 'carrier', field: 'sideNumber' } },
-  'C19': { required: false, label: 'TURN',     target: { kind: 'carrier', field: 'approachTurnNm' } },
-  'C24': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
-  '9E':  { required: false, label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2: the flight's remarks, on every strip type
+  'C18': { required: true,  label: 'SIDE',     target: { kind: 'carrier', field: 'sideNumber' } },
+};
+
+export const CV_LAUNCH_BLOCK_MAP = {
+  ..._CARRIER_IDENTITY,
+  'C20': { required: false, label: 'DEP RAD',  target: { kind: 'carrier', field: 'departureRadialDeg' } },
+  ..._CARRIER_ASSIGNMENTS,
   ..._CARRIER_CHROME,
 };
 
+export const CV_RECOVERY_BLOCK_MAP = {
+  ..._CARRIER_IDENTITY,
+  'C12': { required: false, label: 'FUEL',     target: { kind: 'carrier', field: 'lowStateLb' } },
+  'C7':  { required: false, label: 'ANG',      target: { kind: 'carrier-derived', field: 'angels' } },
+  'C8':  { required: false, label: 'EAT',      target: { kind: 'carrier-derived', field: 'eatPush' } },
+  ..._CARRIER_ASSIGNMENTS,
+  ..._CARRIER_CHROME,
+};
+
+// PAR's talk-down (crc-sync docs/adr/0117): the two assignments are the flight's clearance (H134 LT-RQ8 a: PAR changes them).
 export const FINAL_BLOCK_MAP = {
   'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'carrier-derived', field: 'callsign' } },
   'C2':  { required: true,  label: 'TYPE',     target: { kind: 'carrier-derived', field: 'aircraftType' } },
-  'C9':  { required: false, label: 'FNL BRG',  target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
-  'C18': { required: false, label: 'SIDE',     target: { kind: 'carrier-derived', field: 'sideNumber' } },
-  'C19': { required: false, label: 'TURN',     target: { kind: 'carrier-derived', field: 'approachTurnNm' } },
-  'C16': { required: false, label: 'DECK',     target: { kind: 'carrier-derived', field: 'deck' } },
-  'C17': { required: false, label: 'DIST',     target: { kind: 'carrier-derived', field: 'finalDistance' } },
-  // crc-sync docs/adr/0117: the talk-down's two assignments, the flight's clearance (H134 LT-RQ8 a: PAR changes them).
   '7A': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   '9A-VECTOR': { required: false, label: 'HDG', target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '9E':  { required: false, label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2
   '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
   '25': _CARRIER_CHROME['25'], '26': _CARRIER_CHROME['26'],
-};
-
-export const PATTERN_BLOCK_MAP = {
-  'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
-  'C2':  { required: true,  label: 'TYPE',     target: { kind: 'flightData', path: 'identity.aircraftType' } },
-  'C18': { required: false, label: 'SIDE',     target: { kind: 'carrier-derived', field: 'sideNumber' } },
-  'C24': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
-  '9E':  { required: false, label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2
-  ..._CARRIER_CHROME,
 };
 
 // crc-sync docs/adr/0146: the minimal VFR strip (mirrors block-map.js's VFR_BLOCK_MAP and its comment). The altitude cell
@@ -387,7 +380,7 @@ export function formatVfrAltitude(assigned) {
 
 export const BLOCK_MAPS = {
   DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP,
-  MARSHAL: MARSHAL_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, PATTERN: PATTERN_BLOCK_MAP, VFR: VFR_BLOCK_MAP,
+  CV_LAUNCH: CV_LAUNCH_BLOCK_MAP, CV_RECOVERY: CV_RECOVERY_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, VFR: VFR_BLOCK_MAP,
 };
 
 // ── Remarks (decisions.md H138 U2, H139) ───────────────────────────────────
@@ -813,17 +806,6 @@ export function requiredBlocksFor(stripType = 'DEPARTURE') {
   return Object.entries(map).filter(([, def]) => def.required).map(([id]) => id);
 }
 
-/** crc-sync block-map.js's PAR_FINAL_ONLY_BLOCKS: FINAL Blocks typed only on an airfield's PAR final, never the carrier's. */
-export const PAR_FINAL_ONLY_BLOCKS = Object.freeze(['7A', '9A-VECTOR']);
-
-/**
- * True for a PAR-final-only Block on the carrier's FINAL: neither typed nor shown there (dark cockpit, H115-H119: the
- * carrier final has nothing to type and no conformance, so an approach controller's old HDG and ALT would be noise).
- */
-export function isParFinalOnlyOnCarrier(stripType, blockId, facilityId) {
-  return stripType === 'FINAL' && facilityId === 'CARRIER' && PAR_FINAL_ONLY_BLOCKS.includes(blockId);
-}
-
 /**
  * A Block is directly editable via click-to-edit (guide §3.7/§7.4 — Enter
  * commits, Esc reverts, no auto-commit on blur) when it's flight-data- or
@@ -834,8 +816,6 @@ export function isParFinalOnlyOnCarrier(stripType, blockId, facilityId) {
 export function isBlockEditable(blockId, stripType = 'DEPARTURE', facilityId = null) {
   const map = BLOCK_MAPS[stripType];
   const def = map && map[blockId];
-  // HDG and ALT are the PAR final's (an airfield's): the carrier's FINAL has nothing to type (crc-sync block-map.js).
-  if (isParFinalOnlyOnCarrier(stripType, blockId, facilityId)) return false;
   // 9F is a picker (docs/adr/0073) and editable only while there is a route
   // table to pick from; with none it must not fall through to free text
   // (bay-view.js tries the picker first, then this).
@@ -1010,7 +990,7 @@ export const BLOCK_TITLES = {
   OVERFLIGHT: _titlesFor(OVERFLIGHT_BLOCK_MAP, OVERFLIGHT_TITLES),
   VFR: _titlesFor(VFR_BLOCK_MAP, VFR_TITLES),
   MISSION: { M6: 'Vul window start, UTC HHMM (ours)', M7: 'Vul window end, UTC HHMM (ours)' },
-  MARSHAL: { C15: 'Expected EAT, UTC HHMM (ours)' },
+  CV_LAUNCH: { C20: 'Departure radial, degrees magnetic (ours)' },
 };
 
 // ── §10.5's source on hover (docs/adr/0073) ─────────────────────────────────

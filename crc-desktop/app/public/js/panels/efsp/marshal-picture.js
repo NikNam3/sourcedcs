@@ -1,6 +1,8 @@
 'use strict';
 import { fuelText } from './marshal-board-model.js';
 
+const LANE_LETTER = Object.freeze({ CV_APP1: 'A', CV_APP2: 'B' });
+
 // The Case III picture beside the recovery board (mockup docs/mockups/marshal-stack-panel.html, revision 7; crc-sync docs/adr/0114).
 // After the CV NATOPS / Hornet pocket-checklist profile: the ship at the top, one line along the final bearing (the reciprocal of the
 // marshal radial, corrected onto the final bearing by 12 nm), 0 to 12 nm to scale with a mark every two miles, compressed beyond
@@ -36,12 +38,12 @@ export function pictureModel(rows, ctx) {
     // Without a radar contact an aircraft cannot be placed by DME: it is not drawn rather than drawn in the wrong place.
     if (!Number.isFinite(r.dme)) continue;
     aircraft.push({
-      flightDataId: r.flightDataId, kind: r.kind, dme: r.dme, label: `${r.side || r.callsign}${r.lane ? ` ${r.lane}` : ''}`,
-      fuel: fuelText(r.fuelLb), fuelLevel: r.fuelLevel, onRacetrack: r.kind === 'bolter', turnNm: r.turnNm || PICTURE.DEFAULT_TURN_NM,
+      flightDataId: r.flightDataId, kind: r.kind, dme: r.dme, label: `${r.side || r.callsign}${LANE_LETTER[r.ownerPositionId] ? ` ${LANE_LETTER[r.ownerPositionId]}` : ''}`,
+      fuel: fuelText(r.fuelLb), onRacetrack: false, turnNm: PICTURE.DEFAULT_TURN_NM,
     });
   }
   const fixes = holding.map((r) => ({
-    flightDataId: r.flightDataId, dme: r.marshalDme, label: `${r.side || r.callsign}  A${r.angels}  ${r.marshalDme}`, fuelLevel: r.fuelLevel,
+    flightDataId: r.flightDataId, dme: r.marshalDme, label: `${r.side || r.callsign}  A${r.angels}  ${r.marshalDme}`,
   })).filter((f) => Number.isFinite(f.dme));
   // One bolter racetrack per distinct turn-in among the flights on it; with nobody on it, the reference one at the default.
   const turns = [...new Set(aircraft.filter((a) => a.onRacetrack).map((a) => a.turnNm))].sort((a, b) => a - b);
@@ -100,7 +102,7 @@ export function renderMarshalPicture(svg, model) {
     svg.appendChild(sv('path', { class: 'mp-plane', d: PLANE, transform: `translate(${x} ${y}) rotate(${a.onRacetrack ? 180 : 0})`, 'data-side': a.label }));
     const lx = x - (a.onRacetrack ? 16 : 18);
     svg.appendChild(sv('text', { class: 'mp-label', x: lx, y: y - 1, 'text-anchor': 'end' }, a.label));
-    svg.appendChild(sv('text', { class: `mp-fuel${a.fuelLevel ? ` mp-${a.fuelLevel}` : ''}`, x: lx, y: y + 14, 'text-anchor': 'end' }, a.fuel));
+    svg.appendChild(sv('text', { class: 'mp-fuel', x: lx, y: y + 14, 'text-anchor': 'end' }, a.fuel));
   }
 
   // the stack along the marshal radial: the racetrack's inbound leg on the radial, its outbound leg on the hot side
@@ -113,7 +115,7 @@ export function renderMarshalPicture(svg, model) {
   for (const f of model.fixes) {
     const y = Y(f.dme);
     svg.appendChild(sv('line', { class: 'mp-fix', x1: X - 4, x2: X + 4, y1: y, y2: y }));
-    svg.appendChild(sv('text', { class: `mp-fixlabel${f.fuelLevel ? ` mp-${f.fuelLevel}` : ''}`, x: X + 10, y: y + 4 }, f.label));
+    svg.appendChild(sv('text', { class: 'mp-fixlabel', x: X + 10, y: y + 4 }, f.label));
   }
   if (model.radialText) {
     svg.appendChild(sv('text', { class: 'mp-radial', x: X - g.HOT - 8, y: (ya + yb) / 2 + 4, 'text-anchor': 'end' }, `MARSHAL ${model.radialText}`));

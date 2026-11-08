@@ -7,7 +7,7 @@ import { isAir, sideAltText } from '../../track-label.js';
 import { carrierBannerParts, carrierBearingText, carrierStateOf, getEfspCarrier } from './carrier-state.js';
 import { correlatedTrackIdForStrip, getAllEfspStrips, getEfspFlightData, getEfspStrip, stripIdsForTrackId } from './efsp-state.js';
 import { onEfspChanged } from './efsp-change-bus.js';
-import { buildBoard, fuelLevel } from './marshal-board-model.js';
+import { buildBoard } from './marshal-board-model.js';
 import {
   RANGE_DEFAULT_NM, RANGE_MAX_NM, RANGE_MIN_NM, approachPath, bolterRacetrack, extendedCentreline, clampRange, declutter, distanceNm,
   landingPattern, marshalHolding, marshalStack, occupancy, portHolding, ringSpacingFor, ringsFor, scaleFor, spinCircle, tankerRacetrack, toFrame, wheelRange,
@@ -19,8 +19,7 @@ import {
 // click out; the centre never moves. Contacts look as on the radar map (the hollow diamond, the history dots, labels at the scope's
 // text size, which does not change with zoom); their label is the side number and altitude (track-label.js `sideAltText`).
 //
-// Dark cockpit (memory feedback_dark_cockpit_ui): everything grey; a label is amber within the margin of bingo and red at or below
-// it (the MARSHAL panel's rule and its setting, marshal-board-model.js `fuelLevel`, `marshalLowStateMarginKlb`); the header turns
+// Dark cockpit (memory feedback_dark_cockpit_ui): everything grey (there is no fuel rule, crc-sync docs/adr/0156); the header turns
 // amber only when the picture cannot be trusted (ship track lost, a bearing that is not true). Patterns appear only while someone
 // is in them (carrier-map-model.js `occupancy`) and carry no altitude or distance.
 //
@@ -169,12 +168,11 @@ function _tankerTrackId(side) {
 function _model(view, st) {
   const ship = view.shipState;
   const range = _range();
-  const margin = Number.isFinite(getSetting('marshalLowStateMarginKlb')) ? getSetting('marshalLowStateMarginKlb') : 1.0;
   const caseValue = view.recoveryCase ? view.recoveryCase.value : null;
   const brc = _trueBearing(st.brc);
   const fb = _trueBearing(st.finalBearing);
   const radial = _trueBearing(st.radial);
-  const rows = buildBoard({ view, strips: getAllEfspStrips(), flightDataOf: getEfspFlightData, dmeOf: null, now: missionNow(), marginKlb: margin }).rows;
+  const rows = buildBoard({ view, strips: getAllEfspStrips(), flightDataOf: getEfspFlightData, now: missionNow() }).rows;
   const contactOf = (row) => {
     const s = row.stripId ? getEfspStrip(row.stripId) : null;
     const t = s ? getLatestTrack(correlatedTrackIdForStrip(s)) : null;
@@ -189,11 +187,10 @@ function _model(view, st) {
   for (const t of getAllTracks()) {
     if (!isAir(t) || !Number.isFinite(t.lat) || !Number.isFinite(t.lon)) continue;
     const f = _flightOfTrack(t.id);
-    const level = f ? fuelLevel(Number.isFinite(f.fuelLb) ? f.fuelLb : null, Number.isFinite(f.bingoLb) ? f.bingoLb : null, margin) : '';
     const hist = (history.get(t.id) || []).slice(-6).map((h) => toFrame(ship, h.lat, h.lon));
     aircraft.push({
       id: String(t.id), at: toFrame(ship, t.lat, t.lon), hist, label: sideAltText(t, f ? f.side : ''),
-      tanker: tankerTid != null && String(t.id) === tankerTid, level,
+      tanker: tankerTid != null && String(t.id) === tankerTid,
     });
   }
   const sequenced = caseValue === 'II' || caseValue === 'III';
@@ -311,7 +308,7 @@ function _draw(svg, m, w, h) {
   // contacts: history dots, the radar map's hollow diamond, and the label, decluttered
   const inView = (p) => p.x >= -20 && p.x <= w + 20 && p.y >= -20 && p.y <= h + 20;
   const shown = m.aircraft.map((a) => ({ ...a, p: P(a.at) })).filter((a) => inView(a.p));
-  const rank = (a) => (a.level === 'danger' ? 0 : a.level === 'attn' ? 1 : a.tanker ? 2 : 3);
+  const rank = (a) => (a.tanker ? 0 : 1);
   shown.sort((a, b) => rank(a) - rank(b) || distanceNm(a.at) - distanceNm(b.at) || (a.id < b.id ? -1 : 1));
   const lineH = Math.round(font * 1.2);
   const boxes = shown.map((a) => ({
@@ -324,12 +321,12 @@ function _draw(svg, m, w, h) {
   const tracks = sv('g', { 'data-layer': 'tracks' });
   const labels = sv('g', { 'data-layer': 'labels' });
   for (const a of shown) {
-    const g = sv('g', { 'data-track-id': a.id, ...(a.tanker ? { 'data-tanker': '1' } : {}), ...(a.level ? { 'data-level': a.level } : {}) });
+    const g = sv('g', { 'data-track-id': a.id, ...(a.tanker ? { 'data-tanker': '1' } : {}) });
     a.hist.forEach((q, i) => { const p = P(q); g.appendChild(sv('circle', { cx: p.x, cy: p.y, r: 1.3, fill: COL.muted, opacity: (0.15 + 0.1 * i).toFixed(2) })); });
     g.appendChild(sv('rect', { x: a.p.x - 3.5, y: a.p.y - 3.5, width: 7, height: 7, fill: 'none', stroke: COL.track, transform: `rotate(45 ${a.p.x} ${a.p.y})` }));
     tracks.appendChild(g);
     const box = placed.get(a.id);
-    const colour = a.level === 'danger' ? 'var(--efsp-danger, #ff5c5c)' : a.level === 'attn' ? 'var(--efsp-attn, #e0a83c)' : COL.text;
+    const colour = COL.text;
     if (box.moved) {
       const lx = box.x > a.p.x ? box.x : box.x + boxes.find((b) => b.id === a.id).w;
       labels.appendChild(sv('line', { x1: a.p.x, y1: a.p.y, x2: lx, y2: box.y + glyph.h / 2, stroke: COL.faint, 'stroke-width': 0.75, 'data-leader': a.id }));

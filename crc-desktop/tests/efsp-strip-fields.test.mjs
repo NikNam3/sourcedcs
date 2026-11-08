@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { BLOCK_MAPS } from '../app/public/js/panels/efsp/strip-template.js';
-import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor, fieldSpanFor, MTR_BLOCKS_BY_POSITION, leadingFlightName, sideNumberLeads } from '../app/public/js/panels/efsp/strip-fields.js';
+import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor, fieldSpanFor, MTR_BLOCKS_BY_POSITION, leadingFlightName, isCarrierStrip, CASE_I_HIDDEN_BLOCKS } from '../app/public/js/panels/efsp/strip-fields.js';
 import { hasMtrData, mtrLostCommsAdvisory } from '../app/public/js/panels/efsp/mtr-advisory.js';
 import { setAirportSurfacePositions } from '../app/public/js/airport-surface.js';
 
@@ -203,79 +203,37 @@ test('ALERT (14E) is on OPS, CD, GC and LC — the ground Positions — and nowh
   assert.equal(BLOCK_MAPS.DEPARTURE['14E'].label, 'ALERT');
 });
 
-// H122 (H117, crc-sync docs/adr/0114): on a carrier Strip the side number and the callsign swap places.
-const CARRIER_OWNER = { MARSHAL: 'CV_MARSHAL', FINAL: 'CV_APP1', PATTERN: 'CV_PRIFLY' };
-
-test('a carrier Strip with a side number leads with it in the callsign\'s slot and width; the callsign takes SIDE\'s', () => {
-  const withSide = { military: { carrier: { sideNumber: '104' } } };
-  for (const stripType of ['MARSHAL', 'FINAL']) {
-    const owner = CARRIER_OWNER[stripType];
-    const plain = compactBlocksFor(stripType, owner, null);
-    const swapped = compactBlocksFor(stripType, owner, withSide);
-    assert.equal(swapped[plain.indexOf('C1')], 'C18', stripType);
-    assert.equal(swapped[plain.indexOf('C18')], 'C1', stripType);
-    assert.deepEqual([...swapped].sort(), [...plain].sort(), `${stripType}: the same fields, only two moved`);
-    assert.equal(sideNumberLeads(stripType, owner, withSide), true);
-  }
-  assert.equal(fieldSpanFor('C18', true), fieldSpanFor('C1'));
-  assert.equal(fieldSpanFor('C1', true), fieldSpanFor('C18'));
-  assert.equal(fieldSpanFor('C1'), 2);
-  assert.equal(fieldSpanFor('C18'), 1);
+// crc-sync docs/adr/0156: a carrier Strip carries only what its controller needs, the side number leading; the callsign is never
+// on its face; a Case I flight shows no squawk, EAT or assignments.
+test('carrier Strips: the ADR 0156 Blocks, side number first, no callsign on the face', () => {
+  assert.deepEqual(compactBlocksFor('CV_LAUNCH', 'CV_PRIFLY', null), ['C18', 'C2', 'C20', '5', '9A-VECTOR', '9A-SPEED', '7A']);
+  assert.deepEqual(compactBlocksFor('CV_RECOVERY', 'CV_MARSHAL', null), ['C18', 'C2', 'C12', 'C7', 'C8', '5', '9A-VECTOR', '9A-SPEED', '7A']);
+  assert.deepEqual(compactBlocksFor('FINAL', 'PAR', null), ['C1', 'C2', '9A-VECTOR', '7A'], 'PAR keeps its talk-down');
+  assert.deepEqual([...CASE_I_HIDDEN_BLOCKS].sort(), ['5', '7A', '9A-SPEED', '9A-VECTOR', 'C8']);
+  assert.equal(fieldSpanFor('C18', true), fieldSpanFor('C1'), 'the side number takes the callsign\'s width');
+  assert.equal(isCarrierStrip({ stripType: 'CV_RECOVERY' }), true);
+  assert.equal(isCarrierStrip({ stripType: 'FINAL' }), false);
 });
 
-test('every carrier strip type has a side number Block, so every carrier Strip can swap', () => {
-  for (const stripType of Object.keys(CARRIER_OWNER)) {
-    assert.ok(BLOCK_MAPS[stripType].C1 && BLOCK_MAPS[stripType].C18, stripType);
-    assert.equal(sideNumberLeads(stripType, CARRIER_OWNER[stripType], { military: { carrier: { sideNumber: '104' } } }), true, stripType);
-  }
+test('a Case I carrier flight: no squawk, no EAT, no heading, speed or altitude on its face', async () => {
+  const cs = await import('../app/public/js/panels/efsp/carrier-state.js');
+  cs.applyEfspCarrierSnapshot({ carriers: [{ hullId: 'CVN-72', recoveryCase: { value: 'III' }, derived: { MAIN: [], CASE_I: [{ flightDataId: 'f1', caseValue: 'I' }] } }] });
+  const strip = { stripType: 'CV_RECOVERY', state: 'STACK', flightDataId: 'f1', ownerPositionId: 'CV_MARSHAL' };
+  assert.deepEqual(compactBlocksFor('CV_RECOVERY', 'CV_MARSHAL', null, strip), ['C18', 'C2', 'C12', 'C7']);
+  const iii = { ...strip, flightDataId: 'f2' };
+  assert.equal(compactBlocksFor('CV_RECOVERY', 'CV_MARSHAL', null, iii).includes('9A-VECTOR'), true, 'not in the Case I stack: the ship\'s Case (III)');
+  cs._resetEfspCarrierStateForTest();
 });
 
-test('HDG and ALT are on PAR\'s FINAL only: the carrier FINAL hides them, face and expanded view (supervisor ruling, dark cockpit)', async () => {
-  const { isParFinalOnlyOnCarrier } = await import('../app/public/js/panels/efsp/strip-template.js');
-  const par = compactBlocksFor('FINAL', 'PAR', null);
-  const cv = compactBlocksFor('FINAL', 'CV_APP1', null);
-  assert.ok(par.includes('7A') && par.includes('9A-VECTOR'), 'PAR types them');
-  assert.ok(!cv.includes('7A') && !cv.includes('9A-VECTOR'), 'not on the carrier final');
-  assert.deepEqual(cv, par.filter(id => id !== '7A' && id !== '9A-VECTOR'));
-  assert.equal(isParFinalOnlyOnCarrier('FINAL', '7A', 'CARRIER'), true);
-  assert.equal(isParFinalOnlyOnCarrier('FINAL', '7A', 'INCIRLIK'), false);
-  assert.equal(isParFinalOnlyOnCarrier('OVERFLIGHT', '7A', 'CARRIER'), false);
-});
-
-test('a carrier PATTERN Strip: SIDE only on the face once it leads, then first; the callsign after TYPE', () => {
-  const withSide = { military: { carrier: { sideNumber: '104' } } };
-  assert.deepEqual(compactBlocksFor('PATTERN', 'CV_PRIFLY', null), ['C1', 'C2', 'C24']);
-  assert.deepEqual(compactBlocksFor('PATTERN', 'CV_PRIFLY', withSide), ['C18', 'C2', 'C1', 'C24']);
-});
-
-test('no side number yet: the callsign keeps the big slot; non-carrier Strips and Incirlik\'s FINAL/PATTERN never swap', () => {
-  for (const fd of [null, {}, { military: { carrier: {} } }, { military: { carrier: { sideNumber: '  ' } } }]) {
-    for (const stripType of Object.keys(CARRIER_OWNER)) {
-      assert.equal(sideNumberLeads(stripType, CARRIER_OWNER[stripType], fd), false, stripType);
-      assert.equal(compactBlocksFor(stripType, CARRIER_OWNER[stripType], fd)[0], 'C1', stripType);
-    }
-  }
-  const withSide = { military: { carrier: { sideNumber: '104' } } };
-  for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
-    assert.equal(sideNumberLeads(stripType, 'AP', withSide), false, stripType);
-  }
-  // PAR (FINAL) is Incirlik's: the same strip type, not a carrier Strip. (No RSU since crc-sync docs/adr/0126.)
-  assert.equal(sideNumberLeads('FINAL', 'PAR', withSide), false);
-  assert.deepEqual(compactBlocksFor('FINAL', 'PAR', withSide), compactBlocksFor('FINAL', 'PAR', null));
-});
-
-test('leadingFlightName (H124): a carrier Strip is named by its side number once typed, else the callsign; Incirlik by the callsign', () => {
+test('leadingFlightName (H124): a carrier Strip is named by its side number, else the callsign; any other Strip by the callsign', () => {
   const fd = (side) => ({ identity: { callsign: 'NAVY 1' }, military: { carrier: { sideNumber: side } } });
-  assert.equal(leadingFlightName({ stripType: 'PATTERN', ownerPositionId: 'CV_PRIFLY' }, fd('203')), '203');
-  assert.equal(leadingFlightName({ stripType: 'MARSHAL', ownerPositionId: 'CV_MARSHAL' }, fd(' 204 ')), '204');
-  assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, fd('205')), '205');
-  assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, fd('  ')), 'NAVY 1', 'no side number yet');
-  assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'PAR' }, fd('205')), 'NAVY 1', 'Incirlik PAR: callsign');
+  assert.equal(leadingFlightName({ stripType: 'CV_RECOVERY' }, fd(' 204 ')), '204');
+  assert.equal(leadingFlightName({ stripType: 'CV_LAUNCH' }, fd('  ')), 'NAVY 1', 'no side number: the callsign');
+  assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'PAR' }, fd('205')), 'NAVY 1');
   assert.equal(leadingFlightName(null, fd('205')), 'NAVY 1');
-  assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, null), '');
+  assert.equal(leadingFlightName({ stripType: 'CV_RECOVERY' }, null), '');
 });
 
-// crc-sync docs/adr/0146: the minimal VFR strip's face, and its runway only where the tower works it.
 test('a VFR strip shows callsign, type, code, VFR/ALT, HDG, SPEED, and RWY at an airport-surface Position or once set', () => {
   setAirportSurfacePositions({ INCIRLIK: ['GC', 'LC'] });
   try {

@@ -3,28 +3,21 @@ import {
   getEfspBays, getEfspFlightData, getEfspRack, getEfspStrip
 } from './efsp-state.js';
 import { parTerminalOp, parTerminalRecorded, parTerminals } from './par-model.js';
-import { leadingFlightName } from './strip-fields.js';
 import { carrierFinalDistanceText } from './carrier-final-distance.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { FINAL_HANDOFF_LABEL, FINAL_RECEIVER, finalHandoffOffered, finalHandoffOp, sfaBayOf, sfaRows } from './sfa-state.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 
 // Bay descriptor views (crc-sync docs/adr/0075, 0093): a Bay whose descriptor says
-// `view: 'final' | 'sfa-freqs'` mounts a component, instead of (or
-// above) its Strip racks. One mechanism for every Bay that has one: the carrier's FINAL lanes and the SFA frequency header.
+// `view: 'sfa-freqs'` mounts a component above its Strip racks (the SFA frequency header).
 // (PriFly's pattern leg board, `view: 'pattern'`, is gone: live test U19, docs/adr/0137. The pattern is flown zip-lip.)
 // bay-view.js calls `renderBayDescriptorView()` once per render and knows nothing
 // else about them.
 //
 // What each view does:
-//   final      on the carrier only (no PAR there, H125, crc-sync docs/adr/0116): one line per
-//              aircraft on the final, the side number leading (H124), no range (the Strip's DIST
-//              Block carries it, H126), and Ball / Waveoff. An airfield's PAR final (Incirlik's
-//              `par-final`) is an ordinary Bay of ordinary Strips (H138 U10): the descriptor's
-//              `view: 'final'` there only tells crc-sync which Strips get a PAR sample, and its
-//              `replacesRacks` is not honoured. The final controller's calls ride on the Strip
-//              (parCallButtons below, the ⋯ menu's Final group, the NLA = Landed) and HDG / ALT
-//              are the Strip's own 9A-VECTOR and 7A Blocks.
+//   final      an airfield's PAR final (Incirlik's `par-final`) is an ordinary Bay of ordinary Strips (H138 U10): the
+//              descriptor's `view: 'final'` only tells crc-sync which Strips get a PAR sample. The carrier's final Bays and
+//              their line view went with crc-sync docs/adr/0156.
 //   sfa-freqs  a header over AP's frequency racks: each frequency, what it is for, and on the
 //              three that rotate who has it selected now (crc-sync docs/adr/0117).
 //
@@ -43,38 +36,10 @@ export function bayDescriptorFor(bayId, bays = getEfspBays()) {
 
 // ── final ───────────────────────────────────────────────────────────────────
 
-/** The approach kind of a FINAL Bay: the carrier's lanes or a runway's PAR. */
-export function finalKindOf(bay) {
-  return bay && bay.facilityId === 'CARRIER' ? 'CARRIER' : 'RUNWAY';
-}
-
-/** True when a Bay mounts a component: an airfield's PAR final does not (H138 U10, the ordinary Strips are its interface). */
+/** True when a Bay mounts a component. An airfield's PAR final does not (H138 U10, the ordinary Strips are its interface), and
+ *  the carrier has no final Bay since crc-sync docs/adr/0156 (its approach is on the Marshal panel and the Strips). */
 export function bayHasComponentView(bay) {
-  return !!(bay && bay.view && !(bay.view === 'final' && finalKindOf(bay) === 'RUNWAY'));
-}
-
-// The carrier final's terminal ops (ADR 0064, 0075): "Ball" is the recorded FINAL_TO_LSO handoff, "Waveoff" the state change.
-// At an airfield they are the final controller's (par-model.js PAR_TERMINALS), on the Strip (parCallButtons, strip-menu.js).
-const CARRIER_FINAL_TERMINALS = Object.freeze([
-  Object.freeze({ id: 'BALL', label: 'Ball', toState: 'BALL' }),
-  Object.freeze({ id: 'WAVEOFF', label: 'Waveoff', toState: 'BOLTER_WAVEOFF' }),
-]);
-
-/** The carrier final line's terminal actions, as plain data. */
-export function carrierFinalTerminals() {
-  return CARRIER_FINAL_TERMINALS.map(a => ({ ...a }));
-}
-
-/** The op a carrier final terminal sends: the recorded Ball handoff, or the Waveoff state change. */
-export function carrierFinalTerminalOp(terminal) {
-  if (!terminal) return null;
-  if (terminal.toState === 'BALL') return { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' };
-  return terminal.toState ? { kind: 'SetState', toState: terminal.toState } : null;
-}
-
-/** One carrier final line's model: the side number leading (H124), else the callsign; no range (H126). */
-export function carrierFinalRowModel(strip, flightDataOf = getEfspFlightData) {
-  return { stripId: strip.stripId, name: leadingFlightName(strip, flightDataOf(strip.flightDataId)) || '—' };
+  return !!(bay && bay.view && bay.view !== 'final');
 }
 
 /** True for a FINAL Strip on an airfield's final: the final controller's calls (crc-sync docs/adr/0117) apply to it. */
@@ -131,67 +96,6 @@ function _replace(el, child) {
   if (child) el.appendChild(child);
 }
 
-function _renderFinal(container, bay) {
-  const mount = _mountPoint(container, bay.bayId);
-  const live = [];
-  for (const rackId of bay.rackIds || []) live.push(...getEfspRack(bay.bayId, rackId));
-  // Rebuilt only when its flights change; otherwise the names are rewritten in place, so a button is never replaced under
-  // the controller's click.
-  const sig = live.map(s => s.stripId).join(',');
-  const existing = [...mount.children].find(el => el.dataset && el.dataset.bayView === 'final');
-  if (existing && existing.dataset.sig === sig) {
-    for (const strip of live) {
-      const row = [...existing.children].find(el => el.dataset.stripId === strip.stripId);
-      if (!row) continue;
-      const m = carrierFinalRowModel(strip);
-      const [name] = row.children;
-      if (name.textContent !== m.name) name.textContent = m.name;
-    }
-    return;
-  }
-  const wrap = document.createElement('div');
-  wrap.className = 'efsp-final-list';
-  wrap.dataset.bayView = 'final';
-  wrap.dataset.sig = sig;
-  if (live.length === 0) {
-    const none = document.createElement('div');
-    none.className = 'efsp-final-none';
-    none.textContent = 'No aircraft on final.';
-    wrap.appendChild(none);
-  }
-  // the owner must be signed on here when a control is used, not when it was drawn
-  const ownerHere = (strip) => {
-    const s = getEfspStrip(strip.stripId) || strip;
-    return _signedOnAt(bay).includes(s.ownerPositionId) ? s : null;
-  };
-  for (const strip of live) {
-    const m = carrierFinalRowModel(strip);
-    const row = document.createElement('div');
-    row.className = 'efsp-final-row';
-    row.dataset.stripId = strip.stripId;
-    const name = Object.assign(document.createElement('span'), { className: 'efsp-final-name', textContent: m.name });
-    const term = document.createElement('div');
-    term.className = 'efsp-final-terminals';
-    for (const t of carrierFinalTerminals()) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'efsp-final-terminal';
-      b.dataset.terminal = t.id;
-      b.textContent = t.label;
-      b.addEventListener('click', () => {
-        const s = ownerHere(strip);
-        if (!s) return;
-        const op = carrierFinalTerminalOp(t);
-        if (op) _send(s, op);
-      });
-      term.appendChild(b);
-    }
-    row.append(name, term);
-    wrap.appendChild(row);
-  }
-  _replace(mount, wrap);
-}
-
 // What a pool frequency is for, as the header shows it (crc-sync sfa.js SFA_USE); a rotating one shows who has it instead.
 const SFA_USE_TEXT = Object.freeze({ INITIAL_CONTACT: 'INIT', SPARE: 'SPARE' });
 
@@ -245,8 +149,7 @@ export function renderBayDescriptorView(container, bay) {
   if (!bayHasComponentView(bay)) { if (stale) stale.remove(); _setRacksHidden(container, false); return; }
   container.dataset.efspBayView = bay.bayId;
   _setRacksHidden(container, !!bay.replacesRacks);
-  if (bay.view === 'final') _renderFinal(container, bay);
-  else if (bay.view === 'sfa-freqs') _renderSfaHeader(container, bay);
+  if (bay.view === 'sfa-freqs') _renderSfaHeader(container, bay);
 }
 
 /**

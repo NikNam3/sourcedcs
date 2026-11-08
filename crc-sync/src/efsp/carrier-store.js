@@ -391,7 +391,10 @@ class CarrierStore extends SyncedStore {
 
   _stackOp(record, op, by, quiet) {
     // An op on a flight goes to the stack it is in (its Case, docs/adr/0156); a stack-wide op names its stack or means MAIN.
-    const stackId = op.stackId || (op.flightDataId && this._stackIdOf(record, op.flightDataId)) || carrier.DEFAULT_STACK_ID;
+    // A flight joining (Append, InsertAt) takes the ship's Case now: the stack of that Case.
+    const joining = op.kind === 'Append' || op.kind === 'InsertAt';
+    const stackId = op.stackId || (op.flightDataId && this._stackIdOf(record, op.flightDataId))
+      || (joining ? carrier.stackIdForCase(record.recoveryCase.value) : carrier.DEFAULT_STACK_ID);
     const stack = record.stacks[stackId];
     if (!stack) return { ok: false, reason: 'NOT_FOUND', detail: `unknown stack ${stackId}` };
     if ((op.kind === 'InsertAt' || op.kind === 'Append') && !this._flightDataExists(op.flightDataId)) {

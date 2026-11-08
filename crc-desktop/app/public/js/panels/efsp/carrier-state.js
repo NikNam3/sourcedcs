@@ -44,9 +44,30 @@ export function carrierDerivedStack(stackId = 'MAIN') {
   return (c && c.derived && c.derived[stackId]) || [];
 }
 
-/** The derived entry for a flight, or null when it is not in the stack. */
+/** The stacks a recovery can be in (crc-sync docs/adr/0156): Case II/III, then the overhead Case I stack. */
+export const CARRIER_STACK_IDS = Object.freeze(['MAIN', 'CASE_I']);
+
+/** The derived entry for a flight, in whichever stack it is, or null when it is in none. */
 export function carrierDerivedFor(flightDataId) {
-  return carrierDerivedStack().find(e => e.flightDataId === flightDataId) || null;
+  for (const id of CARRIER_STACK_IDS) {
+    const e = carrierDerivedStack(id).find(x => x.flightDataId === flightDataId);
+    if (e) return e;
+  }
+  return null;
+}
+
+/**
+ * The Case a carrier Strip's flight flies (crc-sync docs/adr/0156, carrier/strip-types.js flightCaseOf): a recovery's is its
+ * stack's; a launch on deck the ship's; an airborne launch is under departure control (II/III). Null for any other Strip.
+ */
+export function carrierFlightCase(strip) {
+  if (!strip) return null;
+  if (strip.stripType === 'CV_RECOVERY') {
+    const d = carrierDerivedFor(strip.flightDataId);
+    return (d && d.caseValue) || carrierCaseValue();
+  }
+  if (strip.stripType === 'CV_LAUNCH') return strip.state === 'ON_DECK' ? carrierCaseValue() : 'III';
+  return null;
 }
 
 function _pad(n, w = 2) { return String(n).padStart(w, '0'); }
@@ -74,7 +95,7 @@ export function carrierBearingText(display) {
 export function carrierDerivedText(field, flightDataId, ship) {
   const c = getEfspCarrier();
   const d = carrierDerivedFor(flightDataId);
-  const caseValue = c && c.recoveryCase ? c.recoveryCase.value : null;
+  const caseValue = d && d.caseValue ? d.caseValue : (c && c.recoveryCase ? c.recoveryCase.value : null);
   switch (field) {
     case 'case': return caseValue || '';
     case 'angels': return d && d.angels != null ? String(d.angels) : (d && caseValue === 'I' ? 'assign' : '');

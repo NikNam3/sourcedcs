@@ -1,4 +1,5 @@
 'use strict';
+import { carrierFlightCase } from './carrier-state.js';
 import { BLOCK_MAPS, isBlockEditable } from './strip-template.js';
 
 // The track-label menu's rule (H164 FT-Q4 a, docs/adr/0140): who is offered heading, speed and altitude from a
@@ -45,6 +46,8 @@ export function labelAssignmentFor(strips, actingAt, { prefer } = {}) {
   for (const strip of strips || []) {
     if (!strip || strip.state === 'DROPPED' || !strip.ownerPositionId || !strip.facilityId) continue;
     if (!(actingAt(strip.facilityId) || []).includes(strip.ownerPositionId)) continue;
+    // crc-sync docs/adr/0156: a Case I carrier flight gets no radar service, so no heading, speed or altitude.
+    if (carrierFlightCase(strip) === 'I') continue;
     const cells = assignmentCellsFor(strip.stripType, strip.facilityId);
     if (cells.length) owned.push({ strip, actingPositionId: strip.ownerPositionId, cells });
   }

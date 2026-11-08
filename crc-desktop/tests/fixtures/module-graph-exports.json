@@ -556,11 +556,7 @@
   "panels/efsp/bay-views.js": [
    "bayDescriptorFor",
    "bayHasComponentView",
-   "carrierFinalRowModel",
-   "carrierFinalTerminalOp",
-   "carrierFinalTerminals",
    "finalHandoffButtons",
-   "finalKindOf",
    "isParFinalStrip",
    "nextParCall",
    "parCallButtons",
@@ -639,6 +635,9 @@
   ],
   "panels/efsp/bay/popovers/bind.js": [
    "_openBindPopover"
+  ],
+  "panels/efsp/bay/popovers/carrier-callsign.js": [
+   "openCarrierCallsignPopover"
   ],
   "panels/efsp/bay/popovers/control-release.js": [
    "_dispatchHandoffOp",
@@ -732,6 +731,7 @@
   "panels/efsp/carrier-final-distance.js": [
    "carrierDistanceNm",
    "carrierFinalDistanceText",
+   "shipBearingRangeOf",
    "shipDistanceNm"
   ],
   "panels/efsp/carrier-management-panel.js": [
@@ -774,6 +774,9 @@
    "initCarrierMapPanel",
    "renderCarrierMap"
   ],
+  "panels/efsp/carrier-menu-rules.js": [
+   "carrierMenuItems"
+  ],
   "panels/efsp/carrier-panel.js": [
    "buildCarrierFinalLine",
    "carrierDecorateNlaButton",
@@ -789,6 +792,7 @@
    "signedOnCarrierIds"
   ],
   "panels/efsp/carrier-state.js": [
+   "CARRIER_STACK_IDS",
    "_resetEfspCarrierStateForTest",
    "applyEfspCarrierDelta",
    "applyEfspCarrierSnapshot",
@@ -798,6 +802,7 @@
    "carrierDerivedFor",
    "carrierDerivedStack",
    "carrierDerivedText",
+   "carrierFlightCase",
    "carrierHhmm",
    "carrierSourceText",
    "carrierStateOf",
@@ -944,11 +949,11 @@
    "FINAL_STATE_OWNERS",
    "FINAL_TRANSFER_LABELS",
    "HOLDER_WORKS_EVERY_STATE",
-   "MARSHAL_STATE_OWNERS",
+   "LAUNCH_STATE_OWNERS",
    "MISSION_STATE_OWNERS",
    "NLA_LABELS",
    "OVERFLIGHT_STATE_OWNERS",
-   "PATTERN_STATE_OWNERS",
+   "RECOVERY_STATE_OWNERS",
    "STATE_OWNERS_BY_STRIP_TYPE",
    "TOFI_ELIGIBLE_STATES",
    "TOFI_EXIT_DUE_MISSION_STATES",
@@ -1214,6 +1219,7 @@
    "marsaParticipantStripIds"
   ],
   "panels/efsp/marshal-board-model.js": [
+   "KIND_OF_STATE",
    "KIND_RANK",
    "buildBoard",
    "clockText",
@@ -1221,13 +1227,17 @@
    "dropSlot",
    "eatMinuteText",
    "fuelBlockOp",
-   "fuelLevel",
    "fuelText",
-   "marginKlb",
    "marksOf",
    "passClearanceOp",
-   "setEatOp",
-   "statusOf"
+   "setAngelsOp",
+   "setDmeOp",
+   "setEatOp"
+  ],
+  "panels/efsp/marshal-circle.js": [
+   "CIRCLE",
+   "circleModel",
+   "renderMarshalCircle"
   ],
   "panels/efsp/marshal-panel.js": [
    "initMarshalPanel",
@@ -1257,6 +1267,11 @@
    "_renderArrivalsLine",
    "noteEfspArrivalShown",
    "noteEfspBoardArrivals"
+  ],
+  "panels/efsp/panel/carrier-create.js": [
+   "CARRIER_CREATE_EXTRA",
+   "carrierCreateSeed",
+   "isCarrierOrigin"
   ],
   "panels/efsp/panel/combination.js": [
    "_resetCombinationAckForTest",
@@ -1320,10 +1335,12 @@
    "_controlAttestEl",
    "_createStripBindEl",
    "_createStripBtnEl",
+   "_createStripExtraEl",
    "_createStripInputEl",
    "_createStripMsgEl",
    "_createStripStereoEl",
    "_createStripTypeEl",
+   "_createStripTypeInputEl",
    "_dotCommandInputEl",
    "_dotCommandPreviewEl",
    "_efspPanelRootEl",
@@ -1519,19 +1536,19 @@
    "tofiExitSignatureFor"
   ],
   "panels/efsp/strip-fields.js": [
+   "CASE_I_HIDDEN_BLOCKS",
    "COMPACT_BLOCKS_BY_POSITION",
    "COMPACT_BLOCKS_BY_STRIP_TYPE",
    "COMPACT_BLOCKS_SHARED",
    "FIELD_SPANS",
    "MTR_BLOCKS_BY_POSITION",
    "ORDNANCE_WHEN_SET",
-   "SIDE_ONLY_WHEN_LEADING",
    "VFR_RUNWAY_BLOCK",
    "compactBlocksFor",
    "fieldSpanFor",
+   "isCarrierStrip",
    "isOrdnanceSet",
-   "leadingFlightName",
-   "sideNumberLeads"
+   "leadingFlightName"
   ],
   "panels/efsp/strip-indicators.js": [
    "_buildIndicatorSlots",
@@ -1550,15 +1567,14 @@
    "BLOCK_MAPS",
    "BLOCK_TITLES",
    "CONFIRM_VACATED_ELIGIBLE_BLOCKS",
+   "CV_LAUNCH_BLOCK_MAP",
+   "CV_RECOVERY_BLOCK_MAP",
    "CYCLE_BLOCKS",
    "DEPARTURE_BLOCK_MAP",
    "ENUM_CLEARABLE_BLOCKS",
    "FINAL_BLOCK_MAP",
-   "MARSHAL_BLOCK_MAP",
    "MISSION_BLOCK_MAP",
    "OVERFLIGHT_BLOCK_MAP",
-   "PAR_FINAL_ONLY_BLOCKS",
-   "PATTERN_BLOCK_MAP",
    "TIME_SOURCE_TEXT",
    "VFR_BLOCK_MAP",
    "ZULU_HHMM_BLOCKS",
@@ -1580,7 +1596,6 @@
    "isBooleanToggleBlock",
    "isCycleBlock",
    "isEnumBlockClearable",
-   "isParFinalOnlyOnCarrier",
    "nextCycleValue",
    "remarksBlockFor",
    "remarksOf",

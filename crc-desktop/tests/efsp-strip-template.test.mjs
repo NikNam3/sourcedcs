@@ -719,8 +719,6 @@ test('T31 a: every typed time says HHMM in its title and its editor placeholder'
       assert.equal(blockInputPlaceholderFor(id), 'HHMM', id);
     }
   }
-  assert.match(blockTitleFor('C15', null, null, 'MARSHAL'), /UTC HHMM/);
-  assert.equal(blockInputPlaceholderFor('C15'), 'HHMM');
   assert.equal(blockInputPlaceholderFor('3'), 'TYPE/WAKE');
   assert.equal(blockInputPlaceholderFor('9'), null);
 });

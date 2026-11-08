@@ -36,6 +36,9 @@ import { isParFinalStrip } from './bay-views.js';
 import { parTerminalOp, parTerminalRecorded, parTerminals } from './par-model.js';
 import { showParFlight } from './par-panel.js';
 import { patternConversionBlockedBy, patternConversionsFor } from './pattern-rules.js';
+import { carrierMenuItems } from './carrier-menu-rules.js';
+import { carrierCaseValue, carrierFlightCase } from './carrier-state.js';
+import { openCarrierCallsignPopover } from './bay/popovers/carrier-callsign.js';
 
 // The Strip's tools column and the ⋯ menu (DESK-SPLIT, split out of strip-view.js): everything a controller starts from a Strip.
 
@@ -317,6 +320,12 @@ function _stripMenuItems(strip) {
     }
     items.push({ group: 'Final', key: 'show-in-par', label: 'Show in PAR panel', cls: 'efsp-par-show-btn', enabled: true,
       title: 'draw this flight in the PAR panel', run: () => { showParFlight(strip.stripId); } });
+  }
+
+  // Carrier (crc-sync docs/adr/0156): Set callsign, Back to stack, the other lane, Abort to the Case II/III stack.
+  for (const c of carrierMenuItems(strip, { acting: getActingPositions('CARRIER'), shipCase: carrierCaseValue(), flightCase: carrierFlightCase(strip) })) {
+    items.push({ group: 'Carrier', key: c.key, label: c.label, cls: 'efsp-carrier-menu-btn', enabled: c.enabled, reason: c.reason || '',
+      run: (anchor) => (c.form === 'callsign' ? openCarrierCallsignPopover(strip, anchor, c.as) : sendEfspMutation(c.as, strip, c.op)) });
   }
 
   // Strip

@@ -240,16 +240,18 @@ export function tankerRacetrack(brcDeg, side = 'port', g = GEOMETRY) {
 // ── what is occupied ──────────────────────────────────────────────────────
 
 /**
- * Which patterns to draw. Strip state first (the board's rows, marshal-board-model.js `buildBoard`), geometry only where the Strip
- * cannot say (a PATTERN Strip is the same state in the break, the downwind and the spin):
- *   - a FINAL Strip in BOLTER_WAVEOFF (row kind `bolter`)  -> the bolter racetrack, one per assigned approach turn (any Case);
- *   - a MARSHAL Strip IN_STACK (kind `hold`) in Case I or II -> port holding;
- *   - a PATTERN Strip IN_PATTERN (kind `pattern`)           -> the landing pattern with the initial, unless its contact is within
+ * Which patterns to draw. Strip state first (the board's rows, marshal-board-model.js `buildBoard`, each with its flight's own
+ * Case, crc-sync docs/adr/0156), geometry only where the Strip cannot say (the pattern is one state in the break, the downwind
+ * and the spin):
+ *   - a recovery holding (kind `hold`) in Case I or II -> port holding and the landing pattern it will fly next;
+ *   - a Case II/III recovery holding, commenced or on the approach -> the planned path after marshal;
+ *   - a recovery in the pattern (kind `pattern`) -> the landing pattern with the initial, unless its contact is within
  *     SPIN_WITHIN_NM at or above SPIN_MIN_FT: then the spin; no contact -> the landing pattern;
  *   - the tanker's racetrack while the carrier state says on station.
+ * There is no bolter state since docs/adr/0156, so `bolterTurns` stays empty.
  *
  * @param {object} a
- * @param {string|null} a.caseValue 'I' | 'II' | 'III'
+ * @param {string|null} a.caseValue the ship's Case, for a row that carries none
  * @param {object[]} a.rows          buildBoard().rows
  * @param {boolean} a.tankerOnStation
  * @param {(row:object)=>({at:{e:number,n:number}, altFt:number|null}|null)} [a.contactOf]
@@ -257,17 +259,14 @@ export function tankerRacetrack(brcDeg, side = 'port', g = GEOMETRY) {
 export function occupancy({ caseValue, rows, tankerOnStation, contactOf }) {
   const out = { bolterTurns: [], portHolding: false, landing: false, spin: false, tanker: !!tankerOnStation, approach: false };
   const turns = new Set();
-  const sequenced = caseValue === 'II' || caseValue === 'III';
   for (const r of rows || []) {
-    // docs/adr/0137 (U21): the planned path after marshal while anyone is recovering in Case II/III, and in Case I/II the landing
-    // pattern a holding flight will fly next (the pattern is where every recovery ends)
+    const c = r.caseValue || caseValue;
+    const sequenced = c === 'II' || c === 'III';
     if (sequenced && (r.kind === 'hold' || r.kind === 'comm' || r.kind === 'approach')) out.approach = true;
-    if (r.kind === 'hold' && (caseValue === 'I' || caseValue === 'II')) out.landing = true;
-    if (r.kind === 'bolter') turns.add([4, 6, 8].includes(r.turnNm) ? r.turnNm : DEFAULT_TURN_NM);
-    else if (r.kind === 'hold' && (caseValue === 'I' || caseValue === 'II')) out.portHolding = true;
+    if (r.kind === 'hold' && (c === 'I' || c === 'II')) { out.landing = true; out.portHolding = true; }
     else if (r.kind === 'pattern') {
-      const c = contactOf ? contactOf(r) : null;
-      if (c && c.at && distanceNm(c.at) <= SPIN_WITHIN_NM && Number.isFinite(c.altFt) && c.altFt >= SPIN_MIN_FT) out.spin = true;
+      const contact = contactOf ? contactOf(r) : null;
+      if (contact && contact.at && distanceNm(contact.at) <= SPIN_WITHIN_NM && Number.isFinite(contact.altFt) && contact.altFt >= SPIN_MIN_FT) out.spin = true;
       else out.landing = true;
     }
   }

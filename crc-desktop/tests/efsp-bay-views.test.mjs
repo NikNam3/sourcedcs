@@ -1,4 +1,4 @@
-// Bay descriptor views (crc-sync docs/adr/0093, 0117): the FINAL line and AP's SFA frequency
+// Bay descriptor views (crc-sync docs/adr/0093, 0117, 0156): AP's SFA frequency
 // header mounted by `view`, from the real Bay descriptors the server sends. Wiring tests against the DOM
 // stub: they prove the right op is dispatched and the right racks are hidden, never layout.
 
@@ -73,7 +73,7 @@ test('a Bay with no view is left alone, and a stale view is removed when a Bay s
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   assert.equal([...c.children].some(x => x.className === 'efsp-bay-view'), false);
-  const pb = bay('cv-app1-final');
+  const pb = bay('ap-sfa');
   const c2 = containerFor(pb);
   renderBayDescriptorView(c2, pb);
   assert.ok([...c2.children].some(x => x.className === 'efsp-bay-view'));
@@ -81,26 +81,11 @@ test('a Bay with no view is left alone, and a stale view is removed when a Bay s
   assert.equal([...c2.children].some(x => x.className === 'efsp-bay-view'), false);
 });
 
-test('final: the carrier line leads with the side number (H124), no range (H126); Ball and Waveoff are its terminals', () => {
-  const cv = { stripId: 'c1', flightDataId: 'fc', stripType: 'FINAL', ownerPositionId: 'CV_APP1' };
-  putFlightData('fc', { identity: { callsign: 'NAVY 1' }, military: { carrier: { sideNumber: '201' } } });
-  assert.deepEqual(V.carrierFinalRowModel(cv), { stripId: 'c1', name: '201' });
-  putFlightData('fc', { identity: { callsign: 'NAVY 1' }, military: { carrier: { sideNumber: '' } } });
-  assert.equal(V.carrierFinalRowModel(cv).name, 'NAVY 1', 'no side number yet: the callsign');
-  assert.equal(V.finalKindOf(bay('par-final')), 'RUNWAY');
-  assert.equal(V.finalKindOf(bay('cv-app1-final')), 'CARRIER');
-  assert.deepEqual(V.carrierFinalTerminals().map(t => t.label), ['Ball', 'Waveoff']);
-  const [ball, waveoff] = V.carrierFinalTerminals();
-  assert.deepEqual(V.carrierFinalTerminalOp(ball), { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' });
-  assert.deepEqual(V.carrierFinalTerminalOp(waveoff), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  assert.equal(V.carrierFinalTerminalOp(null), null);
-});
-
 test('an airfield PAR final is an ordinary Bay (H138 U10): no line list, the racks stay, the Strips are the interface', () => {
   const b = bay('par-final');
   assert.equal(b.view, 'final', 'the descriptor still names the final: crc-sync samples its Strips for the PAR');
   assert.equal(V.bayHasComponentView(b), false);
-  assert.equal(V.bayHasComponentView(bay('cv-app1-final')), true);
+  assert.equal(V.bayHasComponentView(bay('ap-sfa')), true);
   assert.equal(V.bayHasComponentView(bay('cv-prifly-pattern')), false);
   setHeld({ INCIRLIK: ['PAR'] });
   addStrip({ stripId: 'p1', flightDataId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 2, state: 'ON_FINAL', stripType: 'FINAL', facilityId: 'INCIRLIK', flags: {} }, { identity: { callsign: 'VIPER 11' } });
@@ -138,36 +123,9 @@ test('the airfield final controller\'s next call rides beside the NLA: Begin des
   assert.deepEqual(V.parCallButtons(strip), [], 'not the holder: no button');
   setHeld({ CARRIER: ['CV_APP1'] });
   const cv = { ...strip, stripId: 'c1', facilityId: 'CARRIER', ownerPositionId: 'CV_APP1' };
-  assert.equal(V.isParFinalStrip(cv), false, 'the carrier final has Ball and Waveoff, not these calls');
+  assert.equal(V.isParFinalStrip(cv), false, 'a carrier Strip is not an airfield final');
   assert.deepEqual(V.parCallButtons(cv), []);
   assert.equal(V.isParFinalStrip({ ...strip, state: 'BOLTER_WAVEOFF' }), false);
-});
-
-test('final mount on a carrier lane: Ball is the recorded FINAL_TO_LSO handoff, Waveoff the state change; the racks stay', () => {
-  const b = bay('cv-app1-final');
-  setHeld({ CARRIER: ['CV_APP1'] });
-  addStrip({ stripId: 'c1', flightDataId: 'f2', bayId: 'cv-app1-final', rackId: 'main', ownerPositionId: 'CV_APP1', rev: 1, state: 'ON_FINAL', stripType: 'FINAL' }, { identity: { callsign: 'NAVY 1' }, military: { carrier: { sideNumber: '203' } } });
-  const c = containerFor(b);
-  renderBayDescriptorView(c, b);
-  assert.equal([...c.children].filter(x => x.className === 'efsp-rack').every(r => r.style.display !== 'none'), true);
-  const all = descendants(c);
-  assert.ok(all.some(e => e.className === 'efsp-final-name' && e.textContent === '203'));
-  const terms = all.filter(e => e.className === 'efsp-final-terminal');
-  assert.deepEqual(terms.map(t => t.textContent), ['Ball', 'Waveoff']);
-  click(terms[0]);
-  assert.deepEqual(sent.pop().op, { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' });
-  click(terms[1]);
-  assert.deepEqual(sent.pop().op, { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  // not the holder: a tap does nothing; an empty lane says so
-  setHeld({ CARRIER: ['CV_APP2'] });
-  const c2 = containerFor(b);
-  renderBayDescriptorView(c2, b);
-  descendants(c2).filter(e => e.className === 'efsp-final-terminal').forEach(click);
-  assert.equal(sent.length, 0);
-  clearBoard();
-  const c3 = containerFor(b);
-  renderBayDescriptorView(c3, b);
-  assert.deepEqual(descendants(c3).filter(e => e.className === 'efsp-final-none').map(e => e.textContent), ['No aircraft on final.']);
 });
 
 test('sfa header: every pool frequency is a row, grey; a rotating one shows who has it (PAR while it holds the flight), the others what they are for', () => {

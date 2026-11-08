@@ -43,7 +43,7 @@ async function mountPanel({ signedOn = ['OPS'], stereoRoutes = ROUTES, lookupSpy
   const sent = [];
   const els = {};
   for (const id of ['efsp-panel', 'efsp-position-tabs', 'efsp-bay-tabs', 'efsp-bay-content',
-    'efsp-new-strip-callsign', 'efsp-create-strip-btn', 'efsp-create-strip-msg',
+    'efsp-new-strip-callsign', 'efsp-new-strip-actype', 'efsp-new-strip-extra', 'efsp-create-strip-btn', 'efsp-create-strip-msg',
     'efsp-create-strip-type', 'efsp-create-strip-stereo', 'efsp-dot-command-input',
     'efsp-dot-command-preview', 'efsp-mutation-error', 'efsp-mutation-warning',
     'efsp-connection-banner']) {
@@ -310,24 +310,38 @@ test('a burst of snapshots does not stack fetches — the in-flight latch holds'
 
 // ── the carrier (live test U18, docs/adr/0137) ──────────────────────────
 
-test('the Marshal creates a recovery and PriFly a launch Strip from the toolbar, no flight-plan lookup, in the carrier\'s Facility (crc-sync docs/adr/0155)', async () => {
+test('the Marshal creates a recovery and PriFly a launch by side number, type and one more field, no flight-plan lookup (crc-sync docs/adr/0156)', async () => {
   let lookups = 0;
   const sentAll = [];
-  for (const pos of ['CV_MARSHAL', 'CV_PRIFLY']) {
+  for (const [pos, extra] of [['CV_MARSHAL', '4.8'], ['CV_PRIFLY', '090']]) {
     const { els, sent } = await mounted({ signedOn: [pos], lookupSpy: async () => { lookups += 1; return { found: false }; } });
     assert.equal(els['efsp-create-strip-btn'].disabled, false, pos);
     assert.equal(els['efsp-create-strip-type'].hidden, true, `${pos}: one origin, no choice`);
     assert.equal(els['efsp-create-strip-stereo'].hidden, true);
-    els['efsp-new-strip-callsign'].value = 'ROOK21';
+    assert.equal(els['efsp-new-strip-actype'].hidden, false, `${pos}: the type field`);
+    assert.equal(els['efsp-new-strip-extra'].placeholder, pos === 'CV_MARSHAL' ? 'FUEL' : 'DEP RAD');
+    assert.equal(els['efsp-new-strip-callsign'].placeholder, 'SIDE');
+    els['efsp-new-strip-callsign'].value = '301';
+    els['efsp-new-strip-actype'].value = 'fa18c';
+    els['efsp-new-strip-extra'].value = extra;
     for (const fn of els['efsp-create-strip-btn']._listeners.click) await fn({});
     sentAll.push(...sent);
   }
   assert.equal(lookups, 0);
-  assert.deepEqual(sentAll.map(x => [x.actingPositionId, x.facilityId, x.op.bayId, x.op.stripType, x.op.initialState]), [
-    ['CV_MARSHAL', 'CARRIER', 'cv-marshal-stack', 'MARSHAL', undefined],
-    ['CV_PRIFLY', 'CARRIER', 'cv-prifly-launch', 'MARSHAL', 'LAUNCH'],
+  assert.deepEqual(sentAll.map(x => [x.actingPositionId, x.facilityId, x.op.bayId, x.op.stripType]), [
+    ['CV_MARSHAL', 'CARRIER', 'cv-marshal-stack', 'CV_RECOVERY'],
+    ['CV_PRIFLY', 'CARRIER', 'cv-prifly-launch', 'CV_LAUNCH'],
   ]);
-  assert.deepEqual(sentAll[0].op.flightData, { callsign: 'ROOK21', aircraftType: '' });
+  assert.deepEqual(sentAll[0].op.flightData, { sideNumber: '301', aircraftType: 'FA18C', lowStateLb: 4800 });
+  assert.deepEqual(sentAll[1].op.flightData, { sideNumber: '301', aircraftType: 'FA18C', departureRadialDeg: 90 });
+});
+
+test('a carrier create without a side number is not sent, and says why', async () => {
+  const { els, sent } = await mounted({ signedOn: ['CV_MARSHAL'] });
+  els['efsp-new-strip-callsign'].value = '';
+  for (const fn of els['efsp-create-strip-btn']._listeners.click) await fn({});
+  assert.equal(sent.length, 0);
+  assert.match(els['efsp-create-strip-msg'].textContent, /side number/);
 });
 
 test('departure control and the approach lanes originate no Strip', async () => {

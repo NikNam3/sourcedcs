@@ -1,6 +1,7 @@
 'use strict';
 import { _callsignOfFlightData } from './refusal.js';
-import { _createStripBindEl, _createStripBtnEl, _createStripInputEl, _createStripMsgEl, _createStripTypeEl, _createStripStereoEl } from './state.js';
+import { _createStripBindEl, _createStripBtnEl, _createStripInputEl, _createStripMsgEl, _createStripTypeEl, _createStripStereoEl, _createStripTypeInputEl, _createStripExtraEl } from './state.js';
+import { CARRIER_CREATE_EXTRA, carrierCreateSeed, isCarrierOrigin } from './carrier-create.js';
 import { _resolveActingPositionId } from '../bay/dispatch.js';
 import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from '../efsp-ws.js';
 import { facilityOfPosition } from '../facility-topology.js';
@@ -152,12 +153,10 @@ const CREATE_STRIP_ORIGINS = [
   // the one Bay it actually has to land in.
   { actingPositionId: 'TAC_C2', bayId: 'tac-c2-tasked', stripType: 'MISSION', label: 'TAC_C2 · Mission' },
   { actingPositionId: 'GCI', bayId: 'gci-on-station', stripType: 'MISSION', label: 'GCI · Mission', initialState: 'ON_STATION' },
-  // The carrier (live test U18, docs/adr/0137; crc-sync docs/adr/0155): the Marshal originates the recovery check-in, which
-  // joins the stack (IN_STACK, the strip type's initial state), and PriFly the launch, a MARSHAL Strip in LAUNCH on deck
-  // (docs/adr/0109 binds it to an ATO mission line by callsign). Departure and the lanes receive their Strips by a carrier
-  // handoff and create none.
-  { actingPositionId: 'CV_MARSHAL', bayId: 'cv-marshal-stack', stripType: 'MARSHAL', label: 'Marshal · Recovery' },
-  { actingPositionId: 'CV_PRIFLY', bayId: 'cv-prifly-launch', stripType: 'MARSHAL', label: 'PriFly · Launch', initialState: 'LAUNCH' },
+  // The carrier (crc-sync docs/adr/0156): the Marshal originates the recovery, which joins the stack, and PriFly the launch,
+  // on deck, each by its side number. Departure and the lanes receive their Strips by a carrier handoff and create none.
+  { actingPositionId: 'CV_MARSHAL', bayId: 'cv-marshal-stack', stripType: 'CV_RECOVERY', label: 'Marshal · Recovery' },
+  { actingPositionId: 'CV_PRIFLY', bayId: 'cv-prifly-launch', stripType: 'CV_LAUNCH', label: 'PriFly · Launch' },
 ];
 
 /**
@@ -361,6 +360,7 @@ export function _refreshCreateStripAvailability() {
       if (_stereoRoutes.some(r => r.name === prevName)) _createStripStereoEl.value = prevName;
     }
   }
+  _refreshCarrierFields(origin);
   _refreshMissionBindPicker(origin);
   refreshAtoImportButton(); // docs/adr/0071
   _refreshAtoFirstPicker(origin); // docs/adr/0071 — OPS files against an ATO mission
@@ -400,6 +400,32 @@ export function convertStripToArrival(strip) {
   sendEfspMutation(actingPositionId, strip, { kind: 'ConvertToArrival' });
 }
 
+/** crc-sync docs/adr/0156: the carrier form reads side, type and one more field; any other origin, the callsign. */
+function _refreshCarrierFields(origin) {
+  const carrier = isCarrierOrigin(origin);
+  _createStripInputEl.placeholder = carrier ? 'SIDE' : 'Callsign';
+  _createStripInputEl.maxLength = carrier ? 8 : 7;
+  if (_createStripTypeInputEl) _createStripTypeInputEl.hidden = !carrier;
+  if (_createStripExtraEl) {
+    _createStripExtraEl.hidden = !carrier;
+    if (carrier) {
+      _createStripExtraEl.placeholder = CARRIER_CREATE_EXTRA[origin.stripType].placeholder;
+      _createStripExtraEl.maxLength = CARRIER_CREATE_EXTRA[origin.stripType].maxLength;
+    }
+  }
+}
+
+function _submitCarrierCreate(origin) {
+  const seed = carrierCreateSeed(origin.stripType, {
+    side: _createStripInputEl.value, type: _createStripTypeInputEl ? _createStripTypeInputEl.value : '',
+    extra: _createStripExtraEl ? _createStripExtraEl.value : '',
+  });
+  if (!seed.ok) { _setCreateStripMsg(seed.msg, true); return; }
+  _sendCreateStrip(origin.actingPositionId, { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightData: seed.flightData });
+  for (const el of [_createStripInputEl, _createStripTypeInputEl, _createStripExtraEl]) if (el) el.value = '';
+  _setCreateStripMsg(`Creating ${seed.flightData.sideNumber}…`, false);
+}
+
 async function _submitCreateStrip() {
   if (!_createStripInputEl || _createStripLookupInFlight) return;
 
@@ -408,6 +434,7 @@ async function _submitCreateStrip() {
     _setCreateStripMsg('OPS, CD, AP, CTR or Marshal only — select one in Panels to create Strips', true);
     return;
   }
+  if (isCarrierOrigin(origin)) { _submitCarrierCreate(origin); return; }
   // docs/ui-findings F-308 — the picker is read BEFORE the typed callsign is
   // validated, not after. A bound CreateStrip carries no `flightData` at all:
   // identity comes entirely from the flight it is fragged against. Demanding
@@ -486,7 +513,7 @@ async function _submitCreateStrip() {
   const stereoRouteName = _stereoEligibleOrigin(origin) ? _selectedStereoName() : '';
 
   let seed = {};
-  if (!stereoRouteName && origin.stripType !== 'ARRIVAL' && origin.stripType !== 'OVERFLIGHT' && origin.stripType !== 'MISSION' && origin.stripType !== 'MARSHAL') {
+  if (!stereoRouteName && origin.stripType !== 'ARRIVAL' && origin.stripType !== 'OVERFLIGHT' && origin.stripType !== 'MISSION') {
     _createStripLookupInFlight = true;
     if (_createStripInputEl) _createStripInputEl.disabled = true;
     if (_createStripBtnEl) _createStripBtnEl.disabled = true;
@@ -508,9 +535,6 @@ async function _submitCreateStrip() {
     ? { callsign, aircraftType: '', wakeCategory: '', originAirport: '', estimatedArrivalTimeUtc: null }
     : origin.stripType === 'MISSION'
       ? { callsign, missionNumber: '', packageId: '', controllingAgency: '', vulWindowStartUtc: null, vulWindowEndUtc: null }
-      // A carrier Strip: the Marshal types the side number, fuel and the rest on the Strip and in the MARSHAL panel.
-      : origin.stripType === 'MARSHAL'
-        ? { callsign, aircraftType: '' }
       : stereoRouteName
         // Only the callsign and the short name go over the wire — route,
         // altitude and airports are left ABSENT rather than blank so the
@@ -576,6 +600,7 @@ export function _wireCreateStrip() {
   if (!_createStripBtnEl || !_createStripInputEl) return;
   _createStripBtnEl.addEventListener('click', _submitCreateStrip);
   _createStripInputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') _submitCreateStrip(); });
+  for (const el of [_createStripTypeInputEl, _createStripExtraEl]) if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') _submitCreateStrip(); });
   _createStripInputEl.addEventListener('input', () => _refreshAtoFirstPicker(_createStripOrigin())); // docs/adr/0071
   _refreshCreateStripAvailability();
 }
