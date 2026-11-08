@@ -39,14 +39,10 @@ test('Abort to the Case II/III stack: a Case I flight, listed disabled while the
   assert.equal(carrierMenuItems(rec('STACK'), { acting: ['CV_MARSHAL'], shipCase: 'III', flightCase: 'III' }).some(i => i.key === 'carrier-abort'), false);
 });
 
-test('the create seed: side number required (1-8), type upper-cased, radial 0-360, fuel in thousands or pounds', () => {
-  assert.deepEqual(carrierCreateSeed('CV_LAUNCH', { side: '301', type: 'fa18c', extra: '90' }), { ok: true, flightData: { sideNumber: '301', aircraftType: 'FA18C', departureRadialDeg: 90 } });
-  assert.deepEqual(carrierCreateSeed('CV_RECOVERY', { side: '301', extra: '4.8' }).flightData.lowStateLb, 4800);
-  assert.deepEqual(carrierCreateSeed('CV_RECOVERY', { side: '301', extra: '5200' }).flightData.lowStateLb, 5200);
-  assert.equal(carrierCreateSeed('CV_RECOVERY', { side: '' }).ok, false);
-  assert.equal(carrierCreateSeed('CV_RECOVERY', { side: 'TOOLONG99' }).ok, false);
-  assert.equal(carrierCreateSeed('CV_LAUNCH', { side: '301', extra: '400' }).ok, false);
-  assert.match(carrierCreateSeed('CV_LAUNCH', { side: '140', type: 'F14', extra: '13.8' }).msg, /departure radial.*not 13\.8: a launch has no fuel/);
+test('the create seed: the side number alone (1-8 letters or digits); type, radial and fuel are typed on the Strip', () => {
+  assert.deepEqual(carrierCreateSeed({ side: ' 140 ' }), { ok: true, flightData: { sideNumber: '140' } });
+  assert.match(carrierCreateSeed({ side: '' }).msg, /side number/);
+  assert.equal(carrierCreateSeed({ side: 'TOOLONG99' }).ok, false);
   assert.equal(isCarrierOrigin({ stripType: 'CV_LAUNCH' }), true);
   assert.equal(isCarrierOrigin({ stripType: 'ARRIVAL' }), false);
 });

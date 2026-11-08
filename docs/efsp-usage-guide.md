@@ -1924,8 +1924,8 @@ state), **MARSHAL** (every arrival) and **CARRIER MAP** (the picture around the 
 ### Making a carrier Strip: by side number
 
 An aircraft on the carrier is named by its **side number**. PriFly's New Strip (**PriFly · Launch**) and the Marshal's
-(**Marshal · Recovery**) ask for **SIDE**, **TYPE** and one more field: PriFly the **departure radial** (degrees, as you
-read it), the Marshal the **fuel** (`4.8` is 4,800 lb). No callsign is asked for and no flight plan is looked up. The
+(**Marshal · Recovery**) ask for the **SIDE** number only. The type, the departure radial (a launch) and the fuel (a
+recovery, `4.8` is 4,800 lb) are typed on the Strip afterwards, as on any Strip. No flight plan is looked up. The
 callsign, when you learn it, is set from the Strip's **⋯ → Set callsign…**: that also joins the flight to the ATO
 mission tasked with that callsign, if exactly one waits for it (`adr/0109`). In Case II and III a new Strip gets a squawk;
 in **Case I it gets none** (no radar service). Departure control and the approach lanes create nothing. A flight handed to

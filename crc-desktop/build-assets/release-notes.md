@@ -1,10 +1,13 @@
+### Changed in 2.1.2
+- **A carrier Strip is created by its side number alone.** The TYPE and DEP RAD / FUEL boxes beside New Strip are gone: type the side number, press New Strip, and type the type, the departure radial or the fuel on the Strip as on any Strip
+
 ### Fixed in 2.1.1
 - **The Linux build of 2.1.0 was not published**: 2.1.1 is the carrier flow release (see 2.1.0) for both Windows and Linux
 - **SRS radio: the microphone is sent in 40 ms frames**, what the SRS client itself sends, so its receivers' jitter buffer gets whole packets
 - crc-sync starts on a Board saved by an older version: the carrier's old MARSHAL/PATTERN Strips are left out (a server fix: crc-sync is redeployed with this release)
 
 ### Changed in 2.1.0: the carrier flow
-- **Carrier Strips are made by side number.** PriFly's and the Marshal's New Strip ask for SIDE, TYPE and the departure radial (PriFly) or fuel (Marshal); the callsign is set later from ⋯ → Set callsign…, which joins the flight to its ATO mission
+- **Carrier Strips are made by side number.** PriFly's and the Marshal's New Strip ask for the side number only; the type, departure radial and fuel are typed on the Strip; the callsign is set later from ⋯ → Set callsign…, which joins the flight to its ATO mission
 - **Departures:** ON DECK → (Case II/III) LAUNCHED to departure control → KILO → DROP, or TO MARSHAL; in Case I PriFly drops it or hands it TO MARSHAL. TO MARSHAL makes the launch the flight's recovery in the stack (same Strip, same squawk)
 - **Arrivals, Case II/III:** COMMENCE, TO APPR (to APP 1 or 2), DIRTY UP, FLY BULLS, TO PATTERN, DROP. **Case I:** TO PATTERN to PriFly, DROP. Each flight keeps the Case it was given on check-in; ⋯ → Abort to Case II/III stack sends a Case I flight to the stack once the ship is in Case II or III
 - **The MARSHAL panel is the one panel for arrivals:** every recovery to its drop, one table per Case (Case I beside an overhead circle), each row's button its state and live for the Strip's owner only. The Marshal types fuel, EAT, angels and the holding DME. The fuel/bingo colouring is gone

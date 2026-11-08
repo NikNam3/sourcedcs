@@ -327,7 +327,7 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   await setCase(pri, 'III');
 });
 
-test('07 the toolbar creates by side number (crc-sync docs/adr/0156); a Case III launch goes PriFly, departure control to KILO, then TO MARSHAL as the recovery', async ({ browser, baseURL }) => {
+test('07 the toolbar creates by side number alone (crc-sync docs/adr/0156), the radial is typed on the Strip; a Case III launch goes PriFly, departure control to KILO, then TO MARSHAL as the recovery', async ({ browser, baseURL }) => {
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal7', ['CV_MARSHAL']);
   const pri = await controller(browser, baseURL, 'e2e-cv-prifly7', ['CV_PRIFLY']);
   const dep = await controller(browser, baseURL, 'e2e-cv-dep7', ['CV_DEP']);
@@ -335,15 +335,16 @@ test('07 the toolbar creates by side number (crc-sync docs/adr/0156); a Case III
   const [rec, lau] = [cs('REC'), cs('LAU')];
   await expect(marshal.locator('#efsp-new-strip-callsign')).toHaveAttribute('placeholder', 'SIDE');
   await marshal.locator('#efsp-new-strip-callsign').fill(rec);
-  await marshal.locator('#efsp-new-strip-actype').fill('FA18C');
-  await marshal.locator('#efsp-new-strip-extra').fill('6.2');
   await marshal.locator('#efsp-create-strip-btn').click();
   await waitStrip(marshal, rec, s => s.stripType === 'CV_RECOVERY' && s.state === 'STACK' && s.bayId === 'cv-marshal-stack', 'recovery created');
   await pri.locator('#efsp-new-strip-callsign').fill(lau);
-  await pri.locator('#efsp-new-strip-extra').fill('090');
   await pri.locator('#efsp-create-strip-btn').click();
   await waitStrip(pri, lau, s => s.stripType === 'CV_LAUNCH' && s.state === 'ON_DECK' && s.ownerPositionId === 'CV_PRIFLY' && s.bayId === 'cv-prifly-launch', 'launch created');
   await openBay(pri, 'CV_PRIFLY', 'cv-prifly-launch');
+  // the type and the departure radial are typed on the Strip, as on any Strip
+  await strip(pri, lau).locator('.efsp-block-C20').click();
+  await pri.keyboard.type('090');
+  await pri.keyboard.press('Enter');
   await expect(strip(pri, lau).locator('.efsp-block-C20')).toContainText('90');
   await strip(pri, lau).locator('.efsp-nla-btn[data-carrier-handoff="LAUNCH_TO_DEPARTURE"]').click();
   await waitStrip(dep, lau, s => s.state === 'CV_AIRBORNE' && s.ownerPositionId === 'CV_DEP' && s.bayId === 'cv-dep-departures', 'LAUNCHED');

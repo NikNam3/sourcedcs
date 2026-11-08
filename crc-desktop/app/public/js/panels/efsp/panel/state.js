@@ -21,8 +21,6 @@ export let _createStripMsgEl = null;
 export let _createStripTypeEl = null;
 export let _createStripStereoEl = null;
 export let _createStripBindEl = null;
-export let _createStripTypeInputEl = null;
-export let _createStripExtraEl = null;
 export let _dotCommandInputEl = null;
 export let _dotCommandPreviewEl = null;
 export let _mutationErrorEl = null;
@@ -48,8 +46,6 @@ export function _cachePanelElements() {
   _createStripTypeEl = document.getElementById('efsp-create-strip-type');
   _createStripStereoEl = document.getElementById('efsp-create-strip-stereo');
   _createStripBindEl = document.getElementById('efsp-create-strip-bind');
-  _createStripTypeInputEl = document.getElementById('efsp-new-strip-actype');
-  _createStripExtraEl = document.getElementById('efsp-new-strip-extra');
   _dotCommandInputEl = document.getElementById('efsp-dot-command-input');
   _dotCommandPreviewEl = document.getElementById('efsp-dot-command-preview');
   _mutationErrorEl = document.getElementById('efsp-mutation-error');

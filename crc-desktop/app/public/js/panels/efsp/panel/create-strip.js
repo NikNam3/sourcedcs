@@ -1,7 +1,7 @@
 'use strict';
 import { _callsignOfFlightData } from './refusal.js';
-import { _createStripBindEl, _createStripBtnEl, _createStripInputEl, _createStripMsgEl, _createStripTypeEl, _createStripStereoEl, _createStripTypeInputEl, _createStripExtraEl } from './state.js';
-import { CARRIER_CREATE_EXTRA, carrierCreateSeed, isCarrierOrigin } from './carrier-create.js';
+import { _createStripBindEl, _createStripBtnEl, _createStripInputEl, _createStripMsgEl, _createStripTypeEl, _createStripStereoEl } from './state.js';
+import { carrierCreateSeed, isCarrierOrigin } from './carrier-create.js';
 import { _resolveActingPositionId } from '../bay/dispatch.js';
 import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from '../efsp-ws.js';
 import { facilityOfPosition } from '../facility-topology.js';
@@ -400,30 +400,18 @@ export function convertStripToArrival(strip) {
   sendEfspMutation(actingPositionId, strip, { kind: 'ConvertToArrival' });
 }
 
-/** crc-sync docs/adr/0156: the carrier form reads side, type and one more field; any other origin, the callsign. */
+/** crc-sync docs/adr/0156: at a carrier origin the one field is the side number; everything else is typed on the Strip. */
 function _refreshCarrierFields(origin) {
   const carrier = isCarrierOrigin(origin);
   _createStripInputEl.placeholder = carrier ? 'SIDE' : 'Callsign';
   _createStripInputEl.maxLength = carrier ? 8 : 7;
-  if (_createStripTypeInputEl) _createStripTypeInputEl.hidden = !carrier;
-  if (_createStripExtraEl) {
-    _createStripExtraEl.hidden = !carrier;
-    if (carrier) {
-      _createStripExtraEl.placeholder = CARRIER_CREATE_EXTRA[origin.stripType].placeholder;
-      _createStripExtraEl.maxLength = CARRIER_CREATE_EXTRA[origin.stripType].maxLength;
-      _createStripExtraEl.title = CARRIER_CREATE_EXTRA[origin.stripType].title;
-    }
-  }
 }
 
 function _submitCarrierCreate(origin) {
-  const seed = carrierCreateSeed(origin.stripType, {
-    side: _createStripInputEl.value, type: _createStripTypeInputEl ? _createStripTypeInputEl.value : '',
-    extra: _createStripExtraEl ? _createStripExtraEl.value : '',
-  });
+  const seed = carrierCreateSeed({ side: _createStripInputEl.value });
   if (!seed.ok) { _setCreateStripMsg(seed.msg, true); return; }
   _sendCreateStrip(origin.actingPositionId, { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightData: seed.flightData });
-  for (const el of [_createStripInputEl, _createStripTypeInputEl, _createStripExtraEl]) if (el) el.value = '';
+  _createStripInputEl.value = '';
   _setCreateStripMsg(`Creating ${seed.flightData.sideNumber}…`, false);
 }
 
@@ -601,7 +589,6 @@ export function _wireCreateStrip() {
   if (!_createStripBtnEl || !_createStripInputEl) return;
   _createStripBtnEl.addEventListener('click', _submitCreateStrip);
   _createStripInputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') _submitCreateStrip(); });
-  for (const el of [_createStripTypeInputEl, _createStripExtraEl]) if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') _submitCreateStrip(); });
   _createStripInputEl.addEventListener('input', () => _refreshAtoFirstPicker(_createStripOrigin())); // docs/adr/0071
   _refreshCreateStripAvailability();
 }

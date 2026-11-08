@@ -1272,7 +1272,6 @@
    "noteEfspBoardArrivals"
   ],
   "panels/efsp/panel/carrier-create.js": [
-   "CARRIER_CREATE_EXTRA",
    "carrierCreateSeed",
    "isCarrierOrigin"
   ],
@@ -1338,12 +1337,10 @@
    "_controlAttestEl",
    "_createStripBindEl",
    "_createStripBtnEl",
-   "_createStripExtraEl",
    "_createStripInputEl",
    "_createStripMsgEl",
    "_createStripStereoEl",
    "_createStripTypeEl",
-   "_createStripTypeInputEl",
    "_dotCommandInputEl",
    "_dotCommandPreviewEl",
    "_efspPanelRootEl",
