@@ -69,7 +69,7 @@ function importAto(efsp, c, text, choices = []) {
 const flightOf = (efsp, callsign) => efsp.flightDataStore.getAll().find((f) => f.identity.callsign === callsign);
 const missionLines = (efsp) => efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.stripType === 'MISSION' && s.state !== 'DROPPED');
 const launchOp = (flightData) => ({
-  kind: 'CreateStrip', bayId: 'cv-prifly-launch', rackId: 'main', stripType: 'MARSHAL', initialState: 'LAUNCH', flightData,
+  kind: 'CreateStrip', bayId: 'cv-prifly-launch', rackId: 'main', stripType: 'CV_LAUNCH', flightData: { sideNumber: '301', ...flightData },
 });
 // docs/adr/0155: PriFly creates the launch.
 const launch = (efsp, c, callsign) => mustAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', null, launchOp({ callsign, aircraftType: 'F-16C' }));
@@ -132,7 +132,7 @@ test('a launch with no ATO line works, unbound, as before', () => {
   const { efsp, c } = fresh();
   importAto(efsp, c, CARRIER_ATO);
   const strip = launch(efsp, c, 'HAWG99');
-  assert.equal(strip.state, 'LAUNCH');
+  assert.equal(strip.state, 'ON_DECK');
   assert.equal(flightOf(efsp, 'HAWG99').ato, undefined);
   assert.notEqual(strip.flightDataId, flightOf(efsp, 'VIPER11').flightDataId);
 });
@@ -143,7 +143,7 @@ test('a launch with an explicit flightDataId keeps it; a flight already filed or
   const first = launch(efsp, c, 'VIPER11');             // binds
   const second = launch(efsp, c, 'VIPER11');            // the line already has a launch Strip: a new flight
   assert.notEqual(second.flightDataId, first.flightDataId);
-  assert.equal(second.state, 'LAUNCH');
+  assert.equal(second.state, 'ON_DECK');
 });
 
 test('two ATO lines with one callsign are ambiguous: no bind (ambiguity is an answer, ADR 0046)', () => {
@@ -224,8 +224,8 @@ const flight = (extra = {}) => ({ filed: {}, ...extra });
 const CARRIER_BOTH = { carrier: { hullId: 'CVN-72', hullCode: 'UNION', departs: true, recovers: true } };
 
 test('classifyLocality: the ship is the field', () => {
-  const launchOf = { stripType: 'MARSHAL' };
-  const opts = { preDropState: 'LAUNCH' };
+  const launchOf = { stripType: 'CV_LAUNCH' };
+  const opts = { preDropState: 'ON_DECK' };
   // launch + ATO line that recovers on the hull: LOCAL
   assert.deepEqual(classifyLocality(launchOf, flight({ ato: CARRIER_BOTH }), HOME.CARRIER, opts), { locality: 'LOCAL', localityBasis: 'AIRPORTS' });
   // launch, filed plan recovering at Incirlik: TRANSIENT (the divert)
@@ -236,8 +236,10 @@ test('classifyLocality: the ship is the field', () => {
   // launch with nothing known about where it lands: UNKNOWN, not guessed
   assert.deepEqual(classifyLocality(launchOf, flight(), HOME.CARRIER, opts), { locality: 'UNKNOWN', localityBasis: 'NO_AIRPORT_DATA' });
   // recovery (not a launch) of a flight whose ATO line departed the hull: LOCAL; from an airfield: TRANSIENT
-  assert.deepEqual(classifyLocality({ stripType: 'FINAL' }, flight({ ato: CARRIER_BOTH }), HOME.CARRIER, { preDropState: 'BALL' }), { locality: 'LOCAL', localityBasis: 'AIRPORTS' });
-  assert.deepEqual(classifyLocality({ stripType: 'PATTERN' }, flight({ filed: { departureAirport: 'LTAG' } }), HOME.CARRIER, { preDropState: 'IN_PATTERN' }), { locality: 'TRANSIENT', localityBasis: 'AIRPORTS' });
+  assert.deepEqual(classifyLocality({ stripType: 'CV_RECOVERY' }, flight({ ato: CARRIER_BOTH }), HOME.CARRIER, { preDropState: 'CV_PATTERN' }), { locality: 'LOCAL', localityBasis: 'AIRPORTS' });
+  assert.deepEqual(classifyLocality({ stripType: 'CV_RECOVERY' }, flight({ filed: { departureAirport: 'LTAG' } }), HOME.CARRIER, { preDropState: 'CV_PATTERN' }), { locality: 'TRANSIENT', localityBasis: 'AIRPORTS' });
+  // docs/adr/0156: a launch handed to the Marshal is the recovery in place: departed and landed here, LOCAL
+  assert.deepEqual(classifyLocality({ stripType: 'CV_RECOVERY', previousLeg: { stripType: 'CV_LAUNCH' } }, flight(), HOME.CARRIER, { preDropState: 'CV_PATTERN' }), { locality: 'LOCAL', localityBasis: 'CONVERTED_ARRIVAL' });
   // no hull configured for the Facility
   assert.deepEqual(classifyLocality(launchOf, flight({ ato: CARRIER_BOTH }), [], opts), { locality: 'UNKNOWN', localityBasis: 'NO_HOME_AIRPORT_CONFIGURED' });
   // a land Strip is untouched by all of this
@@ -257,13 +259,14 @@ async function countOf(efsp, c, atoText, mutateFlight) {
   if (atoText) importAto(efsp, c, atoText);
   const strip = launch(efsp, c, 'VIPER11');
   if (mutateFlight) mutateFlight(strip.flightDataId);
-  // docs/adr/0155: Case III (the default), so PriFly's Launched goes to departure control, which hands it to the Marshal.
+  // Case III (the default): PriFly's LAUNCHED goes to departure control, which works it to KILO and drops it (docs/adr/0156).
   const airborne = await advance(efsp, c.CV_PRIFLY, 'CV_PRIFLY', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
-  assert.equal(airborne.state, 'LAUNCHED');
+  assert.equal(airborne.state, 'CV_AIRBORNE');
   assert.equal(airborne.ownerPositionId, 'CV_DEP');
-  const atMarshal = await advance(efsp, c.CV_DEP, 'CV_DEP', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
-  assert.equal(atMarshal.ownerPositionId, 'CV_MARSHAL'); // docs/adr/0154: the Marshal keeps it until it drops it
-  const dropped = await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
+  const kilo = await advance(efsp, c.CV_DEP, 'CV_DEP', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
+  assert.equal(kilo.state, 'KILO');
+  // docs/adr/0156: departure control drops it once the aircraft is on its way
+  const dropped = await advance(efsp, c.CV_DEP, 'CV_DEP', efsp.boardStoreFor('CARRIER').getStrip(strip.stripId));
   assert.equal(dropped.state, 'DROPPED');
   const rec = fs.readFileSync(process.env.CRCSYNC_EFSP_TRAFFIC_COUNT_PATH, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.type === 'COUNT' && r.stripId === strip.stripId);
   assert.equal(rec.length, 1, 'the launch counts once');

@@ -33,9 +33,9 @@ function deepFreeze(o) {
   return o;
 }
 
-function fiveStack({ caseIAngels = null } = {}) {
+function fiveStack({ angels = null } = {}) {
   const entries = ['flight-data-a', 'flight-data-b', 'flight-data-c', 'flight-data-d', 'flight-data-e'].map((flightDataId, i) => ({
-    flightDataId, stackIndex: i, status: 'HOLDING', caseIAngels: caseIAngels == null ? null : caseIAngels + i,
+    flightDataId, stackIndex: i, status: 'HOLDING', ...(angels == null ? {} : { angelsOverride: angels + i }),
   }));
   return deepFreeze({ ...emptyStack({ hullId: 'CVN-72' }), entries });
 }
@@ -69,20 +69,17 @@ test('Inserting an aircraft low in the marshal stack renumbers altitude, DME and
   assert.equal(stack.entries[1].stackIndex, 1);
 });
 
-test('Marshal DME, angels and push time are not independently editable.', () => {
+test('Marshal DME, angels and push time are derived; the Marshal may assign one by hand, as an override only (docs/adr/0156).', () => {
   const stack = fiveStack();
-  // (a) no op names them, and trying one is refused
-  // SetCaseIAngels is the one exception by name, and not by substance: it sets
-  // Case I's squadron-assigned altitude (§9.12 rule 3), which the sequenced
-  // derivation never reads — proved right here.
-  for (const kind of STACK_OP_KINDS.filter((k) => k !== 'SetCaseIAngels')) assert.doesNotMatch(kind, /angel|dme|push ?time/i);
-  const caseI = applyStackOp(stack, { kind: 'SetCaseIAngels', flightDataId: 'flight-data-b', caseIAngels: 12 });
-  assert.equal(caseI.ok, true);
-  assert.deepEqual(
-    deriveStack(caseI.stack, withShip()),
-    deriveStack(stack, withShip()),
-  );
-  for (const kind of ['SetAngels', 'SetDme', 'SetMarshalDme', 'SetPushTime']) {
+  // (a) the only ops that name them are the three overrides; the derived slot values move nobody else
+  assert.deepEqual(STACK_OP_KINDS.filter((k) => /angel|dme|eat|push ?time/i.test(k)), ['SetAngels', 'SetDme', 'SetEat']);
+  const set = applyStackOp(stack, { kind: 'SetAngels', flightDataId: 'flight-data-b', angels: 12 });
+  assert.equal(set.ok, true);
+  const before = deriveStack(stack, withShip());
+  const after = deriveStack(set.stack, withShip());
+  for (const k of [0, 2, 3, 4]) assert.deepEqual(after[k], before[k], `slot ${k} untouched`);
+  assert.equal(after[1].angels, 12);
+  for (const kind of ['SetMarshalDme', 'SetPushTime']) {
     const r = applyStackOp(stack, { kind, flightDataId: 'flight-data-b', value: 12 });
     assert.equal(r.ok, false, kind);
     assert.equal(r.reason, 'VALIDATION_ERROR');
@@ -132,7 +129,7 @@ test('Final bearing is computed from ship heading; a typed one is an override be
 });
 
 test('Changing the Case re-derives every carrier entry at once — one Case value, every derived field follows', () => {
-  const stack = fiveStack({ caseIAngels: 2 });
+  const stack = fiveStack();
   const iii = deriveStack(stack, withShip());
   const i = deriveStack(stack, withShip('I'));
   const ii = deriveStack(stack, withShip('II'));
@@ -165,7 +162,7 @@ test('EEAT set before launch is still present on the recovery marshal message', 
     military: { carrier: setCarrierFlightField(defaultCarrierFlight(), 'eeatUtc', EEAT).flight },
   };
   // … and later, on recovery, the marshal message built from the stack derivation carries it
-  const derived = deriveEntry({ flightDataId: 'flight-data-a', stackIndex: 0, status: 'HOLDING', caseIAngels: null },
+  const derived = deriveEntry({ flightDataId: 'flight-data-a', stackIndex: 0, status: 'HOLDING' },
     withShip());
   const eeat = marshalMessage({ flightData, derived, caseValue: 'III', shipState: { finalBearingDeg: 115, headingRef: 'TRUE' } }).find((x) => x.key === 'eeat');
   assert.equal(eeat.value, EEAT);

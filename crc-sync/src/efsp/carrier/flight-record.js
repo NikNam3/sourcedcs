@@ -58,6 +58,7 @@ function defaultCarrierFlight() {
     lowStateLb: null,     // integer lb — the marshal message's FUEL/LOW STATE
     sideNumber: null,     // the aircraft's side number (modex), 1-8 letters or digits: how the carrier regime names it (docs/adr/0114, H117)
     approachTurnNm: null, // the DME at which this flight turns onto final after a bolter or waveoff: 4, 6 or 8 (H118)
+    departureRadialDeg: null, // docs/adr/0156: the launch's departure radial, 1..360 degrees as PriFly typed it (magnetic)
   };
 }
 
@@ -132,6 +133,11 @@ function validateCarrierFlightField(field, value, card = commCard()) {
       const n = typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value) : value;
       if (!APPROACH_TURNS_NM.includes(n)) return _fail(`approachTurnNm must be one of ${APPROACH_TURNS_NM.join(', ')} (the assigned approach turn, nm DME)`);
       return { ok: true, value: n };
+    }
+    case 'departureRadialDeg': {
+      const n = typeof value === 'string' && /^\d{1,3}$/.test(value.trim()) ? Number(value) : value;
+      if (!(Number.isInteger(n) && n >= 0 && n <= 360)) return _fail('the departure radial is a whole number of degrees, 0 to 360');
+      return { ok: true, value: n === 0 ? 360 : n };
     }
     case 'sideNumber': {
       const t = typeof value === 'number' ? String(value) : (typeof value === 'string' ? value.trim() : '');

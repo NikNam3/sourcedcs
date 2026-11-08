@@ -54,20 +54,36 @@ const { isSequencedCase, isCase } = require('./recovery-case');
 // control ASSIGN each aircraft its EAT (6.4.2 item 6, 6.4.4) and departures are a minute apart only "unless weather or operating
 // circumstances dictate otherwise" (6.4.5). It wins over the slot's EAT until cleared, Delta moves it like every holding EAT, and it
 // goes when the flight commences or returns to the stack. Present only while set (an entry without it is the slot's EAT).
-const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc', 'unpassed', 'eatOverrideUtc']);
+// `angelsOverride` and `dmeOverride` (docs/adr/0156): the Marshal sets everything a flight is told. They win over the slot's
+// value until cleared; a Case I flight's angels is only ever this (it has no slot arithmetic). Present only while set, cleared
+// when the flight returns to the stack.
+const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'angelsOverride', 'dmeOverride', 'pushedAtUtc', 'eatUtc', 'unpassed', 'eatOverrideUtc']);
+const OVERRIDE_KEYS = Object.freeze(['eatOverrideUtc', 'angelsOverride', 'dmeOverride']);
 const CLEARANCE_FIELDS = Object.freeze(['angels', 'eat']);
 const STACK_KEYS = Object.freeze(['stackId', 'hullId', 'entries', 'deltaMs']);
 const ENTRY_STATUSES = Object.freeze(['HOLDING', 'PUSHED']);
 const STACK_DEFAULTS = Object.freeze({ maxIndex: 19 }); // [SOURCE-DEFINED] — L4 briefing Q4
-const DEFAULT_STACK_ID = 'MAIN'; // [SOURCE-DEFINED] — decisions H29, one stack in v1
+const DEFAULT_STACK_ID = 'MAIN'; // [SOURCE-DEFINED] — decisions H29: the Case II/III stack
+// docs/adr/0156: a flight keeps the Case it was given on its initial call. Case I flights hold in their own stack (the
+// overhead one), so a flight's Case is the stack it is in, and a Case change moves nobody.
+const CASE_I_STACK_ID = 'CASE_I';
+const STACK_IDS = Object.freeze([DEFAULT_STACK_ID, CASE_I_STACK_ID]);
+/** The stack a flight given this Case joins. */
+function stackIdForCase(caseValue) { return caseValue === 'I' ? CASE_I_STACK_ID : DEFAULT_STACK_ID; }
+/** The Case a stack's flights fly: I for the overhead stack; for MAIN the ship's Case when it is II or III, else III. */
+function caseOfStack(stackId, shipCase) {
+  if (stackId === CASE_I_STACK_ID) return 'I';
+  return isSequencedCase(shipCase) ? shipCase : 'III';
+}
 
 // §9.12 numbers.
 const MIN_ANGELS = 6;
 const DME_PLUS = 15;
 const PUSH_TOLERANCE_MS = 10_000;
-// Case I: "from 2,000 ft AGL"; the ceiling of 20 is a sanity bound, [SOURCE-DEFINED].
-const CASE_I_MIN_ANGELS = 2;
-const CASE_I_MAX_ANGELS = 20;
+// An assigned altitude: Case I holds "from 2,000 ft AGL"; the ceiling of 40 is a sanity bound, [SOURCE-DEFINED]. A DME 1..99.
+const MIN_ASSIGNED_ANGELS = 2;
+const MAX_ASSIGNED_ANGELS = 40;
+const MAX_ASSIGNED_DME = 99;
 const RADIAL_TOLERANCE_DEG = 15; // [SOURCE-DEFINED] — L4 briefing Q3
 
 // Keys that are derived and must never ride on a stored entry. Named so the
@@ -79,7 +95,7 @@ const DERIVED_KEYS = Object.freeze([
 const DERIVED_DETAIL = 'angels/DME/push time are derived from the stack index (§9.12) and cannot be set';
 
 const STACK_OP_KINDS = Object.freeze([
-  'InsertAt', 'Append', 'Move', 'Remove', 'CloseUp', 'MarkPushed', 'SetCaseIAngels', 'Delta', 'BackToStack', 'PassClearance', 'SetEat',
+  'InsertAt', 'Append', 'Move', 'Remove', 'CloseUp', 'MarkPushed', 'SetAngels', 'SetDme', 'Delta', 'BackToStack', 'PassClearance', 'SetEat',
 ]);
 
 // CV NATOPS 6.4.9 (p. 6-17): "the number of minutes of delay (even increments but never less than four)".
@@ -99,8 +115,11 @@ function _maxIndex(opts) {
   return Number.isInteger(m) && m >= 0 ? m : STACK_DEFAULTS.maxIndex;
 }
 
-function _validCaseIAngels(v) {
-  return v === null || (Number.isInteger(v) && v >= CASE_I_MIN_ANGELS && v <= CASE_I_MAX_ANGELS);
+function _validAngels(v) {
+  return v === undefined || v === null || (Number.isInteger(v) && v >= MIN_ASSIGNED_ANGELS && v <= MAX_ASSIGNED_ANGELS);
+}
+function _validDme(v) {
+  return v === undefined || v === null || (Number.isInteger(v) && v >= 1 && v <= MAX_ASSIGNED_DME);
 }
 
 // ── Shape ────────────────────────────────────────────────────────────────────
@@ -149,9 +168,10 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
     if (e.stackIndex <= prev) return _fail(`entries must be in ascending, unique stackIndex order (at ${e.flightDataId})`);
     prev = e.stackIndex;
     if (!ENTRY_STATUSES.includes(e.status)) return _fail(`entry ${e.flightDataId}: status must be one of ${ENTRY_STATUSES.join(', ')}`);
-    if (!_validCaseIAngels(e.caseIAngels)) {
-      return _fail(`entry ${e.flightDataId}: caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} or null`);
+    if (!_validAngels(e.angelsOverride)) {
+      return _fail(`entry ${e.flightDataId}: angelsOverride must be an integer ${MIN_ASSIGNED_ANGELS}..${MAX_ASSIGNED_ANGELS}`);
     }
+    if (!_validDme(e.dmeOverride)) return _fail(`entry ${e.flightDataId}: dmeOverride must be an integer 1..${MAX_ASSIGNED_DME}`);
     if (e.pushedAtUtc !== undefined && !_validTime(e.pushedAtUtc)) return _fail(`entry ${e.flightDataId}: pushedAtUtc must be epoch ms or null`);
     if (e.eatUtc !== undefined && !_validTime(e.eatUtc)) return _fail(`entry ${e.flightDataId}: eatUtc must be epoch ms or null`);
     if (e.eatOverrideUtc !== undefined && !_validTime(e.eatOverrideUtc)) return _fail(`entry ${e.flightDataId}: eatOverrideUtc must be epoch ms or null`);
@@ -199,12 +219,13 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
     }
     const status = ENTRY_STATUSES.includes(e.status) ? e.status : 'HOLDING';
     const override = status === 'HOLDING' && Number.isFinite(e.eatOverrideUtc) && e.eatOverrideUtc >= 0 ? { eatOverrideUtc: e.eatOverrideUtc } : {};
+    if (e.angelsOverride != null && _validAngels(e.angelsOverride)) override.angelsOverride = e.angelsOverride;
+    if (e.dmeOverride != null && _validDme(e.dmeOverride)) override.dmeOverride = e.dmeOverride;
     cleaned.push({
       ...override,
       flightDataId: e.flightDataId,
       stackIndex: e.stackIndex,
       status,
-      caseIAngels: _validCaseIAngels(e.caseIAngels) ? e.caseIAngels : null,
       pushedAtUtc: status === 'PUSHED' && _validTime(e.pushedAtUtc) ? (e.pushedAtUtc ?? null) : null,
       eatUtc: status === 'PUSHED' && _validTime(e.eatUtc) ? (e.eatUtc ?? null) : null,
       unpassed: status === 'HOLDING' && _validUnpassed(e.unpassed) ? _sortFields(e.unpassed) : [],
@@ -228,7 +249,8 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
 /**
  * The displayed fields of one entry, as a pure function of the entry and the recovery's inputs (carrier-state.js
  * `recoveryInputs`): the Case, the ramp time, the final bearing, the marshal radial in force and where it came from, the
- * first fix, and the two tuned durations. Returns a new, frozen object. The Case is a parameter: nothing stored carries it.
+ * first fix, and the two tuned durations. Returns a new, frozen object. The Case is a parameter: the stack's Case
+ * (caseOfStack, docs/adr/0156), passed in by the store.
  *
  * Push time is the EAT (docs/adr/0113, CV NATOPS glossary: "the future time at which an aircraft is cleared to depart inbound
  * ... from a preassigned fix"). It is worked BACK from the ramp time: slot N is expected at the ramp N * pushSpacing after
@@ -255,11 +277,13 @@ function deriveEntry(entry, inputs = {}) {
   if (!isSequencedCase(caseValue) || base.stackIndex == null) {
     // Case I (§9.12 rule 3): an altitude-keyed list. No DME ("within 5 NM" —
     // render "≤5 NM"), no push time ("Do not build Case I around push times"),
-    // no radial (overhead holding). Angels is the squadron-assigned value, and
+    // no radial (overhead holding). Angels is the Marshal-assigned value, and
     // may be null: the Strip shows "assign altitude".
+    const assignedAngels = Number.isInteger(e.angelsOverride) ? e.angelsOverride : null;
     return Object.freeze({
       ...base,
-      angels: _validCaseIAngels(e.caseIAngels) ? e.caseIAngels : null,
+      angels: assignedAngels,
+      ...(assignedAngels != null ? { angelsSet: true } : {}),
       marshalDme: null,
       firstFixDme: null,
       pushTimeUtc: null,
@@ -271,10 +295,14 @@ function deriveEntry(entry, inputs = {}) {
     });
   }
 
-  const angels = MIN_ANGELS + base.stackIndex;
+  const slotAngels = MIN_ANGELS + base.stackIndex;
   // Slot 0 holds at the first fix; each slot above it is one mile and 1,000 ft higher (NATOPS 6.4.1.1: angels + 15, with the
-  // base altitude 6,000 ft, is 21 DME; the first fix is the Marshal's to change, ADR 0113).
-  const marshalDme = Number.isFinite(firstFixDme) ? firstFixDme + base.stackIndex : angels + DME_PLUS;
+  // base altitude 6,000 ft, is 21 DME; the first fix is the Marshal's to change, ADR 0113). The Marshal may assign either by
+  // hand (docs/adr/0156): an assigned value wins until cleared.
+  const angelsSet = Number.isInteger(e.angelsOverride);
+  const dmeSet = Number.isInteger(e.dmeOverride);
+  const angels = angelsSet ? e.angelsOverride : slotAngels;
+  const marshalDme = dmeSet ? e.dmeOverride : (Number.isFinite(firstFixDme) ? firstFixDme + base.stackIndex : slotAngels + DME_PLUS);
   // A flight that has commenced keeps the EAT it worked to and the moment it left (docs/adr/0114): a later ramp-time change or
   // Delta never rewrites a push time in the past. A holding flight's EAT follows the ramp time and the stack's Delta.
   const pushed = e.status === 'PUSHED';
@@ -300,6 +328,8 @@ function deriveEntry(entry, inputs = {}) {
     rampEtaUtc: rampEta,
     pushWindowUtc,
     ...(assigned != null ? { eatSet: true } : {}),
+    ...(angelsSet ? { angelsSet: true } : {}),
+    ...(dmeSet ? { dmeSet: true } : {}),
     marshalRadialDeg: radial,
     marshalRadialSource: radial == null ? null : marshalRadialSource,
     minimumAltitudeOk: angels >= MIN_ANGELS,
@@ -328,7 +358,8 @@ function checkConsistency(derived, { radialToleranceDeg = RADIAL_TOLERANCE_DEG }
   for (const d of list) {
     if (!_isObj(d) || !isSequencedCase(d.caseValue)) continue;
     const fixOffset = Number.isFinite(d.firstFixDme) ? d.firstFixDme - MIN_ANGELS : DME_PLUS; // 15 unless the Marshal moved the first fix
-    if (!(Number.isFinite(d.angels) && Number.isFinite(d.marshalDme) && d.angels + fixOffset === d.marshalDme)) {
+    // A value the Marshal assigned is the Marshal's call (docs/adr/0156): only the slot arithmetic is checked.
+    if (!d.angelsSet && !d.dmeSet && !(Number.isFinite(d.angels) && Number.isFinite(d.marshalDme) && d.angels + fixOffset === d.marshalDme)) {
       out.push({ flightDataId: d.flightDataId, code: 'DME_NOT_ANGELS_PLUS_15', detail: `angels ${d.angels} + ${fixOffset} ≠ DME ${d.marshalDme}` });
     }
     if (!(Number.isFinite(d.angels) && d.angels >= MIN_ANGELS)) {
@@ -357,6 +388,13 @@ function _withoutOverride(e) {
   const { eatOverrideUtc, ...rest } = e;
   void eatOverrideUtc;
   return rest;
+}
+
+/** The entry without anything the Marshal assigned by hand (EAT, angels, DME): a flight back in the stack starts afresh. */
+function _withoutOverrides(e) {
+  const out = { ...e };
+  for (const k of OVERRIDE_KEYS) delete out[k];
+  return out;
 }
 
 function _result(stack, entries, changedSet, extra = {}) {
@@ -420,22 +458,22 @@ function _checkFlightDataId(flightDataId) {
  * together — altitude, DME and push time as one (§9.12 rule 2) — until a
  * vacancy absorbs the ripple.
  */
-function insertAt(stack, { flightDataId, stackIndex, caseIAngels = null } = {}, opts = STACK_DEFAULTS) {
+function insertAt(stack, { flightDataId, stackIndex, unpassed = [] } = {}, opts = STACK_DEFAULTS) {
   const v = validateStack(stack, opts);
   if (!v.ok) return v;
   if (!_checkFlightDataId(flightDataId)) return _fail('flightDataId must be a non-empty string');
   if (stack.entries.some((e) => e.flightDataId === flightDataId)) return _fail(`${flightDataId} is already in the stack — use Move to re-sequence it`);
-  if (!_validCaseIAngels(caseIAngels)) return _fail(`caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} or null`);
-  const placed = _placeAt(_copyEntries(stack), { flightDataId, status: 'HOLDING', caseIAngels, pushedAtUtc: null, eatUtc: null, unpassed: [] }, stackIndex, _maxIndex(opts));
+  if (!_validUnpassed(unpassed)) return _fail(`unpassed must be a list of ${CLEARANCE_FIELDS.join(', ')}, each once`);
+  const placed = _placeAt(_copyEntries(stack), { flightDataId, status: 'HOLDING', pushedAtUtc: null, eatUtc: null, unpassed: _sortFields(unpassed) }, stackIndex, _maxIndex(opts));
   if (!placed.ok) return placed;
   return _result(stack, placed.entries, new Set([flightDataId, ...placed.shifted]));
 }
 
 /** Insert at the next free slot above the highest entry. */
-function append(stack, { flightDataId, caseIAngels = null } = {}, opts = STACK_DEFAULTS) {
+function append(stack, { flightDataId, unpassed = [] } = {}, opts = STACK_DEFAULTS) {
   const v = validateStack(stack, opts);
   if (!v.ok) return v;
-  return insertAt(stack, { flightDataId, stackIndex: _highest(stack.entries) + 1, caseIAngels }, opts);
+  return insertAt(stack, { flightDataId, stackIndex: _highest(stack.entries) + 1, unpassed }, opts);
 }
 
 /**
@@ -540,7 +578,7 @@ function backToStack(stack, { flightDataId } = {}, opts = STACK_DEFAULTS) {
   const index = _highest(rest) + 1;
   if (index > _maxIndex(opts)) return _fail(`the stack is full: there is no slot above ${_highest(rest)}`);
   // Both its angels and its EAT are new to the pilot, whatever they read (decisions H117: "new angels/EAT marked until passed").
-  rest.push(_withoutOverride({ ...entry, stackIndex: index, status: 'HOLDING', pushedAtUtc: null, eatUtc: null, unpassed: [...CLEARANCE_FIELDS] }));
+  rest.push(_withoutOverrides({ ...entry, stackIndex: index, status: 'HOLDING', pushedAtUtc: null, eatUtc: null, unpassed: [...CLEARANCE_FIELDS] }));
   return _result(stack, rest, new Set([flightDataId]));
 }
 
@@ -568,17 +606,34 @@ function delta(stack, { minutes } = {}, opts = STACK_DEFAULTS) {
   return { ok: true, stack: next, changed };
 }
 
-/** Case I only: the squadron-assigned altitude — the one per-entry value a controller types. */
-function setCaseIAngels(stack, { flightDataId, caseIAngels } = {}, opts = STACK_DEFAULTS) {
+/** One override of a HOLDING flight set (`value` a number) or cleared (`value` null): SetAngels and SetDme (docs/adr/0156). */
+function _setOverride(stack, flightDataId, key, value, valid, what, opts) {
   const v = validateStack(stack, opts);
   if (!v.ok) return v;
   const entry = stack.entries.find((e) => e.flightDataId === flightDataId);
   if (!entry) return _fail(`${flightDataId} is not in the stack`, 'NOT_FOUND');
-  if (caseIAngels === undefined || !_validCaseIAngels(caseIAngels)) {
-    return _fail(`caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} (§9.12: from 2,000 ft) or null`);
-  }
-  const entries = _copyEntries(stack).map((e) => (e.flightDataId === flightDataId ? { ...e, caseIAngels } : e));
+  if (entry.status !== 'HOLDING') return _fail(`${flightDataId} has commenced: it has left its fix`);
+  if (value === undefined || !valid(value)) return _fail(what);
+  const had = Number.isInteger(entry[key]) ? entry[key] : null;
+  if (had === value) return { ok: true, stack, changed: [], unchanged: true };
+  const entries = _copyEntries(stack).map((e) => {
+    if (e.flightDataId !== flightDataId) return e;
+    const next = { ...e };
+    if (value === null) delete next[key]; else next[key] = value;
+    return next;
+  });
   return _result(stack, entries, new Set([flightDataId]));
+}
+
+/** SetAngels: the altitude the Marshal assigns a holding flight, any Case (null gives the slot's back; Case I has none). */
+function setAngels(stack, { flightDataId, angels } = {}, opts = STACK_DEFAULTS) {
+  return _setOverride(stack, flightDataId, 'angelsOverride', angels, _validAngels,
+    `angels must be an integer ${MIN_ASSIGNED_ANGELS}..${MAX_ASSIGNED_ANGELS}, or nothing to use the slot's`, opts);
+}
+
+/** SetDme: the holding fix DME the Marshal assigns a Case II/III holding flight (the store refuses it in the Case I stack). */
+function setDme(stack, { flightDataId, dme } = {}, opts = STACK_DEFAULTS) {
+  return _setOverride(stack, flightDataId, 'dmeOverride', dme, _validDme, `the DME must be an integer 1..${MAX_ASSIGNED_DME}, or nothing to use the slot's`, opts);
 }
 
 /**
@@ -673,15 +728,15 @@ const _DISPATCH = {
   MarkPushed: (s, op, o) => markPushed(s, op, o),
   Delta: (s, op, o) => delta(s, op, o),
   BackToStack: (s, op, o) => backToStack(s, op, o),
-  SetCaseIAngels: (s, op, o) => setCaseIAngels(s, op, o),
+  SetAngels: (s, op, o) => setAngels(s, op, o),
+  SetDme: (s, op, o) => setDme(s, op, o),
   PassClearance: (s, op, o) => passClearance(s, op, o),
   SetEat: (s, op, o) => setEat(s, op, o),
 };
 
 /**
- * The dispatcher L17's store calls from apply(). There is no op that names
- * angels, DME or push time — SetAngels / SetDme / SetPushTime and anything
- * else unknown is a VALIDATION_ERROR (WP7A bullet 2, D16).
+ * The dispatcher L17's store calls from apply(). Angels, DME and EAT are the slot's unless the Marshal assigns one
+ * (SetAngels, SetDme, SetEat: an override, never a stored derived value); anything unknown is a VALIDATION_ERROR.
  */
 function applyStackOp(stack, op, opts = STACK_DEFAULTS) {
   if (!_isObj(op) || typeof op.kind !== 'string') return _fail('op must be an object with a string kind');
@@ -698,10 +753,14 @@ module.exports = {
   ENTRY_STATUSES,
   STACK_DEFAULTS,
   DEFAULT_STACK_ID,
+  CASE_I_STACK_ID,
+  STACK_IDS,
+  stackIdForCase,
+  caseOfStack,
   STACK_OP_KINDS,
   RADIAL_TOLERANCE_DEG,
-  CASE_I_MIN_ANGELS,
-  CASE_I_MAX_ANGELS,
+  MIN_ASSIGNED_ANGELS,
+  MAX_ASSIGNED_ANGELS,
   emptyStack,
   validateStack,
   normalizeStack,
@@ -717,7 +776,8 @@ module.exports = {
   backToStack,
   delta,
   DELTA_MIN_MINUTES,
-  setCaseIAngels,
+  setAngels,
+  setDme,
   passClearance,
   setEat,
   markClearanceChanges,

@@ -34,7 +34,7 @@ test('a carrier stack op kind, stack-entry key or handoff added on the server ch
     const efsp = path.join(${JSON.stringify(path.join(HERE, '..', 'src', 'efsp'))});
     const patch = (rel, fn) => { const p = require.resolve(path.join(efsp, rel)); require(p); require.cache[p].exports = fn(require.cache[p].exports); };
     patch('carrier/marshal-stack.js', (m) => ({ ...m, STACK_OP_KINDS: Object.freeze([...m.STACK_OP_KINDS, 'WireProbeOp']), ENTRY_KEYS: Object.freeze([...m.ENTRY_KEYS, 'wireProbeKey']) }));
-    patch('carrier/handoffs.js', (m) => ({ ...m, CARRIER_HANDOFFS: Object.freeze({ ...m.CARRIER_HANDOFFS, WIRE_PROBE: m.CARRIER_HANDOFFS.COMMENCED_TO_MARSHAL }) }));
+    patch('carrier/handoffs.js', (m) => ({ ...m, CARRIER_HANDOFFS: Object.freeze({ ...m.CARRIER_HANDOFFS, WIRE_PROBE: m.CARRIER_HANDOFFS.RETURN_TO_STACK }) }));
     process.stdout.write(JSON.stringify(require(${JSON.stringify(path.join(HERE, '..', 'tools', 'wire-surface.js'))}).computeSurface()));`;
   const patched = JSON.parse(execFileSync(process.execPath, ['-e', probe], { encoding: 'utf8' }));
   assert.ok(patched.storeOpKinds['efsp-carrier-mutation'].includes('WireProbeOp'), 'a new STACK_OP_KINDS entry reaches the surface');

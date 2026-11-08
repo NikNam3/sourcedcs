@@ -13,10 +13,9 @@ function boards(stripsByFacility) {
 test('the shipped Facilities: the Positions that own a final Bay are the final Positions', () => {
   const fc = createFacilityConfig();
   const all = new Map(fc.getFacilityIds().map(f => [f, [...finalPositionsOf(fc, f)].sort()]));
-  // Ids belong in tests: Incirlik's PAR and the carrier's two lane controllers (their files' `view: 'final'` Bays).
+  // Ids belong in tests: Incirlik's PAR (its file's `view: 'final'` Bay). The carrier has no final since docs/adr/0156.
   assert.deepEqual(all.get('INCIRLIK'), ['PAR']);
-  assert.deepEqual(all.get('CARRIER'), ['CV_APP1', 'CV_APP2']);
-  for (const [f, list] of all) if (f !== 'INCIRLIK' && f !== 'CARRIER') assert.deepEqual(list, [], `${f} has no final`);
+  for (const [f, list] of all) if (f !== 'INCIRLIK') assert.deepEqual(list, [], `${f} has no final`);
 });
 
 test('a FINAL Strip on final owned by a final Position is held on the final; the missed approach and other owners are not', () => {
@@ -29,15 +28,13 @@ test('a FINAL Strip on final owned by a final Position is held on the final; the
       { stripId: 'd', flightDataId: 'fd', stripType: 'FINAL', state: 'DROPPED', ownerPositionId: 'PAR' },
     ],
     CARRIER: [
-      { stripId: 'e', flightDataId: 'fe', stripType: 'FINAL', state: 'BALL', ownerPositionId: 'CV_APP2' },
-      { stripId: 'f', flightDataId: 'ff', stripType: 'MARSHAL', state: 'COMMENCED', ownerPositionId: 'CV_APP1' },
+      { stripId: 'f', flightDataId: 'ff', stripType: 'CV_RECOVERY', state: 'FINAL_APPROACH', ownerPositionId: 'CV_APP1' },
     ],
   };
   const held = flightsHeldOnFinal({ facilityConfig: fc, boardStoreFor: boards(strips) });
-  assert.deepEqual([...held.keys()].sort(), ['fa', 'fe']);
+  assert.deepEqual([...held.keys()].sort(), ['fa']);
   assert.equal(held.get('fa').facilityId, 'INCIRLIK');
   assert.equal(held.get('fa').strip.stripId, 'a');
-  assert.equal(held.get('fe').positionId, 'CV_APP2');
 });
 
 test('N airfields (H160): twelve generated Facilities, each with its own final Position, each final found', () => {

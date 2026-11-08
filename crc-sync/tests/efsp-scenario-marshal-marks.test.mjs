@@ -42,7 +42,7 @@ function send(efsp, who, positionId, strip, op) {
 }
 function checkIn(efsp, c, callsign) {
   return mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, {
-    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign, aircraftType: 'F-18C' },
+    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY', flightData: { sideNumber: callsign, callsign, aircraftType: 'F-18C' },
   });
 }
 /** What every client is sent: the derived stack in the hull view, `unpassed` per flight. */
@@ -52,7 +52,7 @@ const pass = (efsp, who, pos, s) => {
   const d = derivedOf(efsp, s);
   return carrierAct(efsp, who, pos, { kind: 'PassClearance', flightDataId: s.flightDataId, angels: d.angels, eatUtc: d.pushTimeUtc });
 };
-const commence = (efsp, c, s) => send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, s), { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_APPROACH', toPositionId: 'CV_APP1' });
+const commence = (efsp, c, s) => send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, s), { kind: 'CarrierHandoff', transfer: 'COMMENCE' });
 const rampDelta = (efsp, c) => {
   carrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'rampTime', value: '2040' });
   const d = carrierAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', { kind: 'Delta', minutes: 4 });
@@ -102,7 +102,7 @@ test('walk: Back to stack marks both; Undo puts the flight back as it was, comme
   checkIn(efsp, c, 'BBB22');
   carrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'rampTime', value: '2040' });
   assert.equal(commence(efsp, c, a).ack.ok, true);
-  const back = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a), { kind: 'CarrierHandoff', transfer: 'COMMENCED_TO_MARSHAL' });
+  const back = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a), { kind: 'CarrierHandoff', transfer: 'RETURN_TO_STACK' });
   assert.equal(back.ack.ok, true, JSON.stringify(back.ack));
   assert.deepEqual(marks(efsp)[a.flightDataId], ['angels', 'eat']);
   const u = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a), { kind: 'Undo', actionId: back.ack.undoable.actionId });

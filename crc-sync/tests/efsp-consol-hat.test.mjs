@@ -160,7 +160,7 @@ test('W5 sign-off mid-hand-off, cross-Facility: AP has no list, the replica stay
 test('W6 sign-off mid-hand-off, carrier: APP1 leaves with a COMMENCED Strip, APP2 staffed, no Marshal: it stays APP1\'s and APP2 is offered APP1', () => {
   const efsp = fresh();
   const c = crew(efsp, { CV_MARSHAL: 'CARRIER', CV_APP1: 'CARRIER', CV_APP2: 'CARRIER' });
-  const made = mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, { kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign: 'W6', aircraftType: 'F18', wakeCategory: 'M' } });
+  const made = mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, { kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY', flightData: { sideNumber: 'W6', callsign: 'W6', aircraftType: 'F18', wakeCategory: 'M' } });
   // Commenced to APP1 (the Commence button's result, set directly: this walk is about the sign-off, not the stack)
   const live = strip(efsp, made, 'CARRIER');
   Object.assign(live, { ownerPositionId: 'CV_APP1', state: 'COMMENCED', bayId: 'cv-app1-lane', rackId: 'main' });
@@ -193,7 +193,7 @@ test('W13 the carrier with no Marshal staffed: a HANDOFF from CTR into the Marsh
 test('W14 PriFly leaves with PATTERN Strips, Marshal staffed: they stay PriFly\'s and the Marshal is offered CV_PRIFLY (H111 Q-C2)', () => {
   const efsp = fresh();
   const c = crew(efsp, { CV_PRIFLY: 'CARRIER', CV_MARSHAL: 'CARRIER' });
-  const made = mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, { kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign: 'W14', aircraftType: 'F18', wakeCategory: 'M' } });
+  const made = mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, { kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY', flightData: { sideNumber: 'W14', callsign: 'W14', aircraftType: 'F18', wakeCategory: 'M' } });
   Object.assign(strip(efsp, made, 'CARRIER'), { ownerPositionId: 'CV_PRIFLY', stripType: 'PATTERN', state: 'IN_PATTERN', bayId: 'cv-prifly-pattern', rackId: 'main' });
   const left = hold(efsp, c.CV_PRIFLY.session, 'CARRIER', []);
   assert.deepEqual(left.ack.warnings, [{ positionId: 'CV_PRIFLY', count: 1, offeredTo: 'CV_MARSHAL' }]);

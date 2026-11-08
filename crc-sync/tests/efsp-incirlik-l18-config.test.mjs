@@ -43,7 +43,7 @@ test('radars: PAR the precision approach radar alone', () => {
   assert.ok(fc.radarBearingPositionIds().includes('PAR'));
 });
 
-test('Bays: each Position\'s Bay implies a state its Role really has, and the new states are not in INELIGIBLE_STATES (every PATTERN/FINAL state is decided)', () => {
+test('Bays: each Position\'s Bay implies a state its Role really has, and the new states are not in INELIGIBLE_STATES (every FINAL state is decided)', () => {
   const stripTypeOfBay = { 'ap-sfa': 'ARRIVAL', 'par-final': 'FINAL', 'par-missed': 'FINAL' };
   for (const [bayId, stripType] of Object.entries(stripTypeOfBay)) {
     const bay = fc.getBay(bayId);
@@ -54,14 +54,14 @@ test('Bays: each Position\'s Bay implies a state its Role really has, and the ne
   assert.equal(fc.getBay('ap-sfa').positionId, 'AP');
   assert.equal(fc.bayImpliesState('ap-sfa'), 'INBOUND');
   assert.equal(fc.bayForImpliedState('AP', 'INBOUND').bayId, 'ap-inbound');
-  for (const state of [...nla.PATTERN_STATES, ...nla.FINAL_STATES]) {
+  for (const state of nla.FINAL_STATES) {
     const eligible = state !== 'DROPPED';
     assert.equal(INELIGIBLE_STATES.has(state), !eligible, state);
     assert.equal(CorrelationReconciler.isEligible([{ state }]), eligible, state);
   }
 });
 
-test('Bay descriptor flags: the PAR and SFA Bays and the carrier\'s final/pattern Bays carry `view`; only PAR\'s final Bay has `capacity`; the SFA Bay carries its pool', () => {
+test('Bay descriptor flags: the PAR and SFA Bays carry `view`; only PAR\'s final Bay has `capacity`; the SFA Bay carries its pool', () => {
   assert.equal(fc.getBay('par-final').view, 'final');
   assert.equal(fc.getBay('ap-sfa').view, 'sfa-freqs');
   assert.deepEqual(fc.getBay('ap-sfa').sfaPool, fc.getSingleFrequencyApproach().pool);
@@ -69,11 +69,9 @@ test('Bay descriptor flags: the PAR and SFA Bays and the carrier\'s final/patter
   assert.equal(fc.getBay('par-final').capacity, 1);
   assert.equal(fc.getBay('par-final').replacesRacks, true);
   assert.equal(fc.getBay('ap-sfa').replacesRacks, undefined, 'the SFA racks ARE the frequencies');
-  assert.equal(fc.getBay('cv-app1-final', 'CARRIER').replacesRacks, undefined, 'the carrier keeps its racks and their buttons');
   assert.equal(fc.getBay('rsu-pattern'), null, 'no RSU (docs/adr/0126)');
   assert.equal(fc.getBay('cv-prifly-pattern', 'CARRIER').view, undefined, 'no pattern leg board (live test U19, docs/adr/0137)');
-  assert.equal(fc.getBay('cv-app1-final', 'CARRIER').view, 'final');
-  assert.equal(fc.getBay('cv-app2-final', 'CARRIER').view, 'final');
+  assert.equal(fc.getAllBays('CARRIER').some(b => b.view), false, 'docs/adr/0156: no carrier Bay has a view of its own');
   const flagged = fc.getFacilityIds().flatMap(f => fc.getAllBays(f)).filter(b => b.capacity !== undefined).map(b => b.bayId);
   assert.deepEqual(flagged, ['par-final']);
 });
@@ -153,14 +151,14 @@ test('permission rows: one capability table; PAR gets ordinary Strip ops and no 
   assert.equal(permission.canCreateStripType('PAR', 'FINAL'), false);
 });
 
-test('state authority: PAR works FINAL on final and after a missed approach (never BALL, the carrier\'s); no other row moved', () => {
+test('state authority: PAR works FINAL on final and after a missed approach; no other row moved', () => {
   assert.equal(permission.canActOnState('RSU', 'PATTERN', 'IN_PATTERN'), false, 'no RSU (docs/adr/0126)');
-  assert.equal(permission.canActOnState('CV_PRIFLY', 'PATTERN', 'IN_PATTERN'), true, 'the carrier row survives');
+  assert.equal(permission.canActOnState('CV_PRIFLY', 'CV_RECOVERY', 'CV_PATTERN'), true, 'the carrier row survives');
   assert.deepEqual(permission.STATE_OWNERS_BY_STRIP_TYPE.ARRIVAL.INBOUND, ['AP', 'CTR']);
   for (const s of ['ON_FINAL', 'BOLTER_WAVEOFF']) assert.equal(permission.canActOnState('PAR', 'FINAL', s), true, s);
   assert.equal(permission.canActOnState('PAR', 'FINAL', 'BALL'), false);
-  for (const s of ['ON_FINAL', 'BALL', 'BOLTER_WAVEOFF']) assert.equal(permission.canActOnState('CV_APP1', 'FINAL', s), true, s);
-  assert.deepEqual(permission.STATE_OWNERS_BY_STRIP_TYPE.MARSHAL.COMMENCED, ['CV_APP1', 'CV_APP2'], 'PAR did not leak into the Marshal table through a shared array');
+  for (const s of ['ON_FINAL', 'BOLTER_WAVEOFF']) assert.equal(permission.canActOnState('CV_APP1', 'FINAL', s), false, s);
+  assert.deepEqual(permission.STATE_OWNERS_BY_STRIP_TYPE.CV_RECOVERY.FINAL_APPROACH, ['CV_APP1', 'CV_APP2'], 'PAR did not leak into the carrier table through a shared array');
   assert.equal(permission.canActOnState('PAR', 'ARRIVAL', 'INBOUND'), false);
 });
 

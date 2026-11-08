@@ -208,3 +208,23 @@ export function mustCarrierAct(efsp, crewMember, positionId, op, opts) {
   return result;
 }
 
+
+/**
+ * docs/adr/0156: the Marshal checks a recovery in by its side number (a CV_RECOVERY Strip at STACK, in the stack).
+ * `extra` goes into the flightData seed (callsign, lowStateLb, ...); `{ flightDataId }` binds an existing flight instead.
+ */
+export function recoveryCheckIn(efsp, c, side, extra = {}) {
+  const { flightDataId, ...seed } = extra;
+  return mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, {
+    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY',
+    ...(flightDataId ? { flightDataId } : { flightData: { sideNumber: side, aircraftType: 'FA18C', ...seed } }),
+  });
+}
+
+/** docs/adr/0156: PriFly creates a launch on deck by its side number (a CV_LAUNCH Strip at ON_DECK). */
+export function launchOnDeck(efsp, c, side, extra = {}) {
+  return mustAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', null, {
+    kind: 'CreateStrip', bayId: 'cv-prifly-launch', rackId: 'main', stripType: 'CV_LAUNCH',
+    flightData: { sideNumber: side, aircraftType: 'FA18C', ...extra },
+  });
+}

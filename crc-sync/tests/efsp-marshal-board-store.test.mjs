@@ -194,8 +194,8 @@ test('a stored push time survives a restart; a holding entry carrying one is ref
 
 test('the pure ops: Delta and Back to stack never mutate the stack they are given', () => {
   const stack = Object.freeze({ stackId: 'MAIN', hullId: 'X', deltaMs: 0, entries: Object.freeze([
-    Object.freeze({ flightDataId: 'a', stackIndex: 0, status: 'PUSHED', caseIAngels: null, pushedAtUtc: 5, eatUtc: 4 }),
-    Object.freeze({ flightDataId: 'b', stackIndex: 1, status: 'HOLDING', caseIAngels: null, pushedAtUtc: null, eatUtc: null }),
+    Object.freeze({ flightDataId: 'a', stackIndex: 0, status: 'PUSHED', pushedAtUtc: 5, eatUtc: 4 }),
+    Object.freeze({ flightDataId: 'b', stackIndex: 1, status: 'HOLDING', pushedAtUtc: null, eatUtc: null }),
   ]) });
   assert.equal(delta(stack, { minutes: 4 }).ok, true);
   assert.equal(backToStack(stack, { flightDataId: 'a' }).stack.entries.find((e) => e.flightDataId === 'a').stackIndex, 2);

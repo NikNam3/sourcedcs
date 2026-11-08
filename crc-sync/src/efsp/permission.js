@@ -84,6 +84,10 @@ function mayActBesideOwner(actingPositionId, strip, op) {
   if (op.kind === 'CarrierHandoff' && op.transfer === 'RETURN_TO_STACK') {
     return actingPositionId === 'CV_MARSHAL' && strip.stripType === 'CV_RECOVERY' && ['FINAL_APPROACH', 'DIRTY'].includes(strip.state);
   }
+  // docs/adr/0156: Abort to the Case II/III stack, on a Case I flight PriFly already holds in the pattern.
+  if (op.kind === 'CarrierHandoff' && op.transfer === 'ABORT_TO_STACK') {
+    return actingPositionId === 'CV_MARSHAL' && strip.stripType === 'CV_RECOVERY' && strip.state === 'CV_PATTERN';
+  }
   // docs/adr/0146 (H175 VR-Q2): the receiver of a VFR handoff accepts it (the STARS accept): the one Position it names.
   if (op.kind === 'VfrHandoff' && op.action === 'ACCEPT') {
     return strip.stripType === 'VFR' && !!strip.vfrHandoff && strip.vfrHandoff.toPositionId === actingPositionId;

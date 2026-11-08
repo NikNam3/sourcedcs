@@ -153,6 +153,7 @@ class Placement {
       carrierCase: this._rules.carrierCase,
       carrierLaneFor: this._rules.carrierLaneFor,
       carrierInStack: this._rules.carrierInStack,
+      carrierCaseOf: this._rules.carrierCaseOf, // docs/adr/0156: the flight's own Case
     };
   }
 

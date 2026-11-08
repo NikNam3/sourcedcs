@@ -35,7 +35,7 @@ const entry = (efsp, fd) => efsp.carrierStore.getRecord().stacks.MAIN.entries.fi
 
 function checkIn(efsp, c, callsign) {
   return mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, {
-    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign, aircraftType: 'F-18C' },
+    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY', flightData: { sideNumber: callsign, callsign, aircraftType: 'F-18C' },
   });
 }
 function recovery() {
@@ -71,8 +71,11 @@ test('only the Marshal assigns it, never in Case I, never a time that is not HHM
   assert.equal(setEat(efsp, c, b.flightDataId, '2359', 'CV_PRIFLY').reason, 'PERMISSION_DENIED');
   assert.match(setEat(efsp, c, b.flightDataId, '25:99').detail, /HHMM/);
   assert.match(setEat(efsp, c, b.flightDataId, hhmm(of(efsp, a.flightDataId).pushTimeUtc)).detail, /6\.4\.9/);
+  // docs/adr/0156: a flight keeps its Case; one checked in under Case I has no EAT.
   mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'I' });
-  assert.match(setEat(efsp, c, b.flightDataId, '2359').detail, /Case I/);
+  assert.equal(setEat(efsp, c, b.flightDataId, '2359').ok, true, 'b is still a Case III flight');
+  const caseI = checkIn(efsp, c, 'CCC33');
+  assert.match(setEat(efsp, c, caseI.flightDataId, '2358').detail, /Case I/);
 });
 
 test('Delta moves an assigned EAT with every other holding EAT; a new ramp time leaves it; Commence records it and clears it', () => {
@@ -85,15 +88,15 @@ test('Delta moves an assigned EAT with every other holding EAT; a new ramp time 
   assert.equal(of(efsp, b.flightDataId).pushTimeUtc, wanted + 4 * MIN, 'the Marshal\'s EAT is the Marshal\'s until cleared');
   void a;
   const strip = efsp.boardStoreFor('CARRIER').getAll().find((s) => s.flightDataId === b.flightDataId && s.state !== 'DROPPED');
-  mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip, { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_APPROACH', toPositionId: 'CV_APP2' });
+  mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip, { kind: 'CarrierHandoff', transfer: 'COMMENCE' });
   const e = entry(efsp, b.flightDataId);
   assert.deepEqual([e.status, e.eatUtc, 'eatOverrideUtc' in e], ['PUSHED', wanted + 4 * MIN, false]);
 });
 
 test('the pure op: a commenced flight has no EAT to assign; a restore keeps an assigned EAT only on a holding flight', () => {
   const s = { stackId: 'MAIN', hullId: null, deltaMs: 0, entries: [
-    { flightDataId: 'a', stackIndex: 0, status: 'PUSHED', caseIAngels: null, pushedAtUtc: 1, eatUtc: 1, unpassed: [] },
-    { flightDataId: 'b', stackIndex: 1, status: 'HOLDING', caseIAngels: null, pushedAtUtc: null, eatUtc: null, unpassed: [] },
+    { flightDataId: 'a', stackIndex: 0, status: 'PUSHED', pushedAtUtc: 1, eatUtc: 1, unpassed: [] },
+    { flightDataId: 'b', stackIndex: 1, status: 'HOLDING', pushedAtUtc: null, eatUtc: null, unpassed: [] },
   ] };
   assert.match(ms.setEat(s, { flightDataId: 'a', eatUtc: 5 * MIN }).detail, /commenced/);
   assert.equal(ms.setEat(s, { flightDataId: 'b', eatUtc: 5 * MIN }).stack.entries[1].eatOverrideUtc, 5 * MIN);

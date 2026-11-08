@@ -444,8 +444,8 @@ const MISSION_BLOCK_MAP = {
 //    for the kind, so SetBlock on one is a VALIDATION_ERROR by the same route as
 //    a `system` Block: CASE, MARSHAL DME, ANGELS, EAT/PUSH and EXPECTED FINAL
 //    BEARING cannot be typed (WP7A bullets 2 and 5, D16). The marshal radial
-//    (C5) is set through SetCarrierState (field radial, docs/adr/0113), and a Case I altitude
-//    through SetCaseIAngels, never through SetBlock.
+//    (C5) is set through SetCarrierState (field radial, docs/adr/0113), and angels, DME and EAT
+//    through the stack's SetAngels, SetDme and SetEat (docs/adr/0156), never through SetBlock.
 //  - `carrier` Blocks write flightData.military.carrier.<field> through
 //    flight-data-store.js's setCarrier(): EEAT, approach, button, bingo and low state
 //    belong to the FLIGHT, which outlives every Strip, so an EEAT set on the
@@ -465,71 +465,54 @@ const _CARRIER_CHROME = {
   '26': { required: true,  target: { kind: 'system' } },
 };
 
-const MARSHAL_BLOCK_MAP = {
-  'C1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
+// docs/adr/0156: a carrier Strip carries only what its controller needs. The side number leads (it is how the carrier
+// names an aircraft); the callsign (C1) is optional, set from the Strip's menu, never on its face. Case II/III flights
+// also carry the squawk (5) and the heading, speed and altitude they were assigned (the flight's clearance cells,
+// docs/adr/0058, VFR's and OVERFLIGHT's ids, so conformance and the label menu read them as on every strip type); a Case I
+// flight has no radar service, so board/ops/set-block.js refuses those four for it.
+const _CARRIER_ASSIGNMENTS = {
+  '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '9A-SPEED': { required: false, target: { kind: 'clearance', field: 'speed' } },
+};
+const _CARRIER_IDENTITY = {
+  'C1':  { required: false, target: { kind: 'flightData', path: 'identity.callsign' } },
   'C2':  { required: true,  target: { kind: 'flightData', path: 'identity.aircraftType' } },
-  'C3':  { required: false, target: { kind: 'carrier-derived', field: 'case' } },
-  'C4':  { required: false, target: { kind: 'carrier', field: 'approachType' } },
-  'C5':  { required: false, target: { kind: 'carrier-derived', field: 'marshalRadial' } },
-  'C6':  { required: false, target: { kind: 'carrier-derived', field: 'marshalDme' } },
-  'C7':  { required: false, target: { kind: 'carrier-derived', field: 'angels' } },
-  'C8':  { required: false, target: { kind: 'carrier-derived', field: 'eatPush' } },
-  'C9':  { required: false, target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
-  'C10': { required: false, target: { kind: 'carrier', field: 'approachButton' } },
-  'C12': { required: false, target: { kind: 'carrier', field: 'lowStateLb' } },
-  'C13': { required: false, target: { kind: 'carrier', field: 'bingoField' } },
-  'C14': { required: false, target: { kind: 'carrier', field: 'bingoFuelLb' } },
-  'C15': { required: false, target: { kind: 'carrier', field: 'eeatUtc' } }, // writable on the LAUNCH Strip too
-  'C18': { required: false, target: { kind: 'carrier', field: 'sideNumber' } }, // docs/adr/0114: the carrier regime names an aircraft by it
-  'C19': { required: false, target: { kind: 'carrier', field: 'approachTurnNm' } }, // H118: where a bolter turns back onto final
-  // Free note, annotation-routed like every strip type's remarks cell.
-  'C24': { required: false, target: { kind: 'annotation' } },
-  // decisions.md H138 U2: the flight's remarks on every strip type, the same field and Block id as the ATC maps'.
-  '9E':  { required: false, target: { kind: 'flightData', path: 'filed.remarks' } },
+  'C18': { required: true,  target: { kind: 'carrier', field: 'sideNumber' } },
+};
+/** The Blocks a Case I flight may not have written (no radar service, docs/adr/0156). */
+const CARRIER_RADAR_SERVICE_BLOCKS = Object.freeze(['5', ...Object.keys(_CARRIER_ASSIGNMENTS)]);
+
+const CV_LAUNCH_BLOCK_MAP = {
+  ..._CARRIER_IDENTITY,
+  'C20': { required: false, target: { kind: 'carrier', field: 'departureRadialDeg' } },
+  ..._CARRIER_ASSIGNMENTS,
   ..._CARRIER_CHROME,
 };
 
-// FINAL has nothing to type but the two assignments of the talk-down (docs/adr/0117, H134 LT-RQ8 a): the final
-// controller's course guidance is by headings ("HEADING (heading)", JO 7110.65BB para 5-12-4), and it may assign an
-// altitude until "BEGIN DESCENT" (para 5-12-3) or after a missed approach. Both are the flight's clearance (docs/adr/0058),
-// so PAR amends what AP assigned rather than keeping a copy, and the Block ids are OVERFLIGHT's (7A, 9A-VECTOR), the
-// non-required pair. Everything else stays read-only (§7.10, WP7A bullet 6): deck, final bearing and distance are
-// derived, drawn by the client from the ship state and the track. Shared with PAR (L18).
-// Every other Block of this map is `system`, `flag` or `carrier-derived`, none of which resolveBlockTarget lets SetBlock
-// write, except the flight's remarks (9E, H138 U2), which every strip type carries. (Block 5, the squawk, is the one
-// chrome Block left off.)
+// C7 and C8 are the stack's (derived, set by the Marshal through SetAngels and SetEat on the panel, never by SetBlock).
+const CV_RECOVERY_BLOCK_MAP = {
+  ..._CARRIER_IDENTITY,
+  'C12': { required: false, target: { kind: 'carrier', field: 'lowStateLb' } },
+  'C7':  { required: false, target: { kind: 'carrier-derived', field: 'angels' } },
+  'C8':  { required: false, target: { kind: 'carrier-derived', field: 'eatPush' } },
+  ..._CARRIER_ASSIGNMENTS,
+  ..._CARRIER_CHROME,
+};
+
+// FINAL is PAR's (docs/adr/0156 took the carrier off it): the talk-down's two assignments (docs/adr/0117, H134 LT-RQ8 a):
+// course guidance by headings ("HEADING (heading)", JO 7110.65BB para 5-12-4) and an altitude until "BEGIN DESCENT"
+// (para 5-12-3) or after a missed approach. Both are the flight's clearance (docs/adr/0058), the Block ids OVERFLIGHT's.
+// Everything else is read-only, and 9E is the flight's remarks (H138 U2).
 const FINAL_BLOCK_MAP = {
   'C1':  { required: true,  target: { kind: 'carrier-derived', field: 'callsign' } },
   'C2':  { required: true,  target: { kind: 'carrier-derived', field: 'aircraftType' } },
-  'C9':  { required: false, target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
-  'C18': { required: false, target: { kind: 'carrier-derived', field: 'sideNumber' } },
-  'C19': { required: false, target: { kind: 'carrier-derived', field: 'approachTurnNm' } },
-  'C16': { required: false, target: { kind: 'carrier-derived', field: 'deck' } },
-  'C17': { required: false, target: { kind: 'carrier-derived', field: 'finalDistance' } },
   '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '9E':  { required: false, target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2
   '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
   '25': _CARRIER_CHROME['25'], '26': _CARRIER_CHROME['26'],
 };
-
-// PATTERN (the carrier's): identity and a free annotation.
-// C18: the side number the Marshal typed, read here (decisions.md H122: on a carrier
-// Strip it leads; the client draws it only once one is set).
-const PATTERN_BLOCK_MAP = {
-  'C1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
-  'C2':  { required: true,  target: { kind: 'flightData', path: 'identity.aircraftType' } },
-  'C18': { required: false, target: { kind: 'carrier-derived', field: 'sideNumber' } },
-  'C24': { required: false, target: { kind: 'annotation' } },
-  '9E':  { required: false, target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2
-  ..._CARRIER_CHROME,
-};
-
-// The PAR final's two assignments (docs/adr/0117 decision 6) are an AIRFIELD's: the carrier's FINAL shares the map but has
-// nothing to type (docs/adr/0116, H125; the supervisor's ruling on LT-PAR-MISSED) and no conformance on its final
-// (docs/adr/0117 decision 8). resolveBlockTarget() refuses them at the carrier; crc-desktop strip-template.js mirrors it.
-const PAR_FINAL_ONLY_BLOCKS = Object.freeze(['7A', '9A-VECTOR']);
-const CARRIER_FACILITY_ID = 'CARRIER';
 
 // docs/adr/0146 (H174, H175 VR-Q1): the minimal VFR strip. Only what applies to a VFR aircraft a controller tagged:
 // callsign and Block 3, the code if one was given (not required: a primary target needs none, VR-Q4), the heading, speed
@@ -557,7 +540,7 @@ const VFR_BLOCK_MAP = {
 
 const BLOCK_MAPS = {
   DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP,
-  MARSHAL: MARSHAL_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, PATTERN: PATTERN_BLOCK_MAP, VFR: VFR_BLOCK_MAP,
+  CV_LAUNCH: CV_LAUNCH_BLOCK_MAP, CV_RECOVERY: CV_RECOVERY_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, VFR: VFR_BLOCK_MAP,
 };
 
 /**
@@ -644,7 +627,6 @@ function resolveBlockTarget(stripType, blockId, facilityId) {
   const map = BLOCK_MAPS[stripType];
   const def = map && map[blockId];
   if (!def) return null;
-  if (stripType === 'FINAL' && facilityId === CARRIER_FACILITY_ID && PAR_FINAL_ONLY_BLOCKS.includes(blockId)) return null;
   if (def.target.kind === 'flightData') return { kind: 'flightData', path: def.target.path };
   if (def.target.kind === 'annotation') return { kind: 'annotation' };
   // WP4A (docs/adr/0018) — routed through flight-data-store.js's dedicated
@@ -739,7 +721,7 @@ function validateFacilityConfig(config) {
 
 module.exports = {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP,
-  MARSHAL_BLOCK_MAP, FINAL_BLOCK_MAP, PATTERN_BLOCK_MAP, BLOCK_MAPS, PAR_FINAL_ONLY_BLOCKS,
+  CV_LAUNCH_BLOCK_MAP, CV_RECOVERY_BLOCK_MAP, FINAL_BLOCK_MAP, BLOCK_MAPS, CARRIER_RADAR_SERVICE_BLOCKS,
   isValidStripType, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig,
   interlockFor, interlockBlocks, controlAxisFor, MILITARY_BLOCK_NAMESPACE,
 };

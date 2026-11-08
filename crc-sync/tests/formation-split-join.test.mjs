@@ -353,7 +353,7 @@ test('S15 eligibility: every IFR type in a ground and an airborne state; MISSION
   assert.deepEqual(elig('ARRIVAL').ground, ['LANDED', 'TAXI_IN']);
   assert.ok(elig('ARRIVAL').split.includes('INBOUND') && !elig('ARRIVAL').split.includes('DROPPED'));
   assert.deepEqual(elig('OVERFLIGHT').ground, []);
-  for (const t of ['MISSION', 'MARSHAL', 'FINAL', 'PATTERN']) { assert.deepEqual(elig(t).split, []); assert.deepEqual(elig(t).join, []); }
+  for (const t of ['MISSION', 'CV_LAUNCH', 'CV_RECOVERY', 'FINAL']) { assert.deepEqual(elig(t).split, []); assert.deepEqual(elig(t).join, []); }
   const lead = formation(2);
   const dropped = mustAct(efsp, c.AP, 'AP', lead, { kind: 'DropStrip' });
   assert.match(split(dropped, 'AP', { size: 1, callsign: 'Z1', assignment: hdg() }).detail, /cannot be split/);

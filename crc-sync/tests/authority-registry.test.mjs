@@ -22,15 +22,15 @@ test('every strip type family is a strip type of nla.js and carries every field'
 
 test('accessors answer from the composed tables', () => {
   assert.deepEqual(authority.stateOwners('DEPARTURE', 'HELD'), ['CD', 'GC']);
-  assert.deepEqual(authority.stateOwners('FINAL', 'ON_FINAL'), ['CV_APP1', 'CV_APP2', 'PAR']);
+  assert.deepEqual(authority.stateOwners('FINAL', 'ON_FINAL'), ['PAR']);
   assert.deepEqual(authority.stateOwners('NOPE', 'X'), []);
-  assert.equal(authority.initialStateFor('MARSHAL'), 'IN_STACK');
+  assert.equal(authority.initialStateFor('CV_RECOVERY'), 'STACK');
   assert.equal(authority.replicaStateOnReceipt('OVERFLIGHT', 'IN_SECTOR'), 'INBOUND');
   assert.equal(authority.replicaStateOnReceipt('ARRIVAL', 'INBOUND'), 'INBOUND');
   assert.equal(authority.senderStateOnAccept('HANDOFF', 'OVERFLIGHT', 'IN_SECTOR'), 'HANDED_OFF');
   assert.equal(authority.senderStateOnAccept('HANDOFF', 'ARRIVAL', 'INBOUND'), undefined);
   assert.deepEqual(authority.creatorsOf('ARRIVAL'), ['AP', 'CTR']);
-  assert.deepEqual(authority.creatorsOf('PATTERN'), [], 'no RSU (docs/adr/0126); the carrier\'s PATTERN Strips come from its handoffs');
+  assert.deepEqual(authority.creatorsOf('FINAL'), [], 'FINAL Strips come from a handoff to the final, never a create');
   const ap = authority.capabilitiesFor('AP');
   assert.equal(ap.family, 'civil-atc');
   assert.equal(ap.capabilities.handsOffToFinal, true, 'incirlik-military extends AP');

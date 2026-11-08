@@ -35,6 +35,7 @@ export const DEFAULT_RULES = {
   carrierApplyEffect: () => ({ ok: true }),
   carrierCase: () => null,
   carrierInStack: () => true,
+  carrierCaseOf: () => null,
   carrierLaneFor: () => null,
   carrierRetireFlight: () => null,
   carrierHandoffs: {},

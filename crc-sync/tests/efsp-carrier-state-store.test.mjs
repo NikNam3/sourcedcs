@@ -95,9 +95,11 @@ test('a Case change mid-recovery keeps the stack, the ramp time and every overri
   set('radial', 150);
   set('firstFix', 25);
   const timed = JSON.stringify(store.view().derived.MAIN);
+  // docs/adr/0156: the flights in the Case II/III stack keep their Case when the ship goes to Case I.
   assert.equal(set('case', 'I').ok, true);
   const caseI = store.view();
-  assert.deepEqual(caseI.derived.MAIN.map((e) => [e.marshalDme, e.pushTimeUtc, e.marshalRadialDeg]), [[null, null, null], [null, null, null]]);
+  assert.equal(JSON.stringify(caseI.derived.MAIN), timed, 'nobody in the stack is re-cleared');
+  assert.deepEqual(caseI.derived.CASE_I, []);
   assert.equal(caseI.state.rampTime.source, 'override', 'the ramp time is the ship\'s, not the stack\'s');
   assert.equal(caseI.state.firstFix.value, 25);
   assert.equal(caseI.state.radial.value, 155);

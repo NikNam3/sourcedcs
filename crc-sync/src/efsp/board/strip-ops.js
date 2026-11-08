@@ -597,11 +597,10 @@ class StripOps {
       return { inhibited: 'cannot drop a Strip under active tactical control — complete a TOFI exit first', reason: 'VALIDATION_ERROR' };
     }
     const status = result.transferTo ? { toState: result.toState, transferTo: result.transferTo } : { toState: result.toState };
-    // docs/adr/0074: which carrier handoff this NLA button records, and the
-    // strip type it changes the Strip to, so the panel labels it from the model's own
-    // table (and renders "See you" beside it in Case II).
+    // docs/adr/0074, 0156: which carrier handoff this NLA button records, so the panel labels it from the model's own
+    // table, and the second handoff offered beside it (TO MARSHAL beside a launch's DROP).
     if (result.carrierHandoff) status.carrierHandoff = result.carrierHandoff;
-    if (result.stripTypeChange) status.stripTypeChange = result.stripTypeChange;
+    if (result.alsoHandoff) status.alsoHandoff = result.alsoHandoff;
     return status;
   }
 

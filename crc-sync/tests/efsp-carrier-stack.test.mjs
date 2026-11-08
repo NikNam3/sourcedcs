@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   ENTRY_KEYS, STACK_OP_KINDS, STACK_DEFAULTS, DEFAULT_STACK_ID,
   emptyStack, validateStack, normalizeStack, deriveEntry, deriveStack, checkConsistency,
-  insertAt, append, move, remove, closeUp, markPushed, setCaseIAngels, applyStackOp,
+  insertAt, append, move, remove, closeUp, markPushed, setAngels, setDme, backToStack, applyStackOp,
 } from '../src/efsp/carrier/marshal-stack.js';
 
 // Guide §9.12 "Case III — one integer drives four displayed fields", and its
@@ -33,7 +33,7 @@ function stackOf(ids, { pushed = [], gaps = [] } = {}) {
   const entries = [];
   for (const id of ids) {
     while (gaps.includes(idx)) idx++;
-    entries.push({ flightDataId: id, stackIndex: idx, status: pushed.includes(id) ? 'PUSHED' : 'HOLDING', caseIAngels: null, pushedAtUtc: null, eatUtc: null });
+    entries.push({ flightDataId: id, stackIndex: idx, status: pushed.includes(id) ? 'PUSHED' : 'HOLDING', pushedAtUtc: null, eatUtc: null });
     idx++;
   }
   return deepFreeze({ ...s, entries });
@@ -51,34 +51,34 @@ test('emptyStack is keyed by stackId (decisions H29) and holds no derived value'
   assert.equal(s.stackId, DEFAULT_STACK_ID);
   assert.deepEqual(s, { stackId: 'MAIN', hullId: 'CVN-72', entries: [], deltaMs: 0 });
   // eatOverrideUtc (docs/adr/0137) is present on an entry only while the Marshal has assigned an EAT
-  assert.deepEqual([...ENTRY_KEYS], ['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc', 'unpassed', 'eatOverrideUtc']);
+  assert.deepEqual([...ENTRY_KEYS], ['flightDataId', 'stackIndex', 'status', 'angelsOverride', 'dmeOverride', 'pushedAtUtc', 'eatUtc', 'unpassed', 'eatOverrideUtc']);
   assert.equal(STACK_DEFAULTS.maxIndex, 19);
 });
 
 test('validateStack refuses derived keys by name; normalizeStack drops them', () => {
   for (const k of ['angels', 'marshalDme', 'pushTimeUtc', 'marshalRadialDeg']) {
-    const s = { ...emptyStack({ hullId: 'CVN-72' }), entries: [{ flightDataId: 'a', stackIndex: 0, status: 'HOLDING', caseIAngels: null, [k]: 99 }] };
+    const s = { ...emptyStack({ hullId: 'CVN-72' }), entries: [{ flightDataId: 'a', stackIndex: 0, status: 'HOLDING', [k]: 99 }] };
     const r = validateStack(s);
     assert.equal(r.ok, false, k);
     assert.equal(r.reason, 'VALIDATION_ERROR');
     assert.match(r.detail, /derived from the stack index/);
     const n = normalizeStack(s);
     assert.equal(n.ok, true);
-    assert.deepEqual(Object.keys(n.stack.entries[0]).sort(), ENTRY_KEYS.filter((x) => x !== 'eatOverrideUtc').sort());
+    assert.deepEqual(Object.keys(n.stack.entries[0]).sort(), ENTRY_KEYS.filter((x) => !['eatOverrideUtc', 'angelsOverride', 'dmeOverride'].includes(x)).sort());
     assert.equal(validateStack(n.stack).ok, true);
   }
 });
 
 test('validateStack refuses duplicates, bad indices, disorder, unknown keys', () => {
   const base = emptyStack({ hullId: 'CVN-72' });
-  const e = (flightDataId, stackIndex, extra = {}) => ({ flightDataId, stackIndex, status: 'HOLDING', caseIAngels: null, ...extra });
+  const e = (flightDataId, stackIndex, extra = {}) => ({ flightDataId, stackIndex, status: 'HOLDING', ...extra });
   assert.equal(validateStack({ ...base, entries: [e('a', 0), e('a', 1)] }).ok, false);
   assert.equal(validateStack({ ...base, entries: [e('a', 0), e('b', 0)] }).ok, false);
   assert.equal(validateStack({ ...base, entries: [e('a', 1), e('b', 0)] }).ok, false);
   assert.equal(validateStack({ ...base, entries: [e('a', 20)] }).ok, false);
   assert.equal(validateStack({ ...base, entries: [e('a', 1.5)] }).ok, false);
   assert.equal(validateStack({ ...base, entries: [e('a', 0, { status: 'GONE' })] }).ok, false);
-  assert.equal(validateStack({ ...base, entries: [e('a', 0, { caseIAngels: 1 })] }).ok, false);
+  assert.equal(validateStack({ ...base, entries: [e('a', 0, { angelsOverride: 1 })] }).ok, false);
   assert.equal(validateStack({ ...base, entries: [e('a', 0, { stripId: 's1' })] }).ok, false, 'keyed by flightDataId, never stripId');
   assert.equal(validateStack({ ...base, bogus: 1 }).ok, false);
   assert.equal(validateStack(null).ok, false);
@@ -108,7 +108,7 @@ test('normalizeStack never refuses; it drops what cannot be kept and says so', (
 // ── Derivation ───────────────────────────────────────────────────────────────
 
 test('deriveEntry Case III: §9.12 worked example — index 2 → angels 8 → DME 23; the EAT is worked back from the ramp time (ADR 0113)', () => {
-  const d = deriveEntry({ flightDataId: 'x', stackIndex: 2, status: 'HOLDING', caseIAngels: null },
+  const d = deriveEntry({ flightDataId: 'x', stackIndex: 2, status: 'HOLDING' },
     withShip({ rampTimeUtc: CHARLIE }));
   assert.equal(d.angels, 8);
   assert.equal(d.marshalDme, 23);
@@ -124,21 +124,21 @@ test('deriveEntry Case III: §9.12 worked example — index 2 → angels 8 → D
 
 test('deriveEntry: index 0 is the §9.12 minimum 6,000 ft, and every index stays ≥ 6', () => {
   for (let i = 0; i <= STACK_DEFAULTS.maxIndex; i++) {
-    const d = deriveEntry({ flightDataId: 'x', stackIndex: i, status: 'HOLDING', caseIAngels: null }, inputs());
+    const d = deriveEntry({ flightDataId: 'x', stackIndex: i, status: 'HOLDING' }, inputs());
     assert.equal(d.angels, 6 + i);
     assert.equal(d.minimumAltitudeOk, true);
   }
 });
 
 test('deriveEntry: a set marshal radial wins over the default (decisions H27)', () => {
-  const d = deriveEntry({ flightDataId: 'x', stackIndex: 0, status: 'HOLDING', caseIAngels: null },
+  const d = deriveEntry({ flightDataId: 'x', stackIndex: 0, status: 'HOLDING' },
     withShip({ marshalRadialDeg: 300, marshalRadialSource: 'SET' }));
   assert.equal(d.marshalRadialDeg, 300);
   assert.equal(d.marshalRadialSource, 'SET');
 });
 
 test('deriveEntry: the first fix moves every slot\'s DME (ADR 0113); angels stay 6 + index', () => {
-  const d = deriveEntry({ flightDataId: 'x', stackIndex: 2, status: 'HOLDING', caseIAngels: null }, withShip({ firstFixDme: 25 }));
+  const d = deriveEntry({ flightDataId: 'x', stackIndex: 2, status: 'HOLDING' }, withShip({ firstFixDme: 25 }));
   assert.equal(d.angels, 8);
   assert.equal(d.marshalDme, 27);
   assert.equal(d.firstFixDme, 25);
@@ -146,7 +146,7 @@ test('deriveEntry: the first fix moves every slot\'s DME (ADR 0113); angels stay
 });
 
 test('deriveEntry: unknown ramp time or final bearing → null, never invented', () => {
-  const d = deriveEntry({ flightDataId: 'x', stackIndex: 1, status: 'HOLDING', caseIAngels: null }, inputs());
+  const d = deriveEntry({ flightDataId: 'x', stackIndex: 1, status: 'HOLDING' }, inputs());
   assert.equal(d.pushTimeUtc, null);
   assert.equal(d.pushWindowUtc, null);
   assert.equal(d.marshalRadialDeg, null);
@@ -156,7 +156,7 @@ test('deriveEntry: unknown ramp time or final bearing → null, never invented',
 });
 
 test('deriveEntry Case I: altitude-keyed, no DME, no push, no radial (§9.12 rule 3)', () => {
-  const d = deriveEntry({ flightDataId: 'x', stackIndex: 3, status: 'HOLDING', caseIAngels: 4 },
+  const d = deriveEntry({ flightDataId: 'x', stackIndex: 3, status: 'HOLDING', angelsOverride: 4 },
     withShip({ caseValue: 'I', rampTimeUtc: CHARLIE }));
   assert.equal(d.angels, 4);
   assert.equal(d.marshalDme, null);
@@ -164,7 +164,7 @@ test('deriveEntry Case I: altitude-keyed, no DME, no push, no radial (§9.12 rul
   assert.equal(d.pushWindowUtc, null);
   assert.equal(d.marshalRadialDeg, null);
   assert.equal(d.expectedFinalBearingDeg, 115);
-  const unassigned = deriveEntry({ flightDataId: 'y', stackIndex: 0, status: 'HOLDING', caseIAngels: null }, inputs({ caseValue: 'I' }));
+  const unassigned = deriveEntry({ flightDataId: 'y', stackIndex: 0, status: 'HOLDING' }, inputs({ caseValue: 'I' }));
   assert.equal(unassigned.angels, null, 'the Strip shows "assign altitude"');
 });
 
@@ -212,7 +212,7 @@ test('insertAt refusals', () => {
     [{ flightDataId: 'b', stackIndex: 1 }, /already in the stack/],
     [{ flightDataId: 'n', stackIndex: 0 }, /already pushed/],
     [{ flightDataId: '', stackIndex: 1 }, /flightDataId/],
-    [{ flightDataId: 'n', stackIndex: 1, caseIAngels: 1 }, /caseIAngels/],
+    [{ flightDataId: 'n', stackIndex: 1, unpassed: ['x'] }, /unpassed/],
   ];
   for (const [op, re] of cases) {
     const r = insertAt(s, op);
@@ -310,16 +310,44 @@ test('a ramp-time change moves every EAT by the same amount and nothing else (th
   }
 });
 
-test('setCaseIAngels: integer 2..20 or null, one entry changed', () => {
-  const s = stackOf(['a', 'b']);
-  const r = setCaseIAngels(s, { flightDataId: 'b', caseIAngels: 3 });
+test('setAngels / setDme (docs/adr/0156): an assigned value wins over the slot until cleared; holding flights only', () => {
+  const s = stackOf(['a', 'b'], { pushed: ['a'] });
+  const r = setAngels(s, { flightDataId: 'b', angels: 12 });
   assert.deepEqual(r.changed, ['b']);
-  assert.equal(r.stack.entries[1].caseIAngels, 3);
-  assert.equal(setCaseIAngels(s, { flightDataId: 'b', caseIAngels: 1 }).ok, false);
-  assert.equal(setCaseIAngels(s, { flightDataId: 'b', caseIAngels: 21 }).ok, false);
-  assert.equal(setCaseIAngels(s, { flightDataId: 'b', caseIAngels: 2.5 }).ok, false);
-  assert.equal(setCaseIAngels(s, { flightDataId: 'b' }).ok, false);
-  assert.equal(setCaseIAngels(s, { flightDataId: 'zz', caseIAngels: 3 }).reason, 'NOT_FOUND');
+  assert.equal(r.stack.entries[1].angelsOverride, 12);
+  const d = deriveStack(r.stack, withShip())[1];
+  assert.equal(d.angels, 12);
+  assert.equal(d.angelsSet, true);
+  assert.equal(d.marshalDme, 22, 'the DME stays the slot\'s');
+  assert.deepEqual(checkConsistency(d).filter((c) => c.code === 'DME_NOT_ANGELS_PLUS_15'), [], 'an assigned value is the Marshal\'s call');
+  const dm = setDme(r.stack, { flightDataId: 'b', dme: 30 });
+  const dd = deriveStack(dm.stack, withShip())[1];
+  assert.equal(dd.marshalDme, 30);
+  assert.equal(dd.dmeSet, true);
+  const cleared = setAngels(dm.stack, { flightDataId: 'b', angels: null });
+  assert.equal('angelsOverride' in cleared.stack.entries[1], false);
+  assert.equal(deriveStack(cleared.stack, withShip())[1].angels, 7);
+  assert.equal(setAngels(s, { flightDataId: 'b', angels: 1 }).ok, false);
+  assert.equal(setAngels(s, { flightDataId: 'b', angels: 41 }).ok, false);
+  assert.equal(setAngels(s, { flightDataId: 'b', angels: 2.5 }).ok, false);
+  assert.equal(setAngels(s, { flightDataId: 'b' }).ok, false);
+  assert.equal(setDme(s, { flightDataId: 'b', dme: 100 }).ok, false);
+  assert.equal(setAngels(s, { flightDataId: 'a', angels: 9 }).ok, false, 'a commenced flight has left its fix');
+  assert.equal(setAngels(s, { flightDataId: 'zz', angels: 3 }).reason, 'NOT_FOUND');
+  assert.equal(setAngels(r.stack, { flightDataId: 'b', angels: 12 }).unchanged, true);
+});
+
+test('backToStack clears every override the Marshal assigned (docs/adr/0156)', () => {
+  const s = stackOf(['a', 'b']);
+  let st = setAngels(s, { flightDataId: 'a', angels: 15 }).stack;
+  st = setDme(st, { flightDataId: 'a', dme: 40 }).stack;
+  st = markPushed(st, { flightDataId: 'a' }).stack;
+  const r = backToStack(st, { flightDataId: 'a' });
+  const a = r.stack.entries.find((e) => e.flightDataId === 'a');
+  assert.equal(a.stackIndex, 2);
+  assert.equal(a.status, 'HOLDING');
+  assert.equal('angelsOverride' in a || 'dmeOverride' in a || 'eatOverrideUtc' in a, false);
+  assert.deepEqual(a.unpassed, ['angels', 'eat']);
 });
 
 test('applyStackOp dispatches every STACK_OP_KIND and refuses anything else', () => {
@@ -331,7 +359,8 @@ test('applyStackOp dispatches every STACK_OP_KIND and refuses anything else', ()
     Remove: { flightDataId: 'a' },
     CloseUp: { fromIndex: 1 },
     MarkPushed: { flightDataId: 'a' },
-    SetCaseIAngels: { flightDataId: 'a', caseIAngels: 2 },
+    SetAngels: { flightDataId: 'b', angels: 9 },
+    SetDme: { flightDataId: 'b', dme: 30 },
     Delta: { minutes: 4 },
     BackToStack: { flightDataId: 'a' },
     PassClearance: { flightDataId: 'a', angels: null, eatUtc: null },
@@ -344,7 +373,7 @@ test('applyStackOp dispatches every STACK_OP_KIND and refuses anything else', ()
     assert.equal(r.ok, true, kind);
     assert.equal(validateStack(r.stack).ok, true, kind);
   }
-  for (const kind of ['SetAngels', 'SetDme', 'SetPushTime', 'SetCharlieTime', 'SetMarshalRadial', 'toString', '__proto__']) {
+  for (const kind of ['SetPushTime', 'SetCharlieTime', 'SetMarshalRadial', 'toString', '__proto__']) {
     const r = applyStackOp(s, { kind, value: 1 });
     assert.equal(r.ok, false, kind);
     assert.equal(r.reason, 'VALIDATION_ERROR');
@@ -362,7 +391,7 @@ test('no op mutates its input (deep-frozen inputs do not throw)', () => {
   remove(s, { flightDataId: 'a', closeUp: true });
   closeUp(s, { fromIndex: 2 });
   markPushed(s, { flightDataId: 'a' });
-  setCaseIAngels(s, { flightDataId: 'a', caseIAngels: 5 });
+  setAngels(s, { flightDataId: 'a', angels: 5 });
   deriveStack(s, withShip());
   assert.equal(JSON.stringify(s), snapshot);
 });

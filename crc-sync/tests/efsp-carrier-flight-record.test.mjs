@@ -14,7 +14,7 @@ const T = Date.UTC(2026, 8, 30, 13, 45, 0);
 
 test('defaults: every field present and null', () => {
   assert.deepEqual(defaultCarrierFlight(), {
-    eeatUtc: null, approachType: null, approachButton: null, bingoField: null, bingoFuelLb: null, lowStateLb: null, sideNumber: null, approachTurnNm: null,
+    eeatUtc: null, approachType: null, approachButton: null, bingoField: null, bingoFuelLb: null, lowStateLb: null, sideNumber: null, approachTurnNm: null, departureRadialDeg: null,
   });
   assert.deepEqual([...CARRIER_FLIGHT_FIELDS], Object.keys(defaultCarrierFlight()));
   assert.notEqual(defaultCarrierFlight(), defaultCarrierFlight(), 'a fresh object each time');
@@ -108,7 +108,7 @@ test('marshalMessage fills from flight data, derivation and ship state; bearings
     military: { carrier: { eeatUtc: T, approachType: 'ICLS', approachButton: 15, bingoField: 'LCRA', bingoFuelLb: 4500, lowStateLb: 7200 } },
   };
   const shipState = { finalBearingDeg: 115, altimeterInHg: 29.92, headingRef: 'TRUE' };
-  const derived = deriveEntry({ flightDataId: 'f', stackIndex: 2, status: 'HOLDING', caseIAngels: null },
+  const derived = deriveEntry({ flightDataId: 'f', stackIndex: 2, status: 'HOLDING' },
     { caseValue: 'III', rampTimeUtc: T + 3_600_000 + 360_000, finalBearingDeg: 115, marshalRadialDeg: 295, marshalRadialSource: 'FINAL_BEARING', firstFixDme: 21, fixToRampMs: 360_000, pushSpacingMs: 60_000 });
   const m = Object.fromEntries(marshalMessage({ flightData, derived, caseValue: 'III', shipState, magneticVariationDeg: 5 }).map((x) => [x.key, x]));
   assert.equal(m.callsign.value, 'HORNET 11');

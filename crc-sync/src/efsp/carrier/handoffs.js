@@ -1,188 +1,106 @@
 'use strict';
 
-// The carrier handoffs (the guide's "ownership transfers"), as data (guide §9.12, docs/adr/0064).
+// The carrier handoffs, as data (docs/adr/0156, which replaced the guide §9.12 set of ADR 0064/0074/0137/0155).
 //
-// §9.12: "Ownership transfers on the carrier are heterogeneous and MUST NOT be
-// unified behind one button: Marshal → Approach is controller-initiated;
-// Approach → Final is on radar acquisition; Final → LSO is on the pilot's
-// 'ball' call; Case II Marshal → PriFly is on a pilot report. Four different
-// trigger types."
+// One row per handoff, everything it does: who sends it (`from`), who receives it (`to`: a list, or 'SAME' for a state
+// change the sender keeps), which Case it is legal in and whose Case that is (`caseOf`: the SHIP's for a launch on deck and
+// for Abort, the FLIGHT's for a recovery, since a flight keeps the Case it was given on its initial call), the Strip it
+// applies to and what that Strip becomes (`stripType`, `states`, `toStripType`, `toState`, in place, as ConvertToArrival
+// does, docs/adr/0023), and what it does to the Marshal stack (`stackEffect`, carrier-store.js applyEffect). The Board
+// (board/ops/carrier-handoff.js) holds no carrier doctrine; it reads this.
 //
-// ALL of them are controller gestures. Guide §10.3 / defect D5 forbid
-// advancing a Strip on surveillance: "radar acquisition" is the controller
-// saying "radar contact"; "ball" and "see you" are the controller recording
-// what the pilot said. The trigger type is METADATA recorded on the handoff
-// and rendered distinctly (WP7A bullet 4). It is never an automation hook.
-//
-// No handoff kind carries a frequency: a frequency is the flight's (docs/adr/0117,
-// D17, lane L18).
-//
-// Provenance:
-//   §9.12 (binding)  — the four kinds and their four trigger types; CV_APP1 /
-//                      CV_APP2 "fed alternately from the Marshal stack in push
-//                      order"; Case II Marshal → PriFly.
-//   §4.1 (binding)   — CV_APP1/2 run MARSHAL → FINAL; the LSO is not one of
-//                      the four CV Positions.
-//   decisions H30    — alternating APP lanes, [SOURCE-DEFINED].
-//   [SOURCE-DEFINED] — the lane parity (even push ordinal → CV_APP1); the
-//                      fifth row MARSHAL_TO_PATTERN_CASE_I (L4 briefing Q8:
-//                      the guide gives Case I no handoff, so it reuses the
-//                      CONTROLLER_INITIATED trigger type — the four trigger
-//                      TYPES stay four); the button labels.
+// Every one is a controller gesture (guide §10.3, D5): nothing here reads a radar contact. No row carries a frequency
+// (docs/adr/0117). [SOURCE-DEFINED]: the human's rulings of 2026-11-08 (ADR 0156).
 
-const TRIGGER_TYPES = Object.freeze(['CONTROLLER_INITIATED', 'RADAR_ACQUISITION', 'PILOT_BALL_CALL', 'PILOT_SEE_YOU']);
+const TRIGGER_TYPES = Object.freeze(['CONTROLLER_INITIATED']);
 
 const APP_LANES = Object.freeze(['CV_APP1', 'CV_APP2']);
+const SEQUENCED = Object.freeze(['II', 'III']);
+const ANY_CASE = Object.freeze(['I', 'II', 'III']);
 
-const _row = (r) => Object.freeze({ ...r, from: Object.freeze(r.from), cases: Object.freeze(r.cases) });
-
-const CARRIER_HANDOFFS = Object.freeze({
-  MARSHAL_TO_APPROACH: _row({
-    trigger: 'CONTROLLER_INITIATED',
-    from: ['CV_MARSHAL'], to: APP_LANES,
-    cases: ['II', 'III'],
-    ownershipChange: true, stripTypeChange: null, // MARSHAL stays MARSHAL
-    stackEffect: 'MARK_PUSHED',
-    label: 'Commence',
-    source: '§9.12',
-    guide: '§9.12 — Marshal → Approach is controller-initiated',
-  }),
-  APPROACH_TO_FINAL: _row({
-    trigger: 'RADAR_ACQUISITION',
-    from: APP_LANES, to: 'SAME', // same lane controller — §4.1 "MARSHAL → FINAL"
-    cases: ['II', 'III'],
-    ownershipChange: false, stripTypeChange: Object.freeze({ from: 'MARSHAL', to: 'FINAL' }),
-    stackEffect: null,
-    label: 'Radar contact',
-    source: '§9.12',
-    guide: '§9.12 — Approach → Final is on radar acquisition',
-  }),
-  FINAL_TO_LSO: _row({
-    trigger: 'PILOT_BALL_CALL',
-    from: APP_LANES, to: 'EXTERNAL_LSO', // the LSO is not an EFSP Position (§4.1 lists four CV Positions)
-    cases: ['I', 'II', 'III'],
-    ownershipChange: false, stripTypeChange: null, // a state change only (FINAL ON_FINAL → BALL)
-    stackEffect: null,
-    label: 'Ball',
-    source: '§9.12',
-    guide: '§9.12 — Final → LSO is on the pilot\'s "ball" call',
-  }),
-  MARSHAL_TO_PRIFLY: _row({
-    trigger: 'PILOT_SEE_YOU',
-    from: ['CV_MARSHAL'], to: Object.freeze(['CV_PRIFLY']),
-    cases: ['II'],
-    ownershipChange: true, stripTypeChange: Object.freeze({ from: 'MARSHAL', to: 'PATTERN' }),
-    stackEffect: 'REMOVE_NO_CLOSE_UP',
-    label: 'See you',
-    source: '§9.12',
-    guide: '§9.12 rule 4 — Case II Marshal → PriFly fires on a pilot report',
-  }),
-  // docs/adr/0114, decisions H117: the Marshal sends a COMMENCED flight back into the stack (CV NATOPS 6.4.9 item 2 does this on
-  // Delta for commenced aircraft above 7,000 ft; here it is the Marshal's manual call). The Strip is the lane's, so this is the
-  // one carrier transfer the Marshal makes on a Strip it does not own (permission.js mayActBesideOwner).
-  COMMENCED_TO_MARSHAL: _row({
-    trigger: 'CONTROLLER_INITIATED',
-    from: ['CV_MARSHAL'], to: Object.freeze(['CV_MARSHAL']),
-    cases: ['II', 'III'],
-    ownershipChange: true, stripTypeChange: null, // MARSHAL stays MARSHAL, COMMENCED -> IN_STACK
-    stackEffect: 'RETURN_TO_STACK',
-    label: 'Back to stack',
-    source: '[SOURCE-DEFINED]',
-    guide: 'decisions H117 — the Marshal sends a commenced aircraft back into the stack',
-  }),
-  MARSHAL_TO_PATTERN_CASE_I: _row({
-    trigger: 'CONTROLLER_INITIATED',
-    from: ['CV_MARSHAL'], to: Object.freeze(['CV_PRIFLY']),
-    cases: ['I'],
-    ownershipChange: true, stripTypeChange: Object.freeze({ from: 'MARSHAL', to: 'PATTERN' }),
-    stackEffect: 'REMOVE_NO_CLOSE_UP',
-    label: 'To pattern',
-    source: '[SOURCE-DEFINED]',
-    guide: '[SOURCE-DEFINED] — §9.12 gives Case I no transfer; L4 briefing Q8',
-  }),
-  // docs/adr/0137 (live test U20): "Trapped" ends the lane's part. The Strip goes to PriFly's RECOVERED Bay as a PATTERN
-  // Strip at RECOVERED (the same place a Case I flight's "Recovered" puts it), and PriFly drops it like any finished
-  // Strip. The flight leaves the stack here, with a vacancy and no close-up (H28), as the drop did before.
-  FINAL_TRAPPED: _row({
-    trigger: 'CONTROLLER_INITIATED',
-    from: APP_LANES, to: Object.freeze(['CV_PRIFLY']),
-    cases: ['I', 'II', 'III'],
-    ownershipChange: true, stripTypeChange: Object.freeze({ from: 'FINAL', to: 'PATTERN' }),
-    stackEffect: 'REMOVE_NO_CLOSE_UP',
-    label: 'Trapped',
-    source: '[SOURCE-DEFINED]',
-    guide: 'docs/adr/0137 — a trapped aircraft\'s Strip goes to PriFly\'s RECOVERED Bay',
-  }),
-  // docs/adr/0155: the launch. PriFly creates the Strip on deck (LAUNCH) and "Launched" hands the airborne aircraft on: in
-  // Case III to CATCC departure control (CV_DEP), in Case I and II straight to the Marshal (departure control works Case III
-  // only, as the lanes are the approach side of CATCC). Departure's "To Marshal" ends its part; the Marshal keeps the flight
-  // until it drops it (docs/adr/0154). [SOURCE-DEFINED]: the human's ruling of 2026-11-07, CV NATOPS 5 not re-read here.
-  LAUNCH_TO_DEPARTURE: _row({
-    trigger: 'CONTROLLER_INITIATED',
-    from: ['CV_PRIFLY'], to: Object.freeze(['CV_DEP']),
-    cases: ['III'],
-    ownershipChange: true, stripTypeChange: null, // MARSHAL stays MARSHAL, LAUNCH -> LAUNCHED
-    stackEffect: null,
-    label: 'Launched',
-    source: '[SOURCE-DEFINED]',
-    guide: 'docs/adr/0155 — Case III: PriFly hands a launched aircraft to departure control',
-  }),
-  LAUNCH_TO_MARSHAL: _row({
-    trigger: 'CONTROLLER_INITIATED',
-    from: ['CV_PRIFLY'], to: Object.freeze(['CV_MARSHAL']),
-    cases: ['I', 'II'],
-    ownershipChange: true, stripTypeChange: null, // MARSHAL stays MARSHAL, LAUNCH -> LAUNCHED
-    stackEffect: null,
-    label: 'Launched',
-    source: '[SOURCE-DEFINED]',
-    guide: 'docs/adr/0155 — Case I and II: PriFly hands a launched aircraft to the Marshal',
-  }),
-  // Any Case: a flight departure control already holds must still be handed on after PriFly changes the Case.
-  DEPARTURE_TO_MARSHAL: _row({
-    trigger: 'CONTROLLER_INITIATED',
-    from: ['CV_DEP'], to: Object.freeze(['CV_MARSHAL']),
-    cases: ['I', 'II', 'III'],
-    ownershipChange: true, stripTypeChange: null, // MARSHAL stays MARSHAL, LAUNCHED stays LAUNCHED
-    stackEffect: null,
-    label: 'To Marshal',
-    source: '[SOURCE-DEFINED]',
-    guide: 'docs/adr/0155 — departure control hands the departure to the Marshal',
-  }),
+const _row = (r) => Object.freeze({
+  trigger: 'CONTROLLER_INITIATED', source: '[SOURCE-DEFINED]', guide: 'docs/adr/0156', stackEffect: null, clearsAssignments: false,
+  ...r,
+  from: Object.freeze(r.from), cases: Object.freeze(r.cases), states: Object.freeze(r.states),
+  to: Array.isArray(r.to) ? Object.freeze(r.to) : r.to,
 });
 
-/** The four kinds §9.12 names — the ones that MUST stay four distinct affordances. */
-const GUIDE_TRANSFER_KINDS = Object.freeze(['MARSHAL_TO_APPROACH', 'APPROACH_TO_FINAL', 'FINAL_TO_LSO', 'MARSHAL_TO_PRIFLY']);
+const CARRIER_HANDOFFS = Object.freeze({
+  // PriFly launches: departure control works Case II and III (ADR 0155, 0156).
+  LAUNCH_TO_DEPARTURE: _row({
+    label: 'LAUNCHED', from: ['CV_PRIFLY'], to: ['CV_DEP'], cases: SEQUENCED, caseOf: 'SHIP',
+    stripType: 'CV_LAUNCH', states: ['ON_DECK'], toStripType: 'CV_LAUNCH', toState: 'CV_AIRBORNE',
+  }),
+  // A launch handed to the Marshal is the flight's recovery from then on, in place: same Strip, flight, squawk.
+  LAUNCH_TO_MARSHAL: _row({
+    label: 'TO MARSHAL', from: ['CV_PRIFLY'], to: ['CV_MARSHAL'], cases: ['I'], caseOf: 'SHIP',
+    stripType: 'CV_LAUNCH', states: ['ON_DECK'], toStripType: 'CV_RECOVERY', toState: 'STACK', stackEffect: 'APPEND',
+  }),
+  DEPARTURE_TO_MARSHAL: _row({
+    label: 'TO MARSHAL', from: ['CV_DEP'], to: ['CV_MARSHAL'], cases: ANY_CASE, caseOf: 'SHIP',
+    stripType: 'CV_LAUNCH', states: ['CV_AIRBORNE', 'KILO'], toStripType: 'CV_RECOVERY', toState: 'STACK', stackEffect: 'APPEND',
+  }),
+  COMMENCE: _row({
+    label: 'COMMENCE', from: ['CV_MARSHAL'], to: 'SAME', cases: SEQUENCED, caseOf: 'FLIGHT',
+    stripType: 'CV_RECOVERY', states: ['STACK'], toStripType: 'CV_RECOVERY', toState: 'COMMENCED', stackEffect: 'MARK_PUSHED',
+  }),
+  // The lanes are fed alternately in push order (H30, laneFor below); the Marshal may name the other lane.
+  TO_APPROACH: _row({
+    label: 'TO APPR', from: ['CV_MARSHAL'], to: APP_LANES, cases: SEQUENCED, caseOf: 'FLIGHT',
+    stripType: 'CV_RECOVERY', states: ['COMMENCED'], toStripType: 'CV_RECOVERY', toState: 'FINAL_APPROACH',
+  }),
+  CASE_I_TO_PRIFLY: _row({
+    label: 'TO PATTERN', from: ['CV_MARSHAL'], to: ['CV_PRIFLY'], cases: ['I'], caseOf: 'FLIGHT',
+    stripType: 'CV_RECOVERY', states: ['STACK'], toStripType: 'CV_RECOVERY', toState: 'CV_PATTERN',
+  }),
+  // Back to stack: the Marshal from COMMENCED on, the lane from its own approach. The flight starts afresh (next free slot,
+  // new EAT, nothing the Marshal assigned by hand, no heading, speed or altitude). Not from BULLSEYE or the pattern.
+  RETURN_TO_STACK: _row({
+    label: 'BACK TO STACK', from: ['CV_MARSHAL', ...APP_LANES], to: ['CV_MARSHAL'], cases: SEQUENCED, caseOf: 'FLIGHT',
+    stripType: 'CV_RECOVERY', states: ['COMMENCED', 'FINAL_APPROACH', 'DIRTY'], toStripType: 'CV_RECOVERY', toState: 'STACK',
+    stackEffect: 'RETURN_TO_STACK', clearsAssignments: true,
+  }),
+  // A Case I flight that cannot finish Case I (the weather went): the Marshal sends it to the Case II/III stack.
+  ABORT_TO_STACK: _row({
+    label: 'ABORT TO CASE II/III', from: ['CV_MARSHAL'], to: ['CV_MARSHAL'], cases: SEQUENCED, caseOf: 'SHIP',
+    flightCases: ['I'],
+    stripType: 'CV_RECOVERY', states: ['STACK', 'CV_PATTERN'], toStripType: 'CV_RECOVERY', toState: 'STACK',
+    stackEffect: 'RECASE_TO_STACK', clearsAssignments: true,
+  }),
+});
 
 function _fail(detail) {
   return { ok: false, reason: 'VALIDATION_ERROR', detail };
 }
 
 /**
- * Is this handoff legal in this Case, from this Position, to that one?
- * `to: 'SAME'` means the receiving Position is the sender (toPositionId may be
- * omitted); `to: 'EXTERNAL_LSO'` means nobody in the EFSP receives it
- * (toPositionId must be null/omitted).
+ * Is this handoff legal in this Case, from this Position, to that one? `shipCase` is the ship's, `flightCase` the flight's
+ * (carrier/strip-types.js flightCaseOf); the row's `caseOf` says which one its `cases` are about, and `flightCases`, when
+ * a row has it, holds the flight's Case too. `to: 'SAME'` means the sender keeps the Strip (toPositionId may be omitted).
  * @returns {{ok:true, transfer:object} | {ok:false, reason:'VALIDATION_ERROR', detail:string}}
  */
-function validateCarrierHandoff(kind, { caseValue, fromPositionId, toPositionId = null } = {}) {
+function validateCarrierHandoff(kind, { shipCase, flightCase, fromPositionId, toPositionId = null } = {}) {
   if (typeof kind !== 'string' || !Object.prototype.hasOwnProperty.call(CARRIER_HANDOFFS, kind)) {
     return _fail(`unknown carrier transfer '${kind}'`);
   }
   const t = CARRIER_HANDOFFS[kind];
+  const caseValue = t.caseOf === 'SHIP' ? shipCase : flightCase;
   if (!t.cases.includes(caseValue)) {
-    return _fail(`${t.label} (${kind}) is a Case ${t.cases.join('/')} transfer; the recovery Case is ${caseValue ?? 'unknown'}`);
+    const whose = t.caseOf === 'SHIP' ? 'the ship is in' : 'the flight is flying';
+    return _fail(`${t.label} is a Case ${t.cases.join('/')} transfer; ${whose} Case ${caseValue ?? 'unknown'}`);
+  }
+  if (t.flightCases && !t.flightCases.includes(flightCase)) {
+    return _fail(`${t.label} is for a Case ${t.flightCases.join('/')} flight; this one is flying Case ${flightCase ?? 'unknown'}`);
   }
   if (!t.from.includes(fromPositionId)) {
-    return _fail(`${t.label} (${kind}) is sent by ${t.from.join(' or ')}, not ${fromPositionId ?? 'nobody'}`);
+    return _fail(`${t.label} is sent by ${t.from.join(' or ')}, not ${fromPositionId ?? 'nobody'}`);
   }
   if (t.to === 'SAME') {
     if (toPositionId != null && toPositionId !== fromPositionId) {
-      return _fail(`${t.label} (${kind}) stays with ${fromPositionId}; it does not go to ${toPositionId}`);
+      return _fail(`${t.label} stays with ${fromPositionId}; it does not go to ${toPositionId}`);
     }
-  } else if (t.to === 'EXTERNAL_LSO') {
-    if (toPositionId != null) return _fail(`${t.label} (${kind}) passes the aircraft to the LSO, who is not an EFSP Position`);
   } else if (!t.to.includes(toPositionId)) {
-    return _fail(`${t.label} (${kind}) goes to ${t.to.join(' or ')}, not ${toPositionId ?? 'nobody'}`);
+    return _fail(`${t.label} goes to ${t.to.join(' or ')}, not ${toPositionId ?? 'nobody'}`);
   }
   return { ok: true, transfer: t };
 }
@@ -208,7 +126,7 @@ function laneFor(pushOrdinal, { isStaffed = () => true } = {}) {
 }
 
 /**
- * Lanes for the HOLDING entries of a derived stack, in push order. The push
+ * Lanes for the entries of a derived stack, in push order. The push
  * ordinal is each entry's rank in the stack (PUSHED entries still in the
  * stack count, so a flight's lane does not flip when the one below it
  * commences; vacancies do not count, so the alternation survives a gap).
@@ -220,7 +138,8 @@ function assignLanes(derivedStack, { isStaffed = () => true } = {}) {
   const ordered = list.slice().sort((a, b) => a.stackIndex - b.stackIndex);
   const out = [];
   ordered.forEach((d, i) => {
-    if (d.status === 'HOLDING') out.push({ flightDataId: d.flightDataId, pushOrdinal: i, lane: laneFor(i, { isStaffed }) });
+    // docs/adr/0156: a commenced flight is still the Marshal's (TO APPR hands it to its lane), so it keeps its lane.
+    out.push({ flightDataId: d.flightDataId, pushOrdinal: i, lane: laneFor(i, { isStaffed }) });
   });
   return out;
 }
@@ -229,7 +148,6 @@ module.exports = {
   TRIGGER_TYPES,
   APP_LANES,
   CARRIER_HANDOFFS,
-  GUIDE_TRANSFER_KINDS,
   validateCarrierHandoff,
   laneFor,
   assignLanes,

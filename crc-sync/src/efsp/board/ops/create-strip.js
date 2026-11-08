@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const { newFlags } = require('../strip-util');
 const { warn } = require('../../warnings');
 const { atoFlightForLaunch } = require('../../carrier/ato-bind');
+const { isCarrierStrip } = require('../../carrier/strip-types');
+const { prepareCarrierSeed } = require('../../carrier/create-seed');
 const authority = require('../../authority');
 
 function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } = {}) {
@@ -63,11 +65,20 @@ function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } 
   // this one op. It also keeps the reverse direction free — WP7's ATO-first
   // case is this same op with a different strip type and acting Position.
   let created;
-  // docs/adr/0109: a carrier launch typed by callsign meets its ATO mission line when exactly one
+  const carrierStrip = isCarrierStrip({ stripType });
+  const newFlight = (op.flightDataId === undefined || op.flightDataId === null) && op.flightData;
+  // docs/adr/0156: a carrier Strip is made by its side number; its carrier fields are checked here, before anything is minted.
+  let carrierFields = [];
+  if (carrierStrip && newFlight) {
+    const prep = prepareCarrierSeed(stripType, op.flightData, ctx.rules.carrierCase());
+    if (!prep.ok) return { ok: false, reason: prep.reason, detail: prep.detail };
+    carrierFields = prep.fields;
+    op = { ...op, flightData: prep.seed };
+  }
+  // docs/adr/0109: a carrier Strip typed with a callsign meets its ATO mission line when exactly one
   // waits for it, as OPS's ATO-first picker does for a land departure.
   let atoBound = null;
-  if (stripType === 'MARSHAL' && (op.initialState || ctx.initialStateFor(stripType)) === 'LAUNCH'
-      && (op.flightDataId === undefined || op.flightDataId === null) && op.flightData) {
+  if (carrierStrip && newFlight && op.flightData.callsign) {
     atoBound = atoFlightForLaunch(ctx, op.flightData);
     if (atoBound) op = { ...op, flightData: undefined, flightDataId: atoBound.flightDataId };
   }
@@ -105,9 +116,11 @@ function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } 
     // flight took in the meantime, and is a no-op for a flight still holding it).
     if (ctx.flightDataStore.reacquireFlightData) ctx.flightDataStore.reacquireFlightData(op.flightDataId);
   } else {
-    created = ctx.flightDataStore.createFlightData(op.flightData, { by });
+    created = ctx.flightDataStore.createFlightData(op.flightData, { by, callsignOptional: carrierStrip });
   }
   if (!created.ok) return { ok: false, reason: created.reason, detail: created.detail };
+  for (const [field, value] of carrierFields) ctx.flightDataStore.setCarrier(created.flightData.flightDataId, field, value, { by });
+  if (carrierFields.length) created = { ...created, flightData: ctx.flightDataStore.getFlightData(created.flightData.flightDataId) };
 
   const stripId = crypto.randomUUID();
   const rackStrips = ctx.state.rack(op.bayId, op.rackId);
@@ -155,7 +168,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } 
     createdAt: now, updatedAt: now, updatedBy: by || null,
   };
   ctx.state.insert(strip);
-  // docs/adr/0074: a recovery check-in (a MARSHAL Strip in IN_STACK) joins the
+  // docs/adr/0074: a recovery check-in (a CV_RECOVERY Strip at STACK) joins the
   // Marshal stack at the next free slot. The Marshal re-sequences with one
   // Move; a full stack is a warning, not a refusal of the check-in.
   let warnings;

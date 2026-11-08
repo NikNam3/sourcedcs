@@ -158,6 +158,7 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     carrierCase:             () => carrierStore.caseValue(),
     carrierLaneFor:          (strip) => carrierStore.laneFor(strip.flightDataId),
     carrierInStack:          (strip) => carrierStore.inStack(strip.flightDataId),
+    carrierCaseOf:           (strip) => carrierStore.caseOf(strip.flightDataId), // docs/adr/0156
     canRecordCarrierHandoff: (actingPositionId, kind) => permission.canRecordCarrierHandoff(actingPositionId, kind),
     validateCarrierHandoff: (kind, args) => carrierModel.validateCarrierHandoff(kind, args),
     carrierHandoffs:        carrierModel.CARRIER_HANDOFFS,

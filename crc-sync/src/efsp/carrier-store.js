@@ -74,7 +74,7 @@ class CarrierStore extends SyncedStore {
       hullId, rev: 0,
       recoveryCase: carrier.initialRecoveryCase(),
       overrides: carrier.emptyOverrides(),
-      stacks: { [carrier.DEFAULT_STACK_ID]: carrier.emptyStack({ stackId: carrier.DEFAULT_STACK_ID, hullId }) },
+      stacks: Object.fromEntries(carrier.STACK_IDS.map(stackId => [stackId, carrier.emptyStack({ stackId, hullId })])),
       transitions: [],
     };
   }
@@ -115,6 +115,11 @@ class CarrierStore extends SyncedStore {
     return { state, inputs: carrier.recoveryInputs(state, this._tuning) };
   }
 
+  /** The recovery inputs a stack derives with: its own Case (docs/adr/0156), not the ship's. */
+  _inputsFor(stackId, inputs) {
+    return { ...inputs, caseValue: carrier.caseOfStack(stackId, inputs.caseValue) };
+  }
+
   /** The resolved state of a hull (copies), for the callers that read one value: `state.brc.value`, `state.rampTime.source`, ... */
   state(hullId = this.defaultHullId) {
     const r = this._records.get(hullId);
@@ -130,10 +135,21 @@ class CarrierStore extends SyncedStore {
     const r = this._records.get(hullId);
     if (!r) return null;
     const { inputs } = this._resolve(r);
-    for (const stack of Object.values(r.stacks)) {
-      const derived = carrier.deriveStack(stack, inputs);
-      const lane = carrier.assignLanes(derived, { isStaffed: this._isStaffed }).find(l => l.flightDataId === flightDataId);
-      if (lane) return lane.lane;
+    // Only the Case II/III stack feeds the lanes.
+    const derived = carrier.deriveStack(r.stacks[carrier.DEFAULT_STACK_ID], this._inputsFor(carrier.DEFAULT_STACK_ID, inputs));
+    const lane = carrier.assignLanes(derived, { isStaffed: this._isStaffed }).find(l => l.flightDataId === flightDataId);
+    return lane ? lane.lane : null;
+  }
+
+  /**
+   * The Case a flight in the recovery flies (docs/adr/0156): 'I' in the overhead stack, the Case II/III stack's otherwise;
+   * null when it is in no stack (a launch).
+   */
+  caseOf(flightDataId, hullId = this.defaultHullId) {
+    const r = this._records.get(hullId);
+    if (!r) return null;
+    for (const [stackId, stack] of Object.entries(r.stacks)) {
+      if (stack.entries.some(e => e.flightDataId === flightDataId)) return carrier.caseOfStack(stackId, r.recoveryCase.value);
     }
     return null;
   }
@@ -155,7 +171,7 @@ class CarrierStore extends SyncedStore {
       // client draws `display`, it never converts.
       const mv = this._variation(hullId);
       const ref = (v) => (v == null ? 'TRUE' : v);
-      derived[stackId] = carrier.deriveStack(stack, inputs).map(e => ({
+      derived[stackId] = carrier.deriveStack(stack, this._inputsFor(stackId, inputs)).map(e => ({
         ...e,
         marshalRadialDisplay: carrier.displayBearing(e.marshalRadialDeg, { ref: ref(state.radial.ref), magneticVariationDeg: mv }),
         expectedFinalBearingDisplay: carrier.displayBearing(e.expectedFinalBearingDeg, { ref: ref(state.finalBearing.ref), magneticVariationDeg: mv }),
@@ -172,13 +188,13 @@ class CarrierStore extends SyncedStore {
       const last = Math.min(carrier.STACK_DEFAULTS.maxIndex, top + 1); // one open slot above the stack: a drop there appends
       slots[stackId] = [];
       for (let i = 0; i <= last; i++) {
-        const d = carrier.deriveEntry({ flightDataId: null, stackIndex: i, status: 'HOLDING', caseIAngels: null }, { ...inputs, deltaMs: stack.deltaMs });
+        const d = carrier.deriveEntry({ flightDataId: null, stackIndex: i, status: 'HOLDING' }, { ...this._inputsFor(stackId, inputs), deltaMs: stack.deltaMs });
         slots[stackId].push({ stackIndex: i, angels: d.angels, marshalDme: d.marshalDme, pushTimeUtc: d.pushTimeUtc });
       }
     }
     const lanes = {};
     for (const [stackId, stack] of Object.entries(r.stacks)) {
-      lanes[stackId] = carrier.assignLanes(carrier.deriveStack(stack, inputs), { isStaffed: this._isStaffed });
+      lanes[stackId] = stackId === carrier.DEFAULT_STACK_ID ? carrier.assignLanes(carrier.deriveStack(stack, this._inputsFor(stackId, inputs)), { isStaffed: this._isStaffed }) : [];
     }
     // The banner is what the GAME says about the ship (BRC, final bearing, altimeter as DCS has them). The values in force,
     // overrides included, are `state`; the client draws those.
@@ -354,7 +370,7 @@ class CarrierStore extends SyncedStore {
   _derivedAll(record) {
     const { inputs } = this._resolve(record);
     const out = {};
-    for (const [stackId, stack] of Object.entries(record.stacks)) out[stackId] = carrier.deriveStack(stack, inputs);
+    for (const [stackId, stack] of Object.entries(record.stacks)) out[stackId] = carrier.deriveStack(stack, this._inputsFor(stackId, inputs));
     return out;
   }
 
@@ -374,7 +390,8 @@ class CarrierStore extends SyncedStore {
   }
 
   _stackOp(record, op, by, quiet) {
-    const stackId = op.stackId || carrier.DEFAULT_STACK_ID;
+    // An op on a flight goes to the stack it is in (its Case, docs/adr/0156); a stack-wide op names its stack or means MAIN.
+    const stackId = op.stackId || (op.flightDataId && this._stackIdOf(record, op.flightDataId)) || carrier.DEFAULT_STACK_ID;
     const stack = record.stacks[stackId];
     if (!stack) return { ok: false, reason: 'NOT_FOUND', detail: `unknown stack ${stackId}` };
     if ((op.kind === 'InsertAt' || op.kind === 'Append') && !this._flightDataExists(op.flightDataId)) {
@@ -396,13 +413,14 @@ class CarrierStore extends SyncedStore {
         // The moment it commences and the EAT it was working to, from the mission clock and the derivation (docs/adr/0114).
         opts.nowMs = this._clock.now();
         const entry = stack.entries.find(e => e.flightDataId === op.flightDataId);
-        if (entry) opts.eatUtc = carrier.deriveEntry(entry, { ...inputs, deltaMs: stack.deltaMs }).pushTimeUtc;
+        if (entry) opts.eatUtc = carrier.deriveEntry(entry, { ...this._inputsFor(stackId, inputs), deltaMs: stack.deltaMs }).pushTimeUtc;
       }
+    }
+    if ((op.kind === 'SetEat' || op.kind === 'SetDme') && stackId === carrier.CASE_I_STACK_ID) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `a Case I recovery has no ${op.kind === 'SetEat' ? 'EAT' : 'holding fix DME'}` };
     }
     if (op.kind === 'SetEat') {
       // docs/adr/0137: a typed Zulu HHMM (or nothing, to use the slot's EAT), dated on the mission clock here, once.
-      const { inputs } = this._resolve(record);
-      if (!carrier.isSequencedCase(inputs.caseValue)) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'a Case I recovery has no EAT' };
       const blank = op.eat === null || op.eat === undefined || (typeof op.eat === 'string' && op.eat.trim() === '');
       const eatUtc = blank ? null : resolveZuluHhmm(op.eat, this._clock.now());
       if (!blank && eatUtc == null) return { ok: false, reason: 'VALIDATION_ERROR', detail: `the EAT must be a Zulu time, HHMM (not ${JSON.stringify(op.eat)})` };
@@ -431,7 +449,9 @@ class CarrierStore extends SyncedStore {
   applyEffect(effect, flightDataId, { hullId = this.defaultHullId, by = null, actingPositionId = null, clientMutationId = null } = {}) {
     const record = this._records.get(hullId);
     if (!record) return { ok: false, reason: 'NOT_FOUND', detail: `unknown hull ${hullId}` };
-    const op = effect === 'MARK_PUSHED' ? { kind: 'MarkPushed', flightDataId }
+    if (effect === 'APPEND') return this.appendFlight(flightDataId, { hullId, by, actingPositionId, clientMutationId });
+    if (effect === 'RECASE_TO_STACK') return this._recase(record, flightDataId, { hullId, by, actingPositionId, clientMutationId });
+    const op = effect === 'MARK_PUSHED' ? { kind: 'MarkPushed', flightDataId, stackId: this._stackIdOf(record, flightDataId) }
       : effect === 'RETURN_TO_STACK' ? { kind: 'BackToStack', flightDataId }
       : effect === 'REMOVE_NO_CLOSE_UP' ? { kind: 'Remove', flightDataId, closeUp: false }
       : null;
@@ -439,6 +459,40 @@ class CarrierStore extends SyncedStore {
     const before = deepClone(record);
     const r = this._stackOp(record, op, by, false);
     this._audit({ clientMutationId, op: { kind: `Stack:${op.kind}` }, hullId }, actingPositionId, by, before, r);
+    return r;
+  }
+
+  /** The stack a flight is in, or null. */
+  _stackIdOf(record, flightDataId) {
+    for (const [stackId, stack] of Object.entries(record.stacks)) if (stack.entries.some(e => e.flightDataId === flightDataId)) return stackId;
+    return null;
+  }
+
+  /**
+   * Abort to the Case II/III stack (docs/adr/0156): a Case I flight leaves the overhead stack (no close-up, H28) and joins the
+   * Case II/III stack at the next free slot, its angels and EAT new to the pilot. Refused while the ship is in Case I.
+   */
+  _recase(record, flightDataId, { hullId, by, actingPositionId, clientMutationId }) {
+    if (!carrier.isSequencedCase(record.recoveryCase.value)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'Case I is active: there is no Case II/III stack to send it to' };
+    }
+    const from = record.stacks[carrier.CASE_I_STACK_ID];
+    if (!from.entries.some(e => e.flightDataId === flightDataId)) return { ok: false, reason: 'NOT_FOUND', detail: `${flightDataId} is not in the Case I stack` };
+    const before = deepClone(record);
+    const derivedBefore = this._derivedAll(record);
+    const out = carrier.remove(from, { flightDataId, closeUp: false });
+    const main = record.stacks[carrier.DEFAULT_STACK_ID];
+    const into = out.ok ? carrier.append(main, { flightDataId, unpassed: ['angels', 'eat'] }) : out;
+    if (!into.ok) {
+      this._audit({ clientMutationId, op: { kind: 'Stack:Recase' }, hullId }, actingPositionId, by, before, into);
+      return into;
+    }
+    record.stacks[carrier.CASE_I_STACK_ID] = out.stack;
+    record.stacks[carrier.DEFAULT_STACK_ID] = into.stack;
+    this._markChanges(record, derivedBefore);
+    this._touch(record, by, 'Recase', flightDataId);
+    const r = { ok: true, record: deepClone(record), changed: [flightDataId] };
+    this._audit({ clientMutationId, op: { kind: 'Stack:Recase' }, hullId }, actingPositionId, by, before, r);
     return r;
   }
 
@@ -515,7 +569,8 @@ class CarrierStore extends SyncedStore {
     if (!record) return { ok: false, reason: 'NOT_FOUND', detail: `unknown hull ${hullId}` };
     if (this.inStack(flightDataId, hullId)) return { ok: true, changed: [], already: true };
     const before = deepClone(record);
-    const r = this._stackOp(record, { kind: 'Append', flightDataId }, by, false);
+    // docs/adr/0156: the flight takes the ship's Case now, and keeps it: the stack it joins is its Case.
+    const r = this._stackOp(record, { kind: 'Append', flightDataId, stackId: carrier.stackIdForCase(record.recoveryCase.value) }, by, false);
     this._audit({ clientMutationId, op: { kind: 'Stack:Append' }, hullId }, actingPositionId, by, before, r);
     return r;
   }
@@ -585,7 +640,7 @@ class CarrierStore extends SyncedStore {
       for (const [stackId, raw] of Object.entries(saved.stacks && typeof saved.stacks === 'object' ? saved.stacks : {})) {
         stacks[stackId] = carrier.normalizeStack(raw, { stackId, hullId: saved.hullId }).stack;
       }
-      if (!stacks[carrier.DEFAULT_STACK_ID]) stacks[carrier.DEFAULT_STACK_ID] = fresh.stacks[carrier.DEFAULT_STACK_ID];
+      for (const stackId of carrier.STACK_IDS) if (!stacks[stackId]) stacks[stackId] = fresh.stacks[stackId];
       this._records.set(saved.hullId, {
         hullId: saved.hullId,
         rev: Number.isInteger(saved.rev) ? saved.rev : 0,

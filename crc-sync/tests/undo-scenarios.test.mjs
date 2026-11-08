@@ -195,27 +195,26 @@ test('U3: undoing a Drop reopens the MARSA relation it ended, re-claims the code
 
 function checkIn(efsp, c, callsign) {
   return mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, {
-    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign, aircraftType: 'F-18C' },
+    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY', flightData: { sideNumber: callsign, callsign, aircraftType: 'F-18C' },
   });
 }
 const stack = (efsp) => efsp.carrierStore.getRecord().stacks.MAIN.entries;
 
-test('U4: Commence undone is RestoreEntry; a PriFly removal undone is Reinsert; a refilled index blocks', () => {
+test('U4: Commence undone is RestoreEntry; a drop out of the stack undone is Reinsert; a refilled index blocks', () => {
   const { efsp, c } = fresh(CARRIER);
   const a = checkIn(efsp, c, 'AAA11');
   const b = checkIn(efsp, c, 'BBB22');
-  const commence = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', a, { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_APPROACH', toPositionId: 'CV_APP1' });
+  const commence = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', a, { kind: 'CarrierHandoff', transfer: 'COMMENCE' });
   assert.equal(commence.ack.ok, true, JSON.stringify(commence.ack));
   assert.equal(stack(efsp)[0].status, 'PUSHED');
   const u = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a, 'CARRIER'), undoOp(commence.ack));
   assert.equal(u.ack.ok, true, JSON.stringify(u.ack));
   assert.equal(stack(efsp)[0].status, 'HOLDING');
-  assert.deepEqual([get(efsp, a, 'CARRIER').state, get(efsp, a, 'CARRIER').ownerPositionId], ['IN_STACK', 'CV_MARSHAL']);
+  assert.deepEqual([get(efsp, a, 'CARRIER').state, get(efsp, a, 'CARRIER').ownerPositionId], ['STACK', 'CV_MARSHAL']);
   assert.deepEqual(u.broadcasts.slots, ['primary', 'carrier'], 'U19: Board then carrier');
   assert.equal(log().filter(e => e.op === 'Stack:RestoreEntry').pop().causedBy, u.ack.clientMutationId);
 
-  carrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'II' });
-  const seeYou = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a, 'CARRIER'), { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_PRIFLY' });
+  const seeYou = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a, 'CARRIER'), { kind: 'DropStrip' });
   assert.equal(seeYou.ack.ok, true, JSON.stringify(seeYou.ack));
   assert.deepEqual(stack(efsp).map(e => e.flightDataId), [b.flightDataId]);
   const back = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a, 'CARRIER'), undoOp(seeYou.ack));
@@ -223,13 +222,13 @@ test('U4: Commence undone is RestoreEntry; a PriFly removal undone is Reinsert; 
   assert.deepEqual(stack(efsp).map(e => [e.flightDataId, e.stackIndex]), [[a.flightDataId, 0], [b.flightDataId, 1]]);
 
   // removed again, then the vacated index is refilled before the Undo
-  const again = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a, 'CARRIER'), { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_PRIFLY' });
+  const again = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a, 'CARRIER'), { kind: 'DropStrip' });
   const d = checkIn(efsp, c, 'DDD44');
   const moved = carrierAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', { kind: 'Move', flightDataId: d.flightDataId, toIndex: 0 });
   assert.equal(moved.ack.ok, true, JSON.stringify(moved.ack));
   const blocked = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a, 'CARRIER'), undoOp(again.ack));
   refused(blocked.ack, 'UNDO_BLOCKED', new RegExp(d.flightDataId));
-  assert.equal(get(efsp, a, 'CARRIER').stripType, 'PATTERN', 'nothing restored');
+  assert.equal(get(efsp, a, 'CARRIER').state, 'DROPPED', 'nothing restored');
 });
 
 // ── U6 the L19 chip ──────────────────────────────────────────────────────

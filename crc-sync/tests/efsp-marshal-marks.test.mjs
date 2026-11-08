@@ -63,7 +63,7 @@ test('a re-sequence marks the moved flight and everyone it shifted (angels and E
   assert.deepEqual(r.all(), { f0: [], f3: ['angels', 'eat'], f1: ['angels', 'eat'], f2: ['angels', 'eat'] });
 });
 
-test('a ramp-time change marks the EATs; a cleared ramp time adds nothing; a Case change marks the Case I altitude that moved', () => {
+test('a ramp-time change marks the EATs; a cleared ramp time adds nothing; an assigned angels marks; a Case change moves nobody (docs/adr/0156)', () => {
   const r = rig();
   r.flights(2);
   r.set('rampTime', '2040');
@@ -72,16 +72,14 @@ test('a ramp-time change marks the EATs; a cleared ramp time adds nothing; a Cas
   r.pass('f0'); r.pass('f1');
   r.set('rampTime', null);
   assert.deepEqual(r.all(), { f0: [], f1: [] }, 'an EAT that goes away leaves nothing to pass');
-  // Case I: the typed altitude; first typed is not a change, re-typed is; to Case III it becomes 6 + slot
-  r.set('case', 'I');
-  assert.deepEqual(r.all(), { f0: [], f1: [] }, 'Case I has no altitude until one is typed');
-  r.op({ kind: 'SetCaseIAngels', flightDataId: 'f0', caseIAngels: 3 });
-  assert.deepEqual(r.marks('f0'), []);
-  r.op({ kind: 'SetCaseIAngels', flightDataId: 'f0', caseIAngels: 4 });
-  assert.deepEqual(r.marks('f0'), ['angels']);
+  r.op({ kind: 'SetAngels', flightDataId: 'f0', angels: 12 });
+  assert.deepEqual(r.marks('f0'), ['angels'], 'an assigned altitude is new to the pilot');
   r.pass('f0');
+  // The flights keep the Case they were given: a ship Case change re-clears nobody.
+  r.set('case', 'I');
+  assert.deepEqual(r.all(), { f0: [], f1: [] });
   r.set('case', 'III');
-  assert.deepEqual(r.all(), { f0: ['angels'], f1: [] });
+  assert.deepEqual(r.all(), { f0: [], f1: [] });
 });
 
 test('Back to stack marks both, whatever they read; Commence clears what was not passed', () => {
@@ -164,10 +162,10 @@ test('the marks survive a restart (persisted with the stack); a pushed entry car
   const withMark = (e, m) => ({ ...stack, entries: stack.entries.map((x) => (x.flightDataId === e ? { ...x, ...m } : x)) });
   assert.equal(validateStack(withMark('f1', { unpassed: ['dme'] })).ok, false);
   assert.equal(validateStack(withMark('f1', { unpassed: ['eat', 'eat'] })).ok, false);
-  const pushed = { ...stack, entries: [{ flightDataId: 'p', stackIndex: 5, status: 'PUSHED', caseIAngels: null, pushedAtUtc: 1, eatUtc: 1, unpassed: ['eat'] }] };
+  const pushed = { ...stack, entries: [{ flightDataId: 'p', stackIndex: 5, status: 'PUSHED', pushedAtUtc: 1, eatUtc: 1, unpassed: ['eat'] }] };
   assert.equal(validateStack(pushed).ok, false);
   // an entry from before this build has no `unpassed`: it reads as nothing to pass
-  const old = normalizeStack({ stackId: 'MAIN', entries: [{ flightDataId: 'a', stackIndex: 0, status: 'HOLDING', caseIAngels: null }] });
+  const old = normalizeStack({ stackId: 'MAIN', entries: [{ flightDataId: 'a', stackIndex: 0, status: 'HOLDING' }] });
   assert.deepEqual(old.stack.entries[0].unpassed, []);
 });
 
@@ -199,7 +197,7 @@ test('a marked flight that diverts or is dropped leaves with its mark; the missi
 });
 
 test('the pure rule: markClearanceChanges and passClearance never mutate their input', () => {
-  const e = (id, i, extra = {}) => Object.freeze({ flightDataId: id, stackIndex: i, status: 'HOLDING', caseIAngels: null, pushedAtUtc: null, eatUtc: null, unpassed: Object.freeze([]), ...extra });
+  const e = (id, i, extra = {}) => Object.freeze({ flightDataId: id, stackIndex: i, status: 'HOLDING', pushedAtUtc: null, eatUtc: null, unpassed: Object.freeze([]), ...extra });
   const stack = Object.freeze({ stackId: 'MAIN', hullId: 'X', deltaMs: 0, entries: Object.freeze([e('a', 0), e('b', 1, { unpassed: Object.freeze(['eat']) })]) });
   const d = (id, angels, push, status = 'HOLDING') => ({ flightDataId: id, status, angels, pushTimeUtc: push });
   const out = markClearanceChanges(stack, [d('a', 6, 100), d('b', 7, 200)], [d('a', 6, 160), d('b', 8, 200)]);

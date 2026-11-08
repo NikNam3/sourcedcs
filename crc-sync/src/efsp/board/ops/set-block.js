@@ -2,7 +2,10 @@
 
 const { MAX_FREE_TEXT } = require('../../flight-data-store');
 const { _frequencyFromBlockValue } = require('../strip-util');
-const { fromCode } = require('../../warnings');
+const { fromCode, warn } = require('../../warnings');
+const { isCarrierStrip, flightCaseOf } = require('../../carrier/strip-types');
+const { CARRIER_RADAR_SERVICE_BLOCKS } = require('../../block-map');
+const { atoFlightForLaunch } = require('../../carrier/ato-bind');
 
 /**
  * The setTofi patch for a TOFI Block write (docs/adr/0102 for SREG). Before the flight has entered, a non-ATC value
@@ -20,6 +23,21 @@ function _tofiPatch(ctx, strip, target, op) {
     return { pendingSeparationRegime: value };
   }
   return value === 'ATC' || value === null ? { separationRegime: value, regimeEffective: null } : { separationRegime: value };
+}
+
+/**
+ * The carrier Strip's flight takes the ATO mission its new callsign was tasked on (docs/adr/0156, ADR 0109's join by
+ * callsign): the mission is copied onto this flight, which keeps its own squawk, stack place and correlation. Only when this
+ * flight has no ATO line yet and exactly one waits for it. Returns the BOUND_TO_ATO warning, or null.
+ */
+function _attachAto(ctx, strip, by) {
+  const own = ctx.flightDataStore.getFlightData(strip.flightDataId);
+  if (!own || own.ato) return null;
+  const tasked = atoFlightForLaunch(ctx, { callsign: own.identity.callsign });
+  if (!tasked) return null;
+  const r = ctx.flightDataStore.attachAto(strip.flightDataId, tasked.ato, { by });
+  if (!r.ok) return null;
+  return warn('BOUND_TO_ATO', `${own.identity.callsign} is flying its ATO mission ${tasked.ato.missionNumber || '?'}`);
 }
 
 function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) {
@@ -69,6 +87,10 @@ function _applySetBlockWrite(ctx, strip, op, by, actingPositionId, clientMutatio
   if (!ctx.rules.isBlockVisible(strip.stripType, op.blockId)) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `Block ${op.blockId} is not visible for ${strip.stripType} at this Facility`, strip };
   }
+  // docs/adr/0156: a Case I flight gets no radar service, so no squawk and no assigned heading, speed or altitude.
+  if (isCarrierStrip(strip) && CARRIER_RADAR_SERVICE_BLOCKS.includes(op.blockId) && flightCaseOf(strip, ctx.rules) === 'I') {
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: 'Case I: no radar service', strip };
+  }
 
   if (target.kind === 'flightData' || target.kind === 'airspace-owner' || target.kind === 'tofi' || target.kind === 'frequency' || target.kind === 'military' || target.kind === 'aircraft-data') {
     const flightDataResult = target.kind === 'aircraft-data'
@@ -96,8 +118,12 @@ function _applySetBlockWrite(ctx, strip, op, by, actingPositionId, clientMutatio
     // concurrency protocol on the wire. See the implementation plan.
     ctx.state.bump(strip, by);
     const marsaVoided = ctx.marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
+    // docs/adr/0156: a carrier Strip gets its callsign from its menu, and with it the ATO line that callsign was tasked on.
+    const atoWarning = isCarrierStrip(strip) && target.path === 'identity.callsign' ? _attachAto(ctx, strip, by) : null;
     return {
-      ok: true, strip, flightData: flightDataResult.flightData, warnings: fromCode(flightDataResult.warning),
+      ok: true, strip, flightData: ctx.flightDataStore.getFlightData(strip.flightDataId) || flightDataResult.flightData,
+      warnings: [...(fromCode(flightDataResult.warning) || []), ...(atoWarning ? [atoWarning] : [])].length
+        ? [...(fromCode(flightDataResult.warning) || []), ...(atoWarning ? [atoWarning] : [])] : undefined,
       marsaVoided, flightDataList: marsaVoided ? ctx.drainMarsaRegimeWrites() : undefined,
     };
   }

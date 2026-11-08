@@ -37,13 +37,13 @@ function toMarshal({ efsp, c }, callsign, from = 'CTR', { released } = {}) {
   };
 }
 
-test('CTR and APP both hand an ARRIVAL at INBOUND to CV_MARSHAL: the replica is a MARSHAL Strip at IN_STACK in the Coordination Bay', () => {
+test('CTR and APP both hand an ARRIVAL at INBOUND to CV_MARSHAL: the replica is a CV_RECOVERY Strip at STACK in the Coordination Bay', () => {
   for (const from of ['CTR', 'AP']) {
     const w = world();
     const ex = toMarshal(w, 'CVIN' + from, from);
     const r = ex.R();
-    assert.equal(r.stripType, 'MARSHAL');
-    assert.equal(r.state, 'IN_STACK');
+    assert.equal(r.stripType, 'CV_RECOVERY');
+    assert.equal(r.state, 'STACK');
     assert.equal(r.ownerPositionId, 'CV_MARSHAL');
     assert.equal(r.bayId, 'cv-marshal-coordination');
     assert.equal(stack(w.efsp).length, 0, 'not in the stack until ACCEPT');
@@ -56,7 +56,7 @@ test('ACCEPT appends to the Marshal stack at the next free slot, through the che
   const a = toMarshal(w, 'CVA1');
   const accepted = mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', a.R(), { kind: 'HANDOFF', action: 'ACCEPT' });
   assert.equal(accepted.bayId, 'cv-marshal-stack');
-  assert.equal(accepted.state, 'IN_STACK');
+  assert.equal(accepted.state, 'STACK');
   assert.equal(stack(w.efsp).length, 1);
   assert.equal(stack(w.efsp)[0].flightDataId, accepted.flightDataId);
   const b = toMarshal(w, 'CVA2', 'AP');
@@ -70,7 +70,7 @@ test('ACCEPT appends to the Marshal stack at the next free slot, through the che
 test('the Marshal receives and never proposes: PROPOSE and CANCEL are refused, and the Marshal takes no other primitive', () => {
   const w = world();
   const own = mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', null, {
-    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign: 'CVOWN1', aircraftType: 'F-18C' },
+    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY', flightData: { sideNumber: 'CVOWN1', callsign: 'CVOWN1', aircraftType: 'F-18C' },
   });
   for (const op of [
     { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' },
@@ -144,7 +144,8 @@ test('I9 CarrierHandoff after control moved: control follows the owner (Marshal 
   mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'ACCEPT' });
   mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'CHECKED_IN' });
   assert.equal(ex.T().coordination.separationResponsibilityRef.positionId, 'CV_MARSHAL');
-  const handed = mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_APPROACH', toPositionId: 'CV_APP1' });
+  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'CarrierHandoff', transfer: 'COMMENCE' });
+  const handed = mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'CarrierHandoff', transfer: 'TO_APPROACH', toPositionId: 'CV_APP1' });
   assert.equal(handed.ownerPositionId, 'CV_APP1');
   assert.equal(ex.R().coordination.separationResponsibilityRef.positionId, 'CV_APP1');
   assert.equal(ex.T().coordination.separationResponsibilityRef.positionId, 'CV_APP1');

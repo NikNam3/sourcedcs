@@ -592,9 +592,10 @@ class FlightDataStore {
    *
    * Returns { ok:true, flightData } or { ok:false, reason }.
    */
-  createFlightData(seed, { by }) {
+  createFlightData(seed, { by, callsignOptional = false } = {}) {
     const callsign = String(seed?.callsign || '').toUpperCase();
-    if (!CALLSIGN_RE.test(callsign)) {
+    // docs/adr/0156: a carrier Strip is made by its side number; the callsign comes later, if ever.
+    if (!(callsignOptional && callsign === '') && !CALLSIGN_RE.test(callsign)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'callsign must be 1-7 alphanumeric characters' };
     }
 
@@ -1307,6 +1308,19 @@ class FlightDataStore {
    * (§9.12 rule 7). Validated by carrier/flight-record.js, which refuses a
    * frequency where a button belongs (rule 6). `null` clears.
    */
+  /** docs/adr/0156: a carrier flight takes the ATO mission its callsign was tasked on (a copy; the tasking stays its own). */
+  attachAto(flightDataId, ato, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
+    if (!ato || typeof ato !== 'object') return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no ATO line' };
+    flightData.ato = JSON.parse(JSON.stringify(ato));
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['ato']);
+    return { ok: true, flightData };
+  }
+
   setCarrier(flightDataId, field, value, { by } = {}) {
     const flightData = this._flightDataList.get(flightDataId);
     if (!flightData) return { ok: false, reason: 'NOT_FOUND' };

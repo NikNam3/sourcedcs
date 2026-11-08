@@ -2,71 +2,75 @@
 
 const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
 
-const { CARRIER_HANDOFF_EFFECTS } = require('../../carrier/handoff-effects'); // pure (docs/adr/0074)
 const { warn } = require('../../warnings');
+const { flightCaseOf } = require('../../carrier/strip-types');
+const { activeClearanceEntry } = require('../../flight-data-store');
+
+const ASSIGNMENT_FIELDS = Object.freeze(['heading', 'speed', 'altitude']);
 
 /**
- * The carrier's four handoffs, as one operation (docs/adr/0064, 0074; guide
- * §9.12: "MUST NOT be unified behind one button"). Reached by the dedicated
- * CarrierHandoff op and by the NLA button (computeNla's `carrierHandoff`),
- * so there is exactly one implementation of what each does.
+ * The carrier's handoffs, as one operation (docs/adr/0156). Reached by the dedicated CarrierHandoff op and by the NLA
+ * button (computeNla's `carrierHandoff`), so there is exactly one implementation of what each does; what each does is
+ * the row in carrier/handoffs.js. Every trigger is a controller gesture, never a surveillance advance (guide §10.3, D5).
  *
- * Each kind carries its own TRIGGER TYPE, recorded on the Strip
- * (`carrierHandoff`) and on the audit line, and rendered distinctly. Every
- * trigger is a controller gesture: "radar contact", "ball" and "see you" are
- * the controller recording what they saw or the pilot said, never a
- * surveillance advance (guide §10.3, D5).
- *
- * Order: validate everything, then the stack effect (the one step that can
- * refuse after validation), then the Strip. Nothing is half applied.
+ * Order: validate everything, then the stack effect (the one step that can refuse after validation), then the Strip.
+ * Nothing is half applied.
  */
 function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPositionId, clientMutationId) {
-  const fx = typeof kind === 'string' && Object.prototype.hasOwnProperty.call(CARRIER_HANDOFF_EFFECTS, kind) ? CARRIER_HANDOFF_EFFECTS[kind] : null;
-  if (!fx) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown carrier transfer '${kind}'`, strip };
-  const row = ctx.rules.carrierHandoffs[kind];
-  const label = row ? row.label : kind;
-  if (strip.stripType !== fx.stripType || strip.state !== fx.state) {
-    return { ok: false, reason: 'VALIDATION_ERROR', detail: `${label} applies to a ${fx.stripType} Strip in ${fx.state}, not ${strip.stripType} in ${strip.state}`, strip };
+  const row = typeof kind === 'string' && Object.prototype.hasOwnProperty.call(ctx.rules.carrierHandoffs, kind) ? ctx.rules.carrierHandoffs[kind] : null;
+  if (!row) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown carrier transfer '${kind}'`, strip };
+  const label = row.label;
+  if (strip.stripType !== row.stripType || !row.states.includes(strip.state)) {
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: `${label} applies to a ${row.stripType} Strip in ${row.states.join(' or ')}, not ${strip.stripType} in ${strip.state}`, strip };
   }
   const blocked = ctx.nlaPrecheck(strip);
   if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
 
+  const handsOn = row.to !== 'SAME';
   let dest = strip.ownerPositionId;
-  if (fx.owner === 'TO') {
-    dest = toPositionId || fx.defaultTo || ctx.rules.carrierLaneFor(strip);
+  if (handsOn) {
+    dest = toPositionId || (row.to.length === 1 ? row.to[0] : ctx.rules.carrierLaneFor(strip));
     if (!dest) return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: 'no receiving Position present', strip };
   }
-  const caseValue = ctx.rules.carrierCase();
   const v = ctx.rules.validateCarrierHandoff(kind, {
-    caseValue, fromPositionId: actingPositionId, toPositionId: fx.owner === 'TO' ? dest : (kind === 'FINAL_TO_LSO' ? null : undefined),
+    shipCase: ctx.rules.carrierCase(), flightCase: flightCaseOf(strip, ctx.rules),
+    fromPositionId: actingPositionId, toPositionId: handsOn ? dest : undefined,
   });
   if (!v.ok) return { ok: false, reason: v.reason || 'VALIDATION_ERROR', detail: v.detail, strip };
 
   // docs/adr/0110 §4: a hand-off into an unstaffed Position is delivered there when a staffed one stands offered its hat.
   let warnings;
-  if (fx.owner === 'TO' && !ctx.rules.isStaffed(dest)) {
+  if (handsOn && dest !== actingPositionId && !ctx.rules.isStaffed(dest)) {
     const offeredTo = ctx.rules.consolidatedAt(dest);
     if (!offeredTo) return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
     warnings = [warn('UNSTAFFED_RECEIVER', `${dest} is unstaffed: offered to ${offeredTo}`)];
   }
 
-  // The stack effect: Commence marks the flight pushed (nobody renumbers, the
-  // drift defect D16 names); a handoff to PriFly removes it leaving a
-  // vacancy (H28). A flight that was never in the stack has nothing to remove.
+  // The stack effect: Commence marks the flight pushed (nobody renumbers, the drift defect D16 names); a launch handed to
+  // the Marshal joins the stack; Back to stack and Abort take the next free slot.
   let carrierChanged = false;
-  const effect = row ? row.stackEffect : null;
-  if (effect) {
-    const r = ctx.rules.carrierApplyEffect(effect, strip.flightDataId, { by, actingPositionId, clientMutationId });
-    if (!r.ok && !(effect === 'REMOVE_NO_CLOSE_UP' && r.reason === 'NOT_FOUND')) {
-      return { ok: false, reason: r.reason || 'VALIDATION_ERROR', detail: r.detail, strip };
+  if (row.stackEffect) {
+    const r = ctx.rules.carrierApplyEffect(row.stackEffect, strip.flightDataId, { by, actingPositionId, clientMutationId });
+    if (!r.ok) return { ok: false, reason: r.reason || 'VALIDATION_ERROR', detail: r.detail, strip };
+    carrierChanged = !!(r.changed && r.changed.length);
+  }
+  // A flight back in the stack starts afresh: the heading, speed and altitude it was given on the approach are gone.
+  if (row.clearsAssignments) {
+    const fd = ctx.flightDataStore.getFlightData(strip.flightDataId);
+    for (const field of ASSIGNMENT_FIELDS) {
+      const active = fd && activeClearanceEntry(fd, field);
+      if (active && active.parsed != null) ctx.flightDataStore.setClearance(strip.flightDataId, field, { value: '' }, { by });
     }
-    carrierChanged = !!(r.ok && r.changed && r.changed.length);
   }
 
   const now = ctx.clock.now();
   const from = { stripType: strip.stripType, state: strip.state, ownerPositionId: strip.ownerPositionId };
-  strip.stripType = fx.toStripType;
-  strip.state = fx.toState;
+  // A launch that becomes the recovery keeps its first leg on record, as ConvertToArrival does (traffic-count.js counts it once).
+  if (row.toStripType !== strip.stripType) {
+    strip.previousLeg = { stripType: strip.stripType, annotations: strip.annotations || {}, convertedAt: now, convertedBy: by || null };
+  }
+  strip.stripType = row.toStripType;
+  strip.state = row.toState;
   strip.ownerPositionId = dest;
   delete strip.consolidatedFrom; // a new owner by decision, not by cover (F10)
   if (dest !== from.ownerPositionId) {
@@ -82,7 +86,7 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
     ctx.placement.relocateForImpliedState(strip, strip.state);
   }
   strip.carrierHandoff = {
-    kind, trigger: row ? row.trigger : null, label, at: now, by: by || null,
+    kind, trigger: row.trigger, label, at: now, by: by || null,
     from: from.ownerPositionId, to: dest, fromStripType: from.stripType, toStripType: strip.stripType,
   };
   ctx.state.bump(strip, by, now);
