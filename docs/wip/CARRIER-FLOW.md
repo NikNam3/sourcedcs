@@ -15,12 +15,12 @@ Case III     CV_AIRBORNE ── KILO ─┬─ DROP                         ─�
                                   └─ to Marshal ─▶ STACK          ── FLY BULLS ──▶ BULLSEYE ── TO PATTERN ──▶ CV_PATTERN ── DROP
 ```
 
-- "to Marshal" changes `CV_DEP` to `CV_ARR` in place (as ConvertToArrival does, ADR 0023), accepted automatically, joins
+- "to Marshal" changes `CV_LAUNCH` to `CV_RECOVERY` in place (as ConvertToArrival does, ADR 0023), accepted automatically, joins
   the stack at the next free slot with the ship's current Case as its `recoveryCase`.
 - Back to stack (the Marshal, from STACK / COMMENCED / FINAL_APPROACH / DIRTY) and the lane's hand back (from
   FINAL_APPROACH / DIRTY) are one transfer: next free slot, new EAT, Angels/DME derived again, HDG/SPD/ALT and the panel
   overrides cleared.
-- Abort to the Case II/III stack: "…" on a Case I `CV_ARR` (STACK or CV_PATTERN), only while the ship's Case is II or
+- Abort to the Case II/III stack: "…" on a Case I `CV_RECOVERY` (STACK or CV_PATTERN), only while the ship's Case is II or
   III. Sets `recoveryCase` to the ship's Case and puts it at STACK, new slot.
 - Lane choice at TO APPR: `laneFor()` (push-order alternation, H30) as the default; the Marshal may pick the other lane
   from "…" before pressing it.
@@ -32,12 +32,12 @@ Case III     CV_AIRBORNE ── KILO ─┬─ DROP                         ─�
 | Strip types | `efsp/authority/strip-types/` | new `cv-dep.js`, `cv-arr.js`; remove `marshal.js`, `pattern.js`; `final.js` loses its CARRIER branches (PAR only) |
 | State owners | the two new tables | `CV_PATTERN` owner by `recoveryCase`: PriFly in I, the lane in II/III (owner table gains a Case-aware form, or the NLA and `mayAdvance` read it: decide in the plan, prefer data) |
 | Handoffs | `efsp/carrier/handoffs.js`, `handoff-effects.js` | rows: LAUNCH_TO_DEPARTURE, DEPARTURE_TO_MARSHAL (converts), PRIFLY_TO_MARSHAL (Case I, converts), MARSHAL_TO_APPROACH (TO APPR), MARSHAL_TO_PRIFLY_CASE_I (TO PATTERN), RETURN_TO_STACK (Marshal or lane), ABORT_TO_STACK; the rest removed |
-| Stack | `efsp/carrier/marshal-stack.js` | keyed on `CV_ARR`; `SetAngels`, `SetDme` beside `SetEat` (stored overrides, cleared on return to stack); DME derived Angels + 15 |
+| Stack | `efsp/carrier/marshal-stack.js` | keyed on `CV_RECOVERY`; `SetAngels`, `SetDme` beside `SetEat` (stored overrides, cleared on return to stack); DME derived Angels + 15 |
 | Fields | flight data / carrier flight record | `departureRadialDeg` (magnetic), `recoveryCase` on the Strip; side number required at create for a carrier Strip, callsign optional |
-| Create | `board/ops/create-strip.js`, `creatorOwnsInitialState` | PriFly creates `CV_DEP`, the Marshal `CV_ARR`; side number, not callsign |
+| Create | `board/ops/create-strip.js`, `creatorOwnsInitialState` | PriFly creates `CV_LAUNCH`, the Marshal `CV_RECOVERY`; side number, not callsign |
 | Set callsign | carrier op or flight-data edit | binds the ATO line (`carrier/ato-bind.js`) at that moment |
 | Squawk | existing allocation | Case II/III only, kept through the conversion |
-| Correlation | correlation path | no auto-correlation for a Case I `CV_ARR`/`CV_DEP`; manual bind allowed |
+| Correlation | correlation path | no auto-correlation for a Case I `CV_RECOVERY`/`CV_LAUNCH`; manual bind allowed |
 | Conformance | `efsp/conformance` | on for Case II/III carrier Strips, assigned values only |
 | Conflict alert | `conflict-alert.js` | skip a pair where both tracks are correlated to a live carrier Strip |
 | Presentation | `surveillance/presentation.js`, `identity.js` | a carrier Strip gives identity only at the carrier map (side number) and at TACTICAL (callsign, once set); elsewhere sensors only |
@@ -49,12 +49,12 @@ if the controller bound one; an unbound Case I flight is listed in the table and
 
 ## 3. Client (crc-desktop)
 
-- `strip-template.js` / block maps: the Blocks of ADR 0156 §8, nothing else, for `CV_DEP` and `CV_ARR`.
+- `strip-template.js` / block maps: the Blocks of ADR 0156 §8, nothing else, for `CV_LAUNCH` and `CV_RECOVERY`.
 - `panel/create-strip.js`: side number field at carrier Positions; PriFly gets type and departure radial, the Marshal type
   and fuel.
 - `strip-menu.js` ("…"): Set callsign; Back to stack (Marshal); Hand back to Marshal (lane); Abort to Case II/III stack
   (Marshal, Case I flight, ship Case II/III); lane override (Marshal, at COMMENCED).
-- `marshal-board-model.js`, `marshal-panel.js`, `marshal-picture.js`: rows are every `CV_ARR`; the button per row, live
+- `marshal-board-model.js`, `marshal-panel.js`, `marshal-picture.js`: rows are every `CV_RECOVERY`; the button per row, live
   for the owner; Case I table + circle (ship-up, live bearing/range, side number + Angels); Case II/III table + the
   current graphic; click-to-edit FUEL, EAT, ANG, DME; the fuel/bingo colouring and `marshalLowStateMarginKlb` removed.
   Which layout a row is in follows its `recoveryCase`, so a panel can hold both while Case I flights finish after a

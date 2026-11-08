@@ -17,20 +17,21 @@ Position does, in each Case, with one panel the Marshal and both approach contro
 ## Decision
 
 1. **Two carrier strip types replace MARSHAL and PATTERN, and the carrier stops using FINAL** (PAR keeps FINAL):
-   - `CV_DEP`: `ON_DECK` · `CV_AIRBORNE` · `KILO` · `DROPPED`;
-   - `CV_ARR`: `STACK` · `COMMENCED` · `FINAL_APPROACH` · `DIRTY` · `BULLSEYE` · `CV_PATTERN` · `DROPPED`.
+   - `CV_LAUNCH`: `ON_DECK` · `CV_AIRBORNE` · `KILO` · `DROPPED`;
+   - `CV_RECOVERY`: `STACK` · `COMMENCED` · `FINAL_APPROACH` · `DIRTY` · `BULLSEYE` · `CV_PATTERN` · `DROPPED`.
    The names collide with no other strip type's state (ADR 0074's rule): `AIRBORNE` is MISSION's, so the carrier's is
    `CV_AIRBORNE`; `CV_PATTERN` stays clear of `IN_PATTERN` and `TRAFFIC_PATTERN`. The panel and the Strip show the plain
-   words (AIRBORNE, PATTERN).
-2. **A Case per flight.** A `CV_ARR` Strip takes the ship's Case when it enters the stack (`recoveryCase`) and keeps it
+   words (AIRBORNE, PATTERN). Not `CV_DEP`/`CV_ARR`: `CV_DEP` is already a Position id.
+2. **A Case per flight.** A recovery takes the ship's Case when it enters the stack and keeps it; the Case is stored on its
+   Marshal-stack entry (`caseValue`), which the stack derivation already reads, and the entry stays until the Strip is dropped. It keeps it
    until it is dropped. A later change of the ship's Case moves no flight. The one exception is the Marshal's **Abort to
    the Case II/III stack** ("…" menu), offered on a Case I flight only while the ship's Case is II or III: the flight
-   becomes a Case II/III arrival at `STACK` with a new slot. A `CV_DEP` Strip follows the ship's Case at creation.
+   becomes a Case II/III arrival at `STACK` with a new slot. A launch follows the ship's Case at the moment PriFly launches it.
 3. **Departures.** PriFly creates the Strip at `ON_DECK`.
    - Case I: PriFly drops it, or hands it to the Marshal.
    - Case II and III: PriFly hands it to departure control (`CV_AIRBORNE`), which advances it to `KILO`, then drops it
      or hands it to the Marshal.
-   A handoff to the Marshal changes the Strip in place to `CV_ARR` at `STACK` (same Strip, same flight, same squawk) and
+   A handoff to the Marshal changes the Strip in place to `CV_RECOVERY` at `STACK` (same Strip, same flight, same squawk) and
    is accepted automatically. ADR 0154's "the recovery is a new MARSHAL Strip" and the Marshal's airborne Bay are gone.
 4. **Arrivals, Case II and III.** One button per state, owned as follows:
 
@@ -43,7 +44,7 @@ Position does, in each Case, with one panel the Marshal and both approach contro
    | BULLSEYE | lane | TO PATTERN |
    | CV_PATTERN | lane | DROP |
 
-   The Marshal may send a flight back to the stack from STACK, COMMENCED, FINAL_APPROACH or DIRTY ("…" menu, any Strip
+   The Marshal may send a flight back to the stack from COMMENCED, FINAL_APPROACH or DIRTY ("…" menu, any Strip
    the Marshal can see); the lane may hand a flight back to the Marshal from FINAL_APPROACH or DIRTY. Both are the same
    thing: the flight returns as a new arrival (next free slot, new EAT, Angels and DME derived again, assignments
    cleared). A flight at BULLSEYE or in the pattern does not leave the pattern.
@@ -55,13 +56,14 @@ Position does, in each Case, with one panel the Marshal and both approach contro
    as for any Strip. The callsign is optional and is not a Block: "…" → **Set callsign**. The ATO bind (ADR 0109) is made
    then, by callsign as before; a Strip without a callsign has no ATO line.
 8. **Blocks.** A carrier Strip carries nothing else:
-   - `CV_DEP`: SIDE, TYPE, DEP RADIAL; Case II/III also SQUAWK, HDG, SPD, ALT;
-   - `CV_ARR` Case I: SIDE, TYPE, FUEL, ANG;
-   - `CV_ARR` Case II/III: SIDE, TYPE, FUEL, ANG, EAT, SQUAWK, HDG, SPD, ALT.
+   - `CV_LAUNCH`: SIDE, TYPE, DEP RADIAL; Case II/III also SQUAWK, HDG, SPD, ALT;
+   - `CV_RECOVERY` Case I: SIDE, TYPE, FUEL, ANG;
+   - `CV_RECOVERY` Case II/III: SIDE, TYPE, FUEL, ANG, EAT, SQUAWK, HDG, SPD, ALT.
 9. **Assignments and conformance (Case II and III only).** HDG, SPD and ALT may be assigned on any Case II/III carrier
-   Strip. The conformance monitor checks only what was assigned; nothing is implied (a holding flight is not checked
+   Strip. The conformance monitor checks only what was assigned (heading and altitude; crc-sync has ground speed only, so an
+   assigned speed is shown and not checked); nothing is implied (a holding flight is not checked
    against its Angels). Back to stack and the hand back clear all three.
-10. **The Marshal panel is the one panel for arrivals.** Every `CV_ARR` Strip from STACK to its drop, in any Case, at the
+10. **The Marshal panel is the one panel for arrivals.** Every `CV_RECOVERY` Strip from STACK to its drop, in any Case, at the
     Marshal, APP1 and APP2 alike; departures never. The button is the status: COMMENCE, TO APPR, DIRTY UP, FLY BULLS,
     TO PATTERN, DROP, live only for the Strip's owner. Columns:
     - Case I: SEQ, SIDE, TYPE, FUEL, ANG, beside a **circle**: the overhead stack, ship-up (BRC up), each aircraft at its
