@@ -1,5 +1,5 @@
 {
-  "protocol": 3,
+  "protocol": 4,
   "surface": {
     "clientToServer": [
       "aptConfigSet",
@@ -126,8 +126,9 @@
         "Move",
         "PassClearance",
         "Remove",
+        "SetAngels",
         "SetCarrierState",
-        "SetCaseIAngels",
+        "SetDme",
         "SetEat"
       ],
       "efsp-correlation-mutation": [
@@ -170,22 +171,17 @@
     },
     "carrier": {
       "handoffs": [
-        "APPROACH_TO_FINAL",
-        "COMMENCED_TO_MARSHAL",
+        "ABORT_TO_STACK",
+        "CASE_I_TO_PRIFLY",
+        "COMMENCE",
         "DEPARTURE_TO_MARSHAL",
-        "FINAL_TO_LSO",
-        "FINAL_TRAPPED",
         "LAUNCH_TO_DEPARTURE",
         "LAUNCH_TO_MARSHAL",
-        "MARSHAL_TO_APPROACH",
-        "MARSHAL_TO_PATTERN_CASE_I",
-        "MARSHAL_TO_PRIFLY"
+        "RETURN_TO_STACK",
+        "TO_APPROACH"
       ],
       "triggerTypes": [
-        "CONTROLLER_INITIATED",
-        "PILOT_BALL_CALL",
-        "PILOT_SEE_YOU",
-        "RADAR_ACQUISITION"
+        "CONTROLLER_INITIATED"
       ],
       "cases": [
         "I",
@@ -224,7 +220,8 @@
         "stackId"
       ],
       "entryKeys": [
-        "caseIAngels",
+        "angelsOverride",
+        "dmeOverride",
         "eatOverrideUtc",
         "eatUtc",
         "flightDataId",
@@ -239,6 +236,7 @@
         "approachType",
         "bingoField",
         "bingoFuelLb",
+        "departureRadialDeg",
         "eeatUtc",
         "lowStateLb",
         "sideNumber"
