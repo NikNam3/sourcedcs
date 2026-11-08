@@ -441,6 +441,7 @@ class PulseMicrophoneCapture:
             source_name=source_name,
             samplerate=samplerate,
             channels=1,
+            block_duration_ms=block_duration_ms,
         )
         self._processor = VoiceProcessor(volume=volume, block_duration_ms=block_duration_ms)
 
