@@ -8,8 +8,9 @@ import { carrierBannerParts, carrierBearingText, carrierStateOf, getEfspCarrier 
 import { correlatedTrackIdForStrip, getAllEfspStrips, getEfspFlightData, getEfspStrip, stripIdsForTrackId } from './efsp-state.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { buildBoard } from './marshal-board-model.js';
+import { magneticText } from '../../magnetic.js';
 import {
-  RANGE_DEFAULT_NM, RANGE_MAX_NM, RANGE_MIN_NM, approachPath, bolterRacetrack, extendedCentreline, clampRange, declutter, distanceNm,
+  RANGE_DEFAULT_NM, RANGE_MAX_NM, RANGE_MIN_NM, approachPath, bearingRangeOf, bolterRacetrack, braText, extendedCentreline, clampRange, declutter, distanceNm, fromPixel,
   landingPattern, marshalHolding, marshalStack, occupancy, portHolding, ringSpacingFor, ringsFor, scaleFor, spinCircle, tankerRacetrack, toFrame, wheelRange,
 } from './carrier-map-model.js';
 
@@ -114,8 +115,17 @@ function _build() {
   svg.setAttribute('aria-label', 'Carrier map, north up');
   svg.dataset.cm = 'svg';
   wrap.appendChild(svg);
+  // crc-sync docs/adr/0156: the cursor's radial and range from the ship, and the measure line, drawn over the picture on an
+  // overlay of their own, so a redraw of the picture never takes them.
+  const overlay = document.createElementNS(NS, 'svg');
+  overlay.setAttribute('class', 'cm-overlay');
+  overlay.dataset.cm = 'overlay';
+  overlay.setAttribute('style', 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none');
+  wrap.style.position = 'relative';
+  wrap.appendChild(overlay);
   _bodyEl.append(hdr, wrap);
-  _els = { hull, caseB, brc, fb, problem, range, wrap, svg };
+  _els = { hull, caseB, brc, fb, problem, range, wrap, svg, overlay };
+  _wirePointer(wrap, overlay);
 
   wrap.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -131,6 +141,62 @@ function _build() {
     _resize = new ResizeObserver(() => { _sig = ''; renderCarrierMap(); });
     _resize.observe(wrap);
   }
+}
+
+// ── the cursor readout and the measure line (crc-sync docs/adr/0156) ──────
+
+let _measureFrom = null; // ship-frame point the right-drag started at
+let _cursorAt = null;    // the last pointer position, panel pixels
+
+function _shipNow() {
+  const v = getEfspCarrier();
+  const s = v && v.shipState;
+  return s && Number.isFinite(s.lat) && Number.isFinite(s.lon) ? s : null;
+}
+
+/** The magnetic figure of a true bearing at the ship ('---' when the variation is unknown). */
+function _mag(trueDeg) {
+  const s = _shipNow();
+  return s ? magneticText(trueDeg, s.lat, s.lon) : '---';
+}
+
+function _drawOverlay(overlay) {
+  overlay.textContent = '';
+  if (!_geom || !_cursorAt || !_shipNow()) return;
+  const font = getTextSizePx();
+  const at = fromPixel(_cursorAt, _geom);
+  const P = (q) => ({ x: _geom.cx + q.e * _geom.k, y: _geom.cy - q.n * _geom.k });
+  if (_measureFrom) {
+    const a = P(_measureFrom);
+    const v = bearingRangeOf({ e: at.e - _measureFrom.e, n: at.n - _measureFrom.n });
+    const line = sv('g', { 'data-cm': 'measure' });
+    line.appendChild(sv('line', { x1: a.x, y1: a.y, x2: _cursorAt.x, y2: _cursorAt.y, stroke: '#ffffff', 'stroke-opacity': 0.7, 'stroke-width': 1, 'stroke-dasharray': '6 4' }));
+    line.appendChild(sv('text', { x: (a.x + _cursorAt.x) / 2, y: (a.y + _cursorAt.y) / 2 - 4, fill: '#ffffff', 'font-size': 11, 'text-anchor': 'middle' },
+      braText(_mag(v.trueDeg), v.nm, ' / ')));
+    overlay.appendChild(line);
+  }
+  const fromShip = bearingRangeOf(at);
+  const nearRight = _cursorAt.x + 14 + 70 > _geom.w;
+  overlay.appendChild(sv('text', {
+    'data-cm': 'cursor-bra', x: nearRight ? _cursorAt.x - 14 : _cursorAt.x + 14, y: _cursorAt.y + 14 + font * 0.8,
+    fill: COL.ringText, 'font-size': font, 'text-anchor': nearRight ? 'end' : 'start',
+  }, braText(_mag(fromShip.trueDeg), fromShip.nm)));
+}
+
+function _wirePointer(wrap, overlay) {
+  const local = (e) => { const r = wrap.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  wrap.addEventListener('mousemove', (e) => { _cursorAt = local(e); _drawOverlay(overlay); });
+  wrap.addEventListener('mouseleave', () => { _cursorAt = null; _measureFrom = null; _drawOverlay(overlay); });
+  // the main map's gesture (map-interactions.js): a right-button drag draws the line, its release clears it
+  wrap.addEventListener('mousedown', (e) => {
+    if (e.button !== 2 || !_geom) return;
+    e.preventDefault();
+    _cursorAt = local(e);
+    _measureFrom = fromPixel(_cursorAt, _geom);
+    _drawOverlay(overlay);
+  });
+  wrap.addEventListener('mouseup', (e) => { if (e.button === 2) { _measureFrom = null; _drawOverlay(overlay); } });
+  wrap.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
 /** True bearing of a carrier state value, or null when it is unknown or not true (a grid bearing would draw the line in the wrong place). */
@@ -369,6 +435,7 @@ export function renderCarrierMap() {
   if (sig === _sig) return;
   _sig = sig;
   _draw(_els.svg, m, w, h);
+  _drawOverlay(_els.overlay);
 }
 
 /** The scale the picture was last drawn at (specs measure against it): centre, pixels per nm, range, size. */

@@ -181,3 +181,19 @@ test('the path after marshal: the radial in to the platform, the 10 and 6 nm fix
   assert.ok(near(m.distanceNm(ap.points[3]), 6, 1e-9));
   assert.deepEqual(ap.points[4], { e: 0, n: 0 });
 });
+
+test('docs/adr/0156: the pixel under the cursor back to the ship frame; bearing, range and the RRR/DDD text', () => {
+  const geom = { cx: 200, cy: 150, k: 10 };
+  const P = (q) => ({ x: geom.cx + q.e * geom.k, y: geom.cy - q.n * geom.k });
+  for (const q of [{ e: 0, n: 0 }, { e: 3, n: -2 }, { e: -7.5, n: 4 }, { e: 12, n: 12 }]) {
+    const back = m.fromPixel(P(q), geom);
+    assert.ok(Math.abs(back.e - q.e) < 1e-9 && Math.abs(back.n - q.n) < 1e-9, JSON.stringify(q));
+  }
+  assert.deepEqual(m.bearingRangeOf({ e: 0, n: 5 }), { trueDeg: 360, nm: 5 });
+  assert.deepEqual(m.bearingRangeOf({ e: 5, n: 0 }), { trueDeg: 90, nm: 5 });
+  assert.equal(Math.round(m.bearingRangeOf({ e: -5, n: -5 }).trueDeg), 225);
+  assert.equal(m.braText(5.4, 12.6), '005/013');
+  assert.equal(m.braText('095', 8), '095/008', 'a magnetic figure as magnetic.js gives it');
+  assert.equal(m.braText('---', 8), '---/008');
+  assert.equal(m.braText(0.2, 1, ' / '), '360 / 001');
+});

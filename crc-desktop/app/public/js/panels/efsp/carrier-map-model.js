@@ -131,6 +131,25 @@ export function arcOnAxis(axisDeg, cAlong, cLat, r, from, to, steps = 16) {
 
 export function distanceNm(p) { return Math.hypot(p.e, p.n); }
 
+/** The ship-frame point under a pixel of the panel (the inverse of the panel's `P`): `geom` is carrierMapGeometry(). */
+export function fromPixel({ x, y }, { cx, cy, k }) {
+  return { e: (x - cx) / k, n: (cy - y) / k };
+}
+
+/** True bearing (0..360, north 360) and range of a ship-frame vector (crc-sync docs/adr/0156: the cursor readout, the measure line). */
+export function bearingRangeOf({ e, n }) {
+  const nm = Math.hypot(e, n);
+  let deg = (Math.atan2(e, n) / RAD + 360) % 360;
+  if (deg === 0) deg = 360;
+  return { trueDeg: deg, nm };
+}
+
+/** `RRR/DDD`: a bearing (the magnetic figure, or '---' when unknown) and a range in whole nm, both three digits. */
+export function braText(bearing, nm, sep = '/') {
+  const b = typeof bearing === 'string' ? bearing : (Number.isFinite(bearing) ? String(Math.round(bearing) % 360 || 360).padStart(3, '0') : '---');
+  return `${b}${sep}${String(Math.round(nm)).padStart(3, '0')}`;
+}
+
 // ── fixed lines ───────────────────────────────────────────────────────────
 
 /**
