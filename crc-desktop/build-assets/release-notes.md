@@ -1,3 +1,14 @@
+### Changed in 2.1.0: the carrier flow
+- **Carrier Strips are made by side number.** PriFly's and the Marshal's New Strip ask for SIDE, TYPE and the departure radial (PriFly) or fuel (Marshal); the callsign is set later from ⋯ → Set callsign…, which joins the flight to its ATO mission
+- **Departures:** ON DECK → (Case II/III) LAUNCHED to departure control → KILO → DROP, or TO MARSHAL; in Case I PriFly drops it or hands it TO MARSHAL. TO MARSHAL makes the launch the flight's recovery in the stack (same Strip, same squawk)
+- **Arrivals, Case II/III:** COMMENCE, TO APPR (to APP 1 or 2), DIRTY UP, FLY BULLS, TO PATTERN, DROP. **Case I:** TO PATTERN to PriFly, DROP. Each flight keeps the Case it was given on check-in; ⋯ → Abort to Case II/III stack sends a Case I flight to the stack once the ship is in Case II or III
+- **The MARSHAL panel is the one panel for arrivals:** every recovery to its drop, one table per Case (Case I beside an overhead circle), each row's button its state and live for the Strip's owner only. The Marshal types fuel, EAT, angels and the holding DME. The fuel/bingo colouring is gone
+- **Back to stack** is in ⋯ (the Marshal from COMMENCED on, the lane on its own approach); it clears the flight's heading, speed and altitude
+- Carrier Strips carry only what the controller needs; Case II/III flights get HDG, SPD and ALT with conformance (heading and altitude). A Case I flight gets no squawk
+- Carrier aircraft are labelled only on the CARRIER MAP; other scopes show them by their sensors. No conflict alert between two carrier aircraft
+- **CARRIER MAP:** the cursor shows its radial and range from the ship; a right-drag measures
+- This release changes the wire protocol: update CRC, an older version shows "Update required". For the server operator: delete `efsp-facility-carrier.json` from the `crc-sync-state` volume if a copy is there (its Bays name removed states), and carrier Strips on the Board are cleared by the mission reset
+
 ### Changed in 2.0.5
 - **The carrier has a Departure Position (`CV_DEP`).** In Case III a launch now goes PriFly → Departure → Marshal: PriFly's **Launched** hands the airborne aircraft to Departure, whose **To Marshal** passes it to the Marshal's airborne Bay. In Case I and II there is no Departure and **Launched** goes straight to the Marshal
 - **PriFly creates the launch Strip** (**PriFly · Launch**, in PriFly's new launch Bay); the Marshal's New Strip makes only the recovery

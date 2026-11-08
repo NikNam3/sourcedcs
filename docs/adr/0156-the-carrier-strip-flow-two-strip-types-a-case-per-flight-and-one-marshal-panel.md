@@ -1,6 +1,6 @@
 # 0156: The carrier strip flow: two strip types, a Case per flight, and one Marshal panel for every arrival
 
-**Status.** Proposed (2026-11-08), not built. Design: `docs/wip/CARRIER-FLOW.md`. Amends, without editing (P4): ADR 0064
+**Status.** Built (2026-11-08). Design: `docs/wip/CARRIER-FLOW.md`; the build's rulings: the plan's ledger, summarised in §Built below. Amends, without editing (P4): ADR 0064
 and 0074 (the MARSHAL, FINAL and PATTERN carrier strip types and their states), ADR 0114 (the MARSHAL board's columns and
 colours, Angels and DME derived only), ADR 0137 (the Marshal creates the recovery by callsign, FINAL_TRAPPED and PriFly's
 RECOVERED Bay, the Case II "See you"), ADR 0154 (the airborne launch stays with the Marshal; a recovery is a new Strip)
@@ -98,3 +98,25 @@ Position does, in each Case, with one panel the Marshal and both approach contro
   `efsp-facility-carrier.json` must be deleted (its Bays imply removed states).
 - Freeze goldens holding carrier states, Bays or the permission tables are re-recorded.
 - `docs/efsp-usage-guide.md` (the carrier chapter) and the release notes are rewritten for the new flow.
+
+## Built (2026-11-08)
+
+What the build decided where the design left it open:
+
+- **A flight's Case is its stack.** The hull record holds two stacks, `MAIN` (Case II/III) and `CASE_I` (the overhead
+  stack); a recovery joins the stack of the ship's Case at check-in and stays in it until its Strip is dropped, so a Case
+  change moves nobody (`marshal-stack.js` `stackIdForCase`, `caseOfStack`; `carrier-store.js` `caseOf`). Abort moves the
+  entry from `CASE_I` to `MAIN`.
+- **One override per figure:** `angelsOverride` (every Case; Case I's angels is only that), `dmeOverride`, `eatOverrideUtc`;
+  `SetAngels` and `SetDme` beside `SetEat`; `SetCaseIAngels` is gone. Back to stack and Abort clear all three.
+- **One row per handoff** (`carrier/handoffs.js`: sender, receiver, whose Case, the Strip it applies to and becomes, the
+  stack effect); `handoff-effects.js` is gone.
+- **Set callsign copies the tasked ATO mission onto the carrier flight** (`flightDataStore.attachAto`) rather than moving
+  the Strip to the ATO flight: that would move the squawk the pilot is flying, the stack entry and the correlation.
+- **Assignment Blocks** are `7A`, `9A-VECTOR`, `9A-SPEED` (VFR's and OVERFLIGHT's non-required ids). Speed is not checked:
+  crc-sync has ground speed only.
+- **No remarks Block on a carrier Strip** (the human: "no other blocks").
+- **Counting:** a launch handed to the Marshal is counted once, LOCAL (`CONVERTED_ARRIVAL`), as ConvertToArrival is.
+- **The carrier's final Bays and their line view are gone**; PAR keeps FINAL (and loses BALL, which only the carrier used).
+- `WIRE_PROTOCOL` 3 → 4.
+

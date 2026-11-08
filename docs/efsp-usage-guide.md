@@ -1906,41 +1906,59 @@ the variation goes in that file's `magneticVariation` (`fixedDeg` or `offsetDeg`
 the ATIS text give the wind **magnetic** (`NNN°M`; the reference card's tooltip shows the true value, and
 the ATIS says "Wind not available." when the variation is unknown, H76).
 
-## 8K. The carrier (`CARRIER` Facility, `adr/0074`, `0113`-`0116`, `0137`, `0155`)
+## 8K. The carrier (`CARRIER` Facility, `adr/0074`, `0113`-`0116`, `0156`)
 
-Sign on to `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2` or `CV_DEP` (departure control, Case III only) under
-**Panels → Acting As** (group `CARRIER`). A carrier
-Strip has one of three strip types: **MARSHAL** (launch, then the stack), **FINAL** (the groove: nothing to type)
-and **PATTERN** (in the visual pattern, then recovered). **The Marshal creates the recovery Strip and PriFly the launch
-Strip**: the Marshal's New Strip toolbar gives **Marshal · Recovery** (the flight joins the stack), PriFly's gives
-**PriFly · Launch** (in `cv-prifly-launch`, on deck); type the callsign. There is
-no flight-plan lookup for a carrier Strip, and a recovery typed by callsign is a new flight (it is not joined to the
-launch of the same callsign). Departure control and the approach lanes create nothing. When a carrier Position is left, its Strips stay with it and
-the next controller on its list is **offered** the hat (§8M): `CV_APP1` → `CV_MARSHAL`, `CV_APP2`, `CV_DEP`, `CV_PRIFLY`;
-`CV_APP2` → `CV_MARSHAL`, `CV_APP1`, `CV_DEP`, `CV_PRIFLY`; `CV_PRIFLY` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`, `CV_DEP`;
-`CV_MARSHAL` → `CV_APP1`, `CV_APP2`, `CV_DEP`, `CV_PRIFLY`; `CV_DEP` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`, `CV_PRIFLY`.
-The Marshal comes first (the human's order, H111). Whoever takes a Position holds it
-as well as their own, so a Marshal who takes an approach lane can advance its Strips only as an approach Position would
-(the Marshal owns LAUNCH, LAUNCHED and IN_STACK); take the hat only if you will work it. The carrier raises no combination warning:
-there is no source in the repo for one. A hand-off into an empty carrier Position that somebody is offered is delivered
-there and says so; one nobody is offered is refused.
+Sign on to `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2` or `CV_DEP` (departure control) under **Panels → Acting As**
+(group `CARRIER`). A carrier Strip is a **launch** (`CV_LAUNCH`: ON DECK, AIRBORNE, KILO) or a **recovery**
+(`CV_RECOVERY`: STACK, COMMENCED, FINAL APP, DIRTY, BULLSEYE, PATTERN). When a carrier Position is left, its Strips stay
+with it and the next controller on its list is **offered** the hat (§8M): `CV_APP1` → `CV_MARSHAL`, `CV_APP2`, `CV_DEP`,
+`CV_PRIFLY`; `CV_APP2` → `CV_MARSHAL`, `CV_APP1`, `CV_DEP`, `CV_PRIFLY`; `CV_PRIFLY` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`,
+`CV_DEP`; `CV_MARSHAL` → `CV_APP1`, `CV_APP2`, `CV_DEP`, `CV_PRIFLY`; `CV_DEP` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`,
+`CV_PRIFLY`. A hand-off into an empty carrier Position that somebody is offered is delivered there and says so; one nobody
+is offered is refused.
 
-Four panels belong to the carrier, each an ordinary dockable panel opened from **PANELS**: the Strip panel's carrier
-Bays, **CARRIER** (the ship's state), **MARSHAL** (the recovery board) and **CARRIER MAP** (the picture around the
-ship). There is **no PAR on the carrier** (`adr/0116`): the PAR panel is Incirlik's (§8L).
+Four panels belong to the carrier, each opened from **PANELS**: the Strip panel's carrier Bays, **CARRIER** (the ship's
+state), **MARSHAL** (every arrival) and **CARRIER MAP** (the picture around the ship). There is **no PAR on the carrier**
+(`adr/0116`).
 
-### The side number names the aircraft
+### Making a carrier Strip: by side number
 
-In the carrier regime an aircraft is named by its **side number**. The Marshal types it in the Strip's **SIDE** Block
-(`C18`); from then on it leads everywhere the carrier names that flight:
+An aircraft on the carrier is named by its **side number**. PriFly's New Strip (**PriFly · Launch**) and the Marshal's
+(**Marshal · Recovery**) ask for **SIDE**, **TYPE** and one more field: PriFly the **departure radial** (degrees, as you
+read it), the Marshal the **fuel** (`4.8` is 4,800 lb). No callsign is asked for and no flight plan is looked up. The
+callsign, when you learn it, is set from the Strip's **⋯ → Set callsign…**: that also joins the flight to the ATO
+mission tasked with that callsign, if exactly one waits for it (`adr/0109`). In Case II and III a new Strip gets a squawk;
+in **Case I it gets none** (no radar service). Departure control and the approach lanes create nothing.
 
-- **On a carrier Strip** (MARSHAL, FINAL, PATTERN owned by a carrier Position) the side number moves to the first, wide
-  field and the callsign moves to SIDE's place. Until a side number is typed the callsign leads (a PATTERN Strip then shows
-  no SIDE at all). Incirlik's FINAL and PATTERN Strips are unchanged.
-- **On the MARSHAL board, the CARRIER MAP labels, the FINAL Bay line, the refusal banner and the "arrived from"
-  line**. A flight with no side number yet is shown
-  by its callsign; on the MARSHAL board that row is grey.
-- The Bay search finds a Strip by its side number too.
+A carrier Strip carries only: the side number, the type, the departure radial (a launch) or the fuel, angels and EAT
+(a recovery), and in Case II and III the squawk and the assigned **HDG**, **SPD** and **ALT**. A Case I flight refuses
+the squawk and the assignments ("Case I: no radar service"). An assigned heading and altitude are checked by conformance
+like any flight's; a speed is shown and not checked (crc-sync has only ground speed).
+
+### The flow, one button per state
+
+**Departures.** PriFly creates the launch **ON DECK**.
+- **Case I:** PriFly's buttons are **DROP** (the aircraft has gone) and **TO MARSHAL** (it comes straight back to recover).
+- **Case II and III:** **LAUNCHED** hands it to departure control (`cv-dep-departures`), whose **KILO** records the
+  report; at KILO its buttons are **DROP** and **TO MARSHAL**.
+
+**TO MARSHAL** makes the launch the flight's recovery in place: the same Strip, flight and squawk, now at **STACK** in the
+Marshal's stack, accepted at once. The carrier hands nothing off the ship: the controller who takes a dropped departure
+next (CTR, a GCI) creates their own Strip.
+
+**Arrivals, Case II and III.** The Marshal: **COMMENCE** (STACK to COMMENCED: the flight keeps the EAT it was working to),
+**TO APPR** (hands it to APP 1 or APP 2, alternately in push order; ⋯ → **To APP 1 / To APP 2** names the other lane). The
+lane: **DIRTY UP**, **FLY BULLS**, **TO PATTERN**, **DROP**. **Arrivals, Case I.** The Marshal's **TO PATTERN** hands
+the flight to PriFly (`cv-prifly-pattern`), whose **DROP** ends it.
+
+**Back to stack** (⋯): the Marshal from COMMENCED, FINAL APP or DIRTY (on the lane's Strip too), the lane on its own
+Strip at FINAL APP or DIRTY. The flight returns as a new arrival: the next free slot at the top, a new EAT, angels and DME
+from the slot, its HDG, SPD and ALT gone. Not offered at BULLSEYE or in the pattern (a flight in the pattern stays in it).
+
+**Abort to Case II/III stack** (⋯, the Marshal): a Case I flight that cannot finish Case I (the weather went) goes to
+the Case II/III stack at the next free slot. Offered only on a Case I flight, and disabled while the ship is in Case I.
+
+**Dragging a Strip into a lane Bay does not do it; the button does** (the drag is refused with the button's name).
 
 ### The banner and the CARRIER panel (`adr/0113`)
 
@@ -1960,8 +1978,9 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
 - Ceiling and visibility have no DCS source: they read "not known" until somebody types them. The wind over deck is the
   DCS wind at the ship less the ship's own motion. The tanker's 6,000 ft and port pattern defaults are ours (CV NATOPS
   sets none), and the panel says so.
-- **The Case** is set here by PriFly or the Marshal (III unless set), one setting for the whole ship; every carrier Strip's
-  next step changes at once when it changes. It is never refused on the weather.
+- **The Case** is set here by PriFly or the Marshal (III unless set). It is the Case a flight is given **when it checks in**
+  (and a launch when PriFly launches it); a flight keeps that Case until it lands or the Marshal aborts it (below), so a
+  Case change moves nobody already in the recovery. It is never refused on the weather.
 
 ### Ramp time and EAT (CV NATOPS)
 
@@ -1977,97 +1996,63 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
   mile and 1,000 ft higher per slot (CV NATOPS 6.4.1.1: angels + 15). The radial and the first fix are set in the
   CARRIER panel.
 
-### The MARSHAL panel: the recovery board (`adr/0114`, `0115`)
+### Ramp time and EAT (CV NATOPS)
 
-- It lists every aircraft in the recovery in landing order, next to land at the top: sequence, side number, type, fuel
-  (thousands of pounds) and EAT minute, angels, and status (**HOLD**, **COMM**, **APP A** or **B**, **BOLTER**, **BALL**,
-  **PATTERN**). Its header shows the Case, the ramp time and the marshal position (`MARSHAL` radial and first fix),
-  read-only: they are set in the CARRIER panel. Beside it is the Case III picture of the stack. Only the Marshal changes
-  anything; the other carrier Positions read it.
-- **Fuel and EAT by hand.** Click a holding flight's fuel to type its low state (`4.8` is 4,800 lb: a number under 100
-  is thousands); it is the Strip's Low state Block. Click its EAT to assign one by hand (`HHMM`): it stays underlined
-  until you clear it (an empty entry gives the slot's EAT back), and is marked until passed like any changed clearance.
-  Delta moves it with the others; a new ramp time does not; Commence records it, Back to stack clears it. Two holding
-  flights cannot share a minute (CV NATOPS 6.4.9), and there is no hand EAT in Case I.
-- **Drag** a HOLD row onto another HOLD row to re-sequence. A recovery check-in joins at the next free slot. A flight that
-  leaves the stack leaves a gap (a vacancy row); **Close up** on it compresses the stack.
-- **Commence** is on the next flight to push. The flight keeps the EAT it was working to and the time it left: a later
-  ramp time or Delta does not rewrite it.
-- **Back to stack** (Case II and III) sends a commenced flight back into holding: it takes the next free slot at the top,
-  with a new angels and EAT.
-- **Delta…** (CV NATOPS 6.4.9: even minutes, never less than four) moves the EATs of the aircraft **holding**; commenced
-  aircraft are not moved. It needs a ramp time and somebody holding; a new ramp time clears it. The 60-minute cap is ours.
-- **Changed, not yet passed.** An angels or EAT that changed (a re-sequence, a Delta, a new ramp time, Back to stack)
-  shows amber until you click the row to say you passed it to the pilot. The marks are the ship's, not your window's:
-  every Marshal controller sees the same ones, they are still there after a reload or a crc-sync restart, and when you
-  click the row it clears for everyone. If the clearance changed again just before your click, the click is refused:
-  read the row again and pass the new value. A mark stays until passed, even if the value moves back. Commence clears it.
-  Only the Marshal clears a mark; the other carrier Positions see it. **Settings → Marshal → "Mark changed clearances
-  until passed"** hides the amber on your screen only (and then your click passes nothing).
-- **Colours.** Grey unless something is wrong. Amber is fuel within the margin above bingo (Settings → Marshal,
-  1.0 k lb by default), a flight past its EAT that has not pushed, and a changed clearance not yet passed; red is fuel at
-  or below bingo. Fuel and bingo are the Strip's Low state and Bingo fuel Blocks.
-- The side number (`C18`) and the approach turn (`C19`: 4, 6 or 8 nm; drawn at 6 when none is assigned, ours) are Strip
-  Blocks the Marshal types; the FINAL Strip shows them read-only.
+- The **ramp time** is the time the first aircraft of a Case III recovery is expected at the ramp (the Charlie time,
+  CV NATOPS glossary). It has no default; type it as Zulu `HHMM`.
+- An aircraft's **EAT** is when it leaves its marshal fix inbound (CV NATOPS 6.4.4). It is worked back from the ramp
+  time: one minute apart per slot (6.4.5), less the time from the fix to the ramp, **6 minutes** unless the squadron
+  changes `fixToRampSec` (ours, from the 6.4.7.2 profile). With no ramp time there is no EAT.
+- The marshal fix is on the marshal radial (final bearing + 180 by default) at the first fix, **21 DME** at angels 6, one
+  mile and 1,000 ft higher per slot (CV NATOPS 6.4.1.1: angels + 15).
+
+### The MARSHAL panel: every arrival (`adr/0114`, `0115`, `0156`)
+
+- Every recovery from STACK to its drop is on it, in landing order, in **its own Case's table**: **Case II / III**
+  (SEQ, SIDE, TYPE, FUEL, EAT, ANG, DME) beside the Case III picture, **Case I** (SEQ, SIDE, TYPE, FUEL, ANG) beside the
+  **overhead circle** (ship-up, each aircraft at its bearing and range from the ship, labelled side number and angels; a
+  Case I flight with no track bound is not drawn). A Case I flight still finishing after the ship goes to Case III stays
+  in the Case I table. Departures are not on it.
+- **The Marshal and both approach controllers look at the same panel.** Each row's button is the flight's state
+  (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, TO PATTERN, DROP) and is live only for the controller who holds the Strip;
+  everyone else sees it greyed as the status. The next flight to push has the blue COMMENCE.
+- **DME** in the table is the **assigned holding fix DME** (angels + 15, or the first fix + slot); the picture still puts
+  each aircraft at its real range from the ship.
+- **The Marshal sets everything.** On a row the Marshal holds, click FUEL, EAT, ANG or DME and type it (`4.8` fuel;
+  `HHMM` EAT; whole angels; whole DME). An assigned EAT, angels or DME is underlined until you clear it (an empty entry
+  gives the slot's back) and is marked until passed. Two holding flights cannot share an EAT minute (CV NATOPS 6.4.9);
+  Case I has no EAT and no DME.
+- **Drag** a holding row onto another to re-sequence; **Close up** on a vacancy compresses the stack; **Delta…** (even
+  minutes, never less than four, CV NATOPS 6.4.9) moves the holding EATs.
+- **Changed, not yet passed.** An angels or EAT that changed shows amber until you click the row to say you passed it.
+  The marks are the ship's: every Marshal sees the same ones, across reloads and restarts. **Settings → Marshal → "Mark
+  changed clearances until passed"** hides them on your screen only.
+- **Colours.** Grey unless something is wrong: amber for a flight past its EAT that has not pushed and a changed
+  clearance not yet passed. **There is no fuel rule.**
 
 ### The CARRIER MAP panel
 
-- A radar picture fixed on the ship, **north up**, behaving like the radar map: the wheel zooms (2.5 to 65 nm), a double
-  click zooms in, Shift and double click out; the ship stays in the middle and there is no pan. Range rings are dark
-  green and the **10 nm ring** is always drawn; the ring spacing and the range are in **Settings → Carrier map**. There is
-  no basemap.
-- The extended centreline runs astern along the final bearing in force, with a tick every mile. In Case II and III the
-  marshal radial and the fixes in use are drawn. Aircraft are labelled by side number and altitude in hundreds of feet;
-  amber is fuel within the margin of bingo and red at or below it (Settings → Marshal). The recovery tanker is labelled
-  `TKR`. The header carries the hull, Case, BRC, FB and range; it turns amber only for a lost ship track or a bearing it
-  cannot draw.
-- **The marshal stack is drawn as the holding pattern**: the left-hand racetrack of CV NATOPS 6.4.1.1 (its size,
-  8 nm legs and 2.6 nm wide, is ours). While anyone holds, has commenced or is on the approach in Case II or III, the
-  **path after marshal** is drawn too: the radial to the platform, the 10 and 6 nm fixes on the final bearing, and the
-  ship.
-- **A pattern is drawn only while a recovery needs it**, from the Strips: the bolter racetrack (turning in at each flight's
-  approach turn) while a FINAL Strip is BOLTER/WAVEOFF; port holding while a flight holds in Case I or II (Case II with
-  holding flights draws both the stack and port holding); the break and landing pattern with the initial while a flight
-  holds in Case I or II or is in the pattern, or the spin circle when its contact is within 3.5 nm of the ship at
-  1,000 ft or above (that rule is ours); the tanker's racetrack while the tanker is on station. The patterns carry no altitude or distance labels.
-  Their shapes follow CV NATOPS 6.2, 6.4.8 and 6.10.3; the figures NATOPS leaves open (the bolter's 2 nm abeam, the break
-  point, the 180, the tanker's 4 nm abeam) are ours.
+- A radar picture fixed on the ship, **north up**: the wheel zooms (2.5 to 65 nm), a double click zooms in, Shift and
+  double click out. Range rings are dark green, the **10 nm ring** always drawn; spacing and range in **Settings →
+  Carrier map**.
+- **The cursor reads its radial and range from the ship** (`RRR/DDD`, magnetic, in the ring green). **A right-button
+  drag draws a measure line** with its heading and range (`RRR / DDD`); releasing the button clears it.
+- **The only labels for carrier aircraft are here**: side number and altitude in hundreds of feet. On every other scope
+  (your own main map included) a carrier aircraft shows as its sensors see it: a primary contact, or with its transponder
+  reply when it squawks. A tactical Position sees its callsign (and its ATO mission) once one is set.
+- The extended centreline, the marshal radial and fixes (Case II/III), the holding racetrack, the path after marshal,
+  port holding, the landing pattern or spin circle (Case I) and the tanker's racetrack are drawn only while a flight
+  needs them.
 
-### Launch, handoffs and the final
+### Separation and counting
 
-- **On the launch Strip** set EEAT (Zulu `HHMM`, Block `C15`), approach, button (a number 1 to 20, never a
-  frequency), bingo and low state. They are on the flight, so they are on the recovery Strip too. The
-  squawk the launch Strip held is re-claimed by the recovery Strip if you dropped the launch Strip in
-  between.
-- **Launched** (PriFly) hands the airborne aircraft on (`adr/0155`). In **Case III** it goes to departure control
-  (`CV_DEP`, Bay `cv-dep-departures`, state `LAUNCHED`), whose **To Marshal** passes it to the Marshal; in **Case I and
-  II** there is no departure control and it goes straight to the Marshal. At the Marshal it sits in the airborne Bay
-  (`cv-marshal-airborne`, state `LAUNCHED`). The carrier hands nothing off the ship: the controller who takes the
-  aircraft next (CTR, a GCI) creates their own Strip, and the Marshal **Drops** its Strip when they have it (`adr/0154`). A flight still at `LAUNCHED` has a live MARSHAL Strip, so its
-  recovery Strip can be made on the same flight only after that drop.
-- **The handoffs, one button each**, each recording its trigger type: **Commence** (Marshal to an approach
-  lane), **Radar contact** (lane, MARSHAL becomes FINAL), **Ball** (FINAL to BALL), **Trapped** (the lane, at BALL:
-  the Strip goes to PriFly's RECOVERED Bay, `cv-prifly-recovered`, and leaves the MARSHAL board) and **See you** (Case II
-  only: the pilot has the ship, to PriFly as PATTERN). Case I has its own **To pattern**; a Case I **Recovered** also
-  puts the Strip in PriFly's RECOVERED Bay. PriFly's next step there is **Drop**. **Dragging a Strip
-  into a lane Bay does not do it; the button does** (the drag is refused with the button's name). The one
-  allowed drag is a **bolter**: drag it to the Bolter Bay and the next step brings it back on final.
-- **The carrier final.** The approach controller works the final from the **FINAL Bay's flight line** and the
-  **CARRIER MAP**. The line names each aircraft on the final by its side number and carries **Ball** and **Waveoff**;
-  it has no range and no link to a PAR panel.
-- **DIST** (Block `C17`) on a carrier Strip is the range from the ship to the aircraft, the same figure for every
-  carrier Position (PriFly, the Marshal, the approach lanes), updated about once a second as both move. With no radar
-  contact it is blank. The MARSHAL board's DME is the same measurement.
-- **FINAL has nothing to type** but its remarks (Block 9E). Its identity Blocks are derived, Block 5 is off its map,
-  and the HDG and ALT an Incirlik PAR final carries are neither shown nor accepted on the carrier's.
-- **PriFly's Bays** list the flights coming to the deck (`cv-prifly-pattern`, one Rack: there are no pattern legs any
-  more) and those recovered (`cv-prifly-recovered`).
-- A launch, a trap and a recovered pattern flight each count once in the traffic count (§10). The ship is the CARRIER
-  Facility's home field (`UNION` in `config/efsp-instrumentation.json`): a launch whose ATO line (or plan) recovers on the
-  ship is **local**, one that recovers at Incirlik is **transient**, and one with no plan or ATO line is **unknown**
-  (`adr/0109`). The ATO line carries the carrier mission's hull (§8I).
-- **Not walked against a real DCS ship**: the banner reads "hull not found" until a hull track exists, so no panel has
-  shown live contacts around a real ship; the deck-state board (`cv-prifly-deck`) is inert; two hulls were not tried.
+- **No conflict alert between two carrier aircraft** (two flights with live carrier Strips). A carrier aircraft against
+  any other aircraft still alerts.
+- **Case I is never correlated automatically**: bind its track by hand (⋯ → Bind) if you want one. Case II and III
+  correlate by squawk.
+- A launch counts once in the traffic count, a recovery once; a launch handed to the Marshal that lands on the ship counts
+  once, as a **local** movement (`adr/0109`).
+- **Not walked against a real DCS ship**: the banner reads "hull not found" until a hull track exists.
 
 ## 8L. Incirlik: the tower's pattern, the single frequency approach and PAR (`adr/0117`, `0123`, `0126`, `0130`)
 
