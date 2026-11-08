@@ -211,3 +211,17 @@ test('the hub sends an MCI only to a session whose Positions show it, and never 
   const lc = WsHub.prototype._efspAlertsMsg.call(self, session('LC'));
   assert.deepEqual(lc.conflictAlert.map(c => c.kind), ['CA']);
 });
+
+test('docs/adr/0156: two carrier flights raise no conflict alert; a carrier flight against any other still does', () => {
+  const carrier = new Set(['fA', 'fB']);
+  const both = monitorFor(headOn(), { 1: 'fA', 2: 'fB' }, { isCarrierFlight: (id) => carrier.has(id) });
+  both.tick(NOW);
+  assert.deepEqual(both.getAll(), []);
+  const one = monitorFor(headOn(), { 1: 'fA', 2: 'fC' }, { isCarrierFlight: (id) => carrier.has(id) });
+  one.tick(NOW);
+  assert.equal(one.getAll().length, 1);
+  assert.equal(one.getAll()[0].kind, 'CA');
+  const intruder = monitorFor(headOn(), { 1: 'fA' }, { isCarrierFlight: (id) => carrier.has(id) });
+  intruder.tick(NOW);
+  assert.equal(intruder.getAll()[0].kind, 'MCI', 'an uncorrelated intruder into the stack still alerts');
+});

@@ -190,6 +190,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     trackControlOf: (flightDataId) => trackControlPositions(stripsOfFlight(flightDataId)),
     // Alert text names each aircraft the way identity does (docs/adr/0059).
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
+    isCarrierFlight: (flightDataId) => identity.isCarrierFlight(flightDataId),
   });
   /** Every Strip of one flight on every Facility's Board, with its Facility (docs/adr/0147's track control reads them). */
   function stripsOfFlight(flightDataId) {

@@ -68,6 +68,11 @@ class Identity {
     };
   }
 
+  /** Does a live carrier Strip hold this flight (as of the last indexTick)? docs/adr/0156. */
+  isCarrierFlight(flightDataId) {
+    return this._carrier.has(flightDataId);
+  }
+
   /** The one name for a contact where there is no per-session picture: alert text. */
   labelFor(trackId) {
     const who = this.identify(trackId);

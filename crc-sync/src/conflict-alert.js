@@ -245,6 +245,7 @@ class ConflictAlertMonitor {
    *   Absent: every track counts as tracked (the geometry alone, for tests)
    * @param {(flightDataId:string) => object|null} [deps.activeMarsaFor] the flight's ACTIVE MARSA relation
    * @param {(flightDataId:string) => number} [deps.flightSizeOf] the formation's size (identity.flightSize)
+   * @param {(flightDataId:string) => boolean} [deps.isCarrierFlight] a live carrier Strip holds the flight (docs/adr/0156)
    * @param {(track:object) => boolean} [deps.reportsAltitude] the target replies Mode C (its transponder is on)
    * @param {(track:object) => string|null} [deps.callsignFor]
    * @param {(intruder:object, facilityId:string, positionId:string) => boolean} [deps.mciShownAt] whether an MCI with this
@@ -340,7 +341,7 @@ class ConflictAlertMonitor {
 
   /** The role of every track this tick (the header's "Which pairs" and "Groups"). */
   _roles(tracks) {
-    const { trackedFlights, activeMarsaFor, flightSizeOf } = this._d;
+    const { trackedFlights, activeMarsaFor, flightSizeOf, isCarrierFlight } = this._d;
     if (!trackedFlights) return null;
     const flights = trackedFlights();
     const leads = new Map();
@@ -348,7 +349,9 @@ class ConflictAlertMonitor {
       const flightDataId = flights.get(String(t.id));
       if (!flightDataId) continue;
       const relation = activeMarsaFor ? activeMarsaFor(flightDataId) : null;
-      leads.set(t, { flightDataId, group: relation ? `M:${relation.marsaId}` : `F:${flightDataId}`, size: flightSizeOf ? flightSizeOf(flightDataId) : 1 });
+      // docs/adr/0156: no strip in the CCA gets a conflict alert against another: every carrier flight is one group.
+      const group = isCarrierFlight && isCarrierFlight(flightDataId) ? 'CV' : relation ? `M:${relation.marsaId}` : `F:${flightDataId}`;
+      leads.set(t, { flightDataId, group, size: flightSizeOf ? flightSizeOf(flightDataId) : 1 });
     }
     const members = formationMembers(tracks.filter(t => AIRBORNE_CATEGORIES.has(t.category)), leads, this._d.config);
     this._memberFlights = new Map([...members].map(([t, m]) => [String(t.id), m.flightDataId]));
