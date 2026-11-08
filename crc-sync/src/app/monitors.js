@@ -86,6 +86,8 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     correlationStore: efsp.correlationStore,
     boardStoreFor: efsp.boardStoreFor,
     facilityConfig,
+    // docs/adr/0156: a Case I carrier flight is correlated only by hand.
+    noAutoCorrelation: (flightDataId) => efsp.carrierStore.caseOf(flightDataId) === 'I',
     onDelta: (payload) => deliver(correlationDelta(efsp.correlationStore, payload.correlations || [], payload.stats)),
   });
 

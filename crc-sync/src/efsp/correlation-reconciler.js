@@ -76,10 +76,12 @@ class CorrelationReconciler {
    *   aircraft's transponder is sending, or null (Transponders#transponderOf).
    * @param {(code:string)=>boolean} [deps.isSyntheticCode] — is this code in the
    *   block crc-sync mints for AI transponders (code-allocator.js isSynthetic)?
+   * @param {(flightDataId:string)=>boolean} [deps.noAutoCorrelation] — a flight the beacon rung must leave alone: a Case I
+   *   carrier flight gets no radar service (docs/adr/0156), so only the controller's own BindTrack correlates it.
    * @param {(payload:object)=>void} [deps.onDelta] — called ONCE per tick with
    *   the records that changed plus the stats, or not at all on a quiet tick.
    */
-  constructor({ trackStore, flightDataStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, isSyntheticCode = isSynthetic, onDelta, clock = WALL_CLOCK, wallClock = WALL_CLOCK }) {
+  constructor({ trackStore, flightDataStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, isSyntheticCode = isSynthetic, noAutoCorrelation = () => false, onDelta, clock = WALL_CLOCK, wallClock = WALL_CLOCK }) {
     // The mission clock (docs/adr/0079) — what the correlation records are
     // stamped with. The below-target warning's rate limit is a log throttle
     // and stays on the wall clock (_warnIfBelowTarget).
@@ -88,6 +90,7 @@ class CorrelationReconciler {
     if (typeof beaconOf !== 'function') throw new Error('CorrelationReconciler needs beaconOf');
     this._beaconOf = beaconOf;
     this._isSynthetic = isSyntheticCode;
+    this._noAutoCorrelation = noAutoCorrelation;
     this._trackStore = trackStore;
     this._flightDataStore = flightDataStore;
     this._store = correlationStore;
@@ -215,7 +218,7 @@ class CorrelationReconciler {
     for (const flightData of eligible) {
       if (resolutions.has(flightData.flightDataId)) continue;
       const assigned = flightData.identity.beaconAssigned;
-      if (!assigned) continue;
+      if (!assigned || this._noAutoCorrelation(flightData.flightDataId)) continue;
       const squawking = byBeacon.get(assigned) || [];
       const candidates = squawking.filter(id => !claimed.has(id));
       if (candidates.length === 0) {

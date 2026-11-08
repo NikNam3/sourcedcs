@@ -47,7 +47,7 @@ function track(id, callsign, squawk = null) {
   return { id, callsign, squawk, category: 1, lat: 37, lon: 35, alt: 6000 };
 }
 
-function build({ flightDataList = [], strips = [], tracks = [] } = {}) {
+function build({ flightDataList = [], strips = [], tracks = [], noAutoCorrelation } = {}) {
   const flightDataStore = fakeFlightDataStore(flightDataList);
   const store = new CorrelationStore({ flightDataExists: (id) => !!flightDataStore.getFlightData(id) });
   const deltas = [];
@@ -58,6 +58,7 @@ function build({ flightDataList = [], strips = [], tracks = [] } = {}) {
     correlationStore: store,
     boardStoreFor: (facilityId) => (facilityId === 'INCIRLIK' ? { getAll: () => strips } : { getAll: () => [] }),
     facilityConfig: { getFacilityIds: () => ['INCIRLIK', 'CENTER'] },
+    noAutoCorrelation,
     onDelta: (payload) => deltas.push(payload),
   });
   return { reconciler, store, flightDataStore, deltas };
@@ -643,4 +644,16 @@ test('a mission reload forgets which AI aircraft held a synthetic code', () => {
   tracks[0] = track(80, 'COLT11', 6012); // every id re-minted
   reconciler.tick();
   assert.equal(store.getCorrelation('f1').trackId, '80');
+});
+
+test('docs/adr/0156: a flight marked for no auto correlation (a Case I carrier flight) is not matched by its code', () => {
+  const { reconciler, store } = build({
+    flightDataList: [flightData('cv1', '', '4521'), flightData('cv3', '', '4522')],
+    strips: [strip('cv1', 'STACK'), strip('cv3', 'STACK')],
+    tracks: [track('t1', 'x', 4521), track('t3', 'y', 4522)],
+    noAutoCorrelation: (id) => id === 'cv1',
+  });
+  reconciler.tick();
+  assert.notEqual((store.getCorrelation('cv1') || {}).state, 'CORRELATED', 'Case I: not by its code');
+  assert.equal(store.getCorrelation('cv3').state, 'CORRELATED', 'Case III: by its code');
 });
