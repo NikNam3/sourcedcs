@@ -233,7 +233,7 @@ class Coordination {
     // check-in a recovery CreateStrip makes. A full stack is a warning, not a refusal of the handoff.
     let warnings;
     let carrierChanged;
-    if (strip.stripType === 'MARSHAL' && strip.state === 'IN_STACK') {
+    if (strip.stripType === 'CV_RECOVERY' && strip.state === 'STACK') {
       const a = this._rules.carrierAppendFlight(strip.flightDataId, { by, actingPositionId });
       if (a && a.ok === false) warnings = [warn('NOT_IN_MARSHAL_STACK', `not in the Marshal stack: ${a.detail || a.reason}`)];
       else if (a && a.changed && a.changed.length) carrierChanged = true;

@@ -59,9 +59,9 @@ registerStripTypeFamily(require('./strip-types/departure').family);
 registerStripTypeFamily(require('./strip-types/arrival').family);
 registerStripTypeFamily(require('./strip-types/overflight').family);
 registerStripTypeFamily(require('./strip-types/mission').family);
-registerStripTypeFamily(require('./strip-types/marshal').family);
+registerStripTypeFamily(require('./strip-types/cv-launch').family); // docs/adr/0156
+registerStripTypeFamily(require('./strip-types/cv-recovery').family);
 registerStripTypeFamily(require('./strip-types/final').family);
-registerStripTypeFamily(require('./strip-types/pattern').family);
 registerStripTypeFamily(require('./strip-types/vfr').family); // docs/adr/0146
 
 const positionFamilies = [];

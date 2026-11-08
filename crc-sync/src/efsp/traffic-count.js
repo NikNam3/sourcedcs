@@ -130,8 +130,7 @@ function countability(before, after) {
   return { counted: false, excludedReason: EXCLUDED_WHEN_NOT_COUNTABLE[stripType] || 'UNCLASSIFIED_STRIP_TYPE' };
 }
 
-// The carrier family (authority/strip-types/marshal.js): a hull's own Strips.
-const CARRIER_STRIP_TYPES = new Set(['MARSHAL', 'FINAL', 'PATTERN']);
+const { isCarrierStrip } = require('./carrier/strip-types');
 
 function _code(v) { return typeof v === 'string' ? v.trim().toUpperCase() : ''; }
 
@@ -155,12 +154,16 @@ function classifyLocality(strip, flightData, homeAirports, opts) {
   }
   let dep = _code(filed.departureAirport);
   let dest = _code(filed.destinationAirport);
-  if (strip && CARRIER_STRIP_TYPES.has(strip.stripType)) {
+  if (isCarrierStrip(strip)) {
     // docs/adr/0109: the ship is the field. A carrier Strip knows one end by itself: a launch departs
-    // this hull, and a recovery (a Strip that was not a launch) lands on it. The other end is the filed
-    // plan's, else the flight's ATO line (a hull is its code, a field its ATO location), else unknown.
+    // this hull, and a recovery lands on it. The other end is the filed plan's, else the flight's ATO line
+    // (a hull is its code, a field its ATO location), else unknown. docs/adr/0156: a launch handed to the
+    // Marshal became the recovery in place; like a converted ARRIVAL it counts once, departing and landing here.
     const hull = _code([...home][0]);
-    const launch = !!(opts && (opts.preDropState === 'LAUNCH' || opts.preDropState === 'LAUNCHED'));
+    if (strip.stripType === 'CV_RECOVERY' && strip.previousLeg && strip.previousLeg.stripType === 'CV_LAUNCH') {
+      return { locality: 'LOCAL', localityBasis: 'CONVERTED_ARRIVAL' };
+    }
+    const launch = strip.stripType === 'CV_LAUNCH';
     const ato = (flightData && flightData.ato) || {};
     const car = ato.carrier || null;
     const atoEnd = (place, onHull) => (onHull && car ? _code(car.hullCode) : _code(place && place.location));

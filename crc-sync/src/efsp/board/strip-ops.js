@@ -9,6 +9,7 @@ const { MAX_FREE_TEXT } = require('../flight-data-store');
 const { deepClone } = require('./strip-util');
 const { undoDeclarationProblem } = require('../undo/undo-history');
 const { voidAppendedEntries } = require('../undo/append-only');
+const { isCarrierStrip } = require('../carrier/strip-types');
 
 // A DEPARTURE in these states has left the ground (docs/adr/0076).
 const DEPARTURE_AIRBORNE_STATES = ['DEPARTED', 'HANDED_OFF'];
@@ -642,10 +643,10 @@ class StripOps {
     // `endedBy: 'PARTICIPANT_RETIRED'`; nothing went wrong and no alert is due.
     const marsaChanged = this._releaseFlightDataIfLastStrip(strip, by);
     // docs/adr/0074: a flight that leaves the recovery leaves the stack, with a
-    // vacancy and no close-up (H28). A LAUNCH Strip is not in the stack; the
+    // vacancy and no close-up (H28). A launch is not in the stack; the
     // removal is a no-op for it.
     let carrierChanged;
-    if (['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.stripType)) {
+    if (isCarrierStrip(strip)) {
       carrierChanged = this.rules.carrierRetireFlight(strip.flightDataId, by) || undefined;
     }
     // U7: a replica that ends takes the proposer's link with it.

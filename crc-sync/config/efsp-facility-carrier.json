@@ -22,11 +22,36 @@
     "CV_DEP": "D"
   },
   "consolidation": {
-    "CV_APP1": ["CV_MARSHAL", "CV_APP2", "CV_DEP", "CV_PRIFLY"],
-    "CV_APP2": ["CV_MARSHAL", "CV_APP1", "CV_DEP", "CV_PRIFLY"],
-    "CV_PRIFLY": ["CV_MARSHAL", "CV_APP1", "CV_APP2", "CV_DEP"],
-    "CV_MARSHAL": ["CV_APP1", "CV_APP2", "CV_DEP", "CV_PRIFLY"],
-    "CV_DEP": ["CV_MARSHAL", "CV_APP1", "CV_APP2", "CV_PRIFLY"]
+    "CV_APP1": [
+      "CV_MARSHAL",
+      "CV_APP2",
+      "CV_DEP",
+      "CV_PRIFLY"
+    ],
+    "CV_APP2": [
+      "CV_MARSHAL",
+      "CV_APP1",
+      "CV_DEP",
+      "CV_PRIFLY"
+    ],
+    "CV_PRIFLY": [
+      "CV_MARSHAL",
+      "CV_APP1",
+      "CV_APP2",
+      "CV_DEP"
+    ],
+    "CV_MARSHAL": [
+      "CV_APP1",
+      "CV_APP2",
+      "CV_DEP",
+      "CV_PRIFLY"
+    ],
+    "CV_DEP": [
+      "CV_MARSHAL",
+      "CV_APP1",
+      "CV_APP2",
+      "CV_PRIFLY"
+    ]
   },
   "handBack": {},
   "positionRadars": {
@@ -80,14 +105,7 @@
         "rackIds": [
           "main"
         ],
-        "impliesState": "IN_STACK"
-      },
-      {
-        "bayId": "cv-marshal-airborne",
-        "rackIds": [
-          "main"
-        ],
-        "impliesState": "LAUNCHED"
+        "impliesState": "STACK"
       },
       {
         "bayId": "cv-marshal-coordination",
@@ -102,21 +120,14 @@
         "rackIds": [
           "main"
         ],
-        "impliesState": "LAUNCH"
+        "impliesState": "ON_DECK"
       },
       {
         "bayId": "cv-prifly-pattern",
         "rackIds": [
           "main"
         ],
-        "impliesState": "IN_PATTERN"
-      },
-      {
-        "bayId": "cv-prifly-recovered",
-        "rackIds": [
-          "main"
-        ],
-        "impliesState": "RECOVERED"
+        "impliesState": "CV_PATTERN"
       },
       {
         "bayId": "cv-prifly-deck",
@@ -127,50 +138,34 @@
     ],
     "CV_APP1": [
       {
-        "bayId": "cv-app1-lane",
+        "bayId": "cv-app1-approach",
         "rackIds": [
           "main"
         ],
-        "impliesState": "COMMENCED"
+        "impliesState": "FINAL_APPROACH"
       },
       {
-        "bayId": "cv-app1-final",
+        "bayId": "cv-app1-pattern",
         "rackIds": [
           "main"
         ],
-        "impliesState": "ON_FINAL",
-        "view": "final"
-      },
-      {
-        "bayId": "cv-app1-bolter",
-        "rackIds": [
-          "main"
-        ],
-        "impliesState": "BOLTER_WAVEOFF"
+        "impliesState": "CV_PATTERN"
       }
     ],
     "CV_APP2": [
       {
-        "bayId": "cv-app2-lane",
+        "bayId": "cv-app2-approach",
         "rackIds": [
           "main"
         ],
-        "impliesState": "COMMENCED"
+        "impliesState": "FINAL_APPROACH"
       },
       {
-        "bayId": "cv-app2-final",
+        "bayId": "cv-app2-pattern",
         "rackIds": [
           "main"
         ],
-        "impliesState": "ON_FINAL",
-        "view": "final"
-      },
-      {
-        "bayId": "cv-app2-bolter",
-        "rackIds": [
-          "main"
-        ],
-        "impliesState": "BOLTER_WAVEOFF"
+        "impliesState": "CV_PATTERN"
       }
     ],
     "CV_DEP": [
@@ -179,7 +174,7 @@
         "rackIds": [
           "main"
         ],
-        "impliesState": "LAUNCHED"
+        "impliesState": "CV_AIRBORNE"
       }
     ]
   },

@@ -35,9 +35,9 @@ const departure = require('./authority/strip-types/departure');
 const { ARRIVAL_STATES } = require('./authority/strip-types/arrival');
 const { OVERFLIGHT_STATES } = require('./authority/strip-types/overflight');
 const { MISSION_STATES } = require('./authority/strip-types/mission');
-const { MARSHAL_STATES } = require('./authority/strip-types/marshal');
+const { LAUNCH_STATES } = require('./authority/strip-types/cv-launch');
+const { RECOVERY_STATES } = require('./authority/strip-types/cv-recovery');
 const { FINAL_STATES } = require('./authority/strip-types/final');
-const { PATTERN_STATES } = require('./authority/strip-types/pattern');
 
 const { DEPARTURE_STATES, REQUIRED_FOR_CLEARANCE, CLEARANCE_BLOCK_LABELS, isFlightPlanValid, missingForClearance, isVoidExpired } = departure;
 const STATES_BY_STRIP_TYPE = authority.STATES_BY_STRIP_TYPE;
@@ -73,6 +73,8 @@ function _normalizeCtx(ctx) {
     carrierCase: (ctx && ctx.carrierCase) || (() => null),
     carrierLaneFor: (ctx && ctx.carrierLaneFor) || (() => null),
     carrierInStack: (ctx && ctx.carrierInStack) || (() => true),
+    // docs/adr/0156: the flight's own Case, from its Marshal-stack entry; null when it has none.
+    carrierCaseOf: (ctx && ctx.carrierCaseOf) || (() => null),
   };
 }
 
@@ -98,7 +100,7 @@ function computeNla(strip, flightData, now, ctx = {}) {
 
 module.exports = {
   STATES, DEPARTURE_STATES, ARRIVAL_STATES, OVERFLIGHT_STATES, MISSION_STATES, STATES_BY_STRIP_TYPE,
-  MARSHAL_STATES, FINAL_STATES, PATTERN_STATES,
+  LAUNCH_STATES, RECOVERY_STATES, FINAL_STATES,
   isValidState, isFlightPlanValid, isVoidExpired, computeNla, REQUIRED_FOR_CLEARANCE,
   missingForClearance, CLEARANCE_BLOCK_LABELS,
 };

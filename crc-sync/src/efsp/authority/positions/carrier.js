@@ -43,7 +43,7 @@ const COORDINATION_ACTIONS = {
  * the Marshal is a MARSHAL Strip at IN_STACK, and ACCEPT joins it to the stack through the check-in path.
  */
 const REPLICA_ON_RECEIPT = {
-  CV_MARSHAL: { ARRIVAL: { INBOUND: { stripType: 'MARSHAL', state: 'IN_STACK' } } },
+  CV_MARSHAL: { ARRIVAL: { INBOUND: { stripType: 'CV_RECOVERY', state: 'STACK' } } },
 };
 
 const CREATE_STRIP_TYPE_PERMISSIONS = {
@@ -52,8 +52,8 @@ const CREATE_STRIP_TYPE_PERMISSIONS = {
   // converted to by a carrier transfer, so no Position may CreateStrip them.
   // docs/adr/0155: PriFly creates the launch, the Marshal the recovery. Which one is the state's owner
   // (MARSHAL's `creatorOwnsInitialState`): PriFly owns LAUNCH, the Marshal IN_STACK.
-  CV_MARSHAL: new Set(['MARSHAL']),
-  CV_PRIFLY:  new Set(['MARSHAL']),
+  CV_MARSHAL: new Set(['CV_RECOVERY']),
+  CV_PRIFLY:  new Set(['CV_LAUNCH']),
 };
 
 /**

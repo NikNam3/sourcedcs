@@ -5,6 +5,8 @@
 // Over-declaring is safe (more is captured and more later changes are attributed); under-declaring makes the action
 // not undoable (the history's scope-escape check), never half-restored.
 
+const { isCarrierStrip } = require('../carrier/strip-types');
+
 /** The Strip itself and its flight data. */
 function stripScope(ctx, strip) {
   return {
@@ -27,7 +29,7 @@ function retireScope(ctx, strip) {
     const relation = ctx.rules.activeMarsaFor(strip.flightDataId);
     if (relation) for (const id of relation.participants || []) scope.flightData.push(id);
   }
-  if (['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.stripType)) scope.carrier = [{ flightDataId: strip.flightDataId }];
+  if (isCarrierStrip(strip)) scope.carrier = [{ flightDataId: strip.flightDataId }];
   // The peer's Strip of a live exchange: a replica that ends takes the proposer's link with it (U7), and a proposer that
   // ends while it still holds communications or control hands them to the replica (docs/adr/0101 TRANSFERRING_RETIRED).
   const link = strip.coordination;

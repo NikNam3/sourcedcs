@@ -164,7 +164,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } 
     warnings = [warn('BOUND_TO_ATO', `${atoBound.identity.callsign} launches against its ATO mission ${msn}`)];
   }
   let carrierChanged;
-  if (stripType === 'MARSHAL' && strip.state === 'IN_STACK') {
+  if (stripType === 'CV_RECOVERY' && strip.state === 'STACK') {
     const a = ctx.rules.carrierAppendFlight(strip.flightDataId, { by, actingPositionId });
     if (a && a.ok === false) warnings = [...(warnings || []), warn('NOT_IN_MARSHAL_STACK', `not in the Marshal stack: ${a.detail || a.reason}`)];
     else if (a && a.changed && a.changed.length) carrierChanged = true;

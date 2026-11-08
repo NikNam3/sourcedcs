@@ -43,9 +43,9 @@ const { DEPARTURE_STATE_OWNERS } = require('./authority/strip-types/departure');
 const { ARRIVAL_STATE_OWNERS } = require('./authority/strip-types/arrival');
 const { OVERFLIGHT_STATE_OWNERS } = require('./authority/strip-types/overflight');
 const { MISSION_STATE_OWNERS } = require('./authority/strip-types/mission');
-const { MARSHAL_STATE_OWNERS } = require('./authority/strip-types/marshal');
+const { LAUNCH_STATE_OWNERS } = require('./authority/strip-types/cv-launch');
+const { RECOVERY_STATE_OWNERS } = require('./authority/strip-types/cv-recovery');
 const { FINAL_STATE_OWNERS } = require('./authority/strip-types/final');
-const { PATTERN_STATE_OWNERS } = require('./authority/strip-types/pattern');
 const {
   CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE, RUNWAY_STATUS_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
 } = authority;
@@ -69,8 +69,8 @@ function canActOnRunwayStatus(actingPositionId, opKind) {
  *  - TOFI answer (B2): on a MISSION Strip, the Position `tofiAnsweredBy` names
  *    for its owner (TAC_C2 for an AIC-held line; AIC "works under TAC_C2's
  *    TOFI", guide §4.1, ADR 0025) may ACCEPT, REJECT or TRANSFER_COMMS.
- *  - Back to stack (docs/adr/0114, H117): the Marshal's CarrierHandoff COMMENCED_TO_MARSHAL on a COMMENCED MARSHAL Strip the
- *    lane holds.
+ *  - Back to stack (docs/adr/0156): the Marshal's CarrierHandoff RETURN_TO_STACK on a CV_RECOVERY Strip a lane holds
+ *    (FINAL_APPROACH, DIRTY).
  *  - OPS alert status (S-L13, H56): OPS owns Block 14E on a DEPARTURE at every
  *    state until it is DROPPED, whoever holds the Strip. Likewise 3G ORDNANCE (UI-A U1).
  * The acting Position must still hold the op kind (canMutate runs first).
@@ -80,9 +80,9 @@ function mayActBesideOwner(actingPositionId, strip, op) {
   if (op.kind === 'TOFI' && strip.stripType === 'MISSION' && TOFI_ANSWER_ACTIONS.includes(op.action)) {
     return tofiAnswererFor(strip.ownerPositionId) === actingPositionId;
   }
-  // docs/adr/0114: Back to stack. The Marshal sends a COMMENCED flight (the lane's Strip) back into its stack.
-  if (op.kind === 'CarrierHandoff' && op.transfer === 'COMMENCED_TO_MARSHAL') {
-    return actingPositionId === 'CV_MARSHAL' && strip.stripType === 'MARSHAL' && strip.state === 'COMMENCED';
+  // docs/adr/0156: Back to stack. The Marshal sends a flight on the approach (the lane's Strip) back into its stack.
+  if (op.kind === 'CarrierHandoff' && op.transfer === 'RETURN_TO_STACK') {
+    return actingPositionId === 'CV_MARSHAL' && strip.stripType === 'CV_RECOVERY' && ['FINAL_APPROACH', 'DIRTY'].includes(strip.state);
   }
   // docs/adr/0146 (H175 VR-Q2): the receiver of a VFR handoff accepts it (the STARS accept): the one Position it names.
   if (op.kind === 'VfrHandoff' && op.action === 'ACCEPT') {
@@ -215,6 +215,6 @@ module.exports = {
   canActOnRunwayStatus, RUNWAY_STATUS_OP_OWNERS,
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner, NON_OWNER_BLOCK_WRITES,
   CARRIER_CAPABILITIES, canEditCarrierState, canSequenceMarshalStack, canRecordCarrierHandoff,
-  MARSHAL_STATE_OWNERS, FINAL_STATE_OWNERS, PATTERN_STATE_OWNERS,
+  LAUNCH_STATE_OWNERS, RECOVERY_STATE_OWNERS, FINAL_STATE_OWNERS,
   INCIRLIK_CAPABILITIES, canHandOffToFinal, canRecordFinalCall, finalReceiver, incirlikPositionsWith,
 };

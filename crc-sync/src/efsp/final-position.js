@@ -12,7 +12,7 @@
 // checked as any arrival's.
 
 /** The states of a FINAL Strip that are the final itself (the missed approach and DROPPED are not). */
-const ON_FINAL_STATES = Object.freeze(['ON_FINAL', 'BALL']);
+const ON_FINAL_STATES = Object.freeze(['ON_FINAL']);
 
 /** The Positions of a Facility that own a final Bay (`view: 'final'`). */
 function finalPositionsOf(facilityConfig, facilityId) {
