@@ -471,52 +471,6 @@ test('06 Landed from the PAR panel: the Strip goes to GC and PAR\'s Bay frees (T
   await page.waitForFunction(() => crc.ws.getAckedPositions('INCIRLIK').includes('PAR'));
 });
 
-test('07 a carrier lane has no PAR (H125): no sample, the FINAL line by side number (H124) with no range (H126), Ball and Waveoff keep their ops', async ({ page }) => {
-  await openPanel(page, { signedOn: ['CV_MARSHAL', 'CV_APP1', 'CV_APP2', 'CV_PRIFLY'], facilityId: 'CARRIER', controller: `e2e-par-cv-${unique()}` });
-  await page.waitForFunction(() => typeof crc.carrier.getEfspCarrier === 'function' && !!crc.carrier.getEfspCarrier());
-  await installSampleInjection(page);
-  const call = `CV${unique()}`;
-  const side = `2${unique()}`.slice(0, 3);
-  await page.evaluate((c) => crc.ws.sendEfspCreateStrip('CV_MARSHAL', {
-    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign: c, aircraftType: 'F-18C' },
-  }, 'CARRIER'), call);
-  await waitStrip(page, call, s => s.state === 'IN_STACK', 'checked in');
-  await page.evaluate(([c, sn]) => {
-    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
-    crc.ws.sendEfspMutation('CV_MARSHAL', s, { kind: 'SetBlock', blockId: 'C18', value: sn });
-  }, [call, side]);
-  await expect.poll(() => page.evaluate((c) => {
-    const x = crc.state.getAllEfspStrips().find(y => y.state !== 'DROPPED' && (crc.state.getEfspFlightData(y.flightDataId) || { identity: {} }).identity.callsign === c);
-    const f = crc.state.getEfspFlightData(x.flightDataId);
-    return (f.military && f.military.carrier && f.military.carrier.sideNumber) || null;
-  }, call)).toBe(side);
-  await openBay(page, 'CV_MARSHAL', 'cv-marshal-stack');
-  const strip = page.locator('.efsp-strip', { has: page.getByText(call, { exact: true }) }).first();
-  await strip.locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_APPROACH"]').click();
-  await waitStrip(page, call, s => s.state === 'COMMENCED' && s.ownerPositionId === 'CV_APP1', 'Commence');
-  await openBay(page, 'CV_APP1', 'cv-app1-lane');
-  await page.locator('.efsp-strip', { has: page.getByText(call, { exact: true }) }).first().locator('.efsp-nla-btn[data-carrier-handoff="APPROACH_TO_FINAL"]').click();
-  await waitStrip(page, call, s => s.stripType === 'FINAL' && s.state === 'ON_FINAL', 'Radar contact');
-  // No PAR on the carrier (H125, crc-sync docs/adr/0116): the server sends this lane no sample, the FINAL Bay line names the
-  // flight by its side number (H124), has no range (H126) and no link to the PAR panel, and keeps Ball / Waveoff.
-  await page.evaluate(() => {
-    window.__parSeen = [];
-    crc.msgRegistry.addEfspMessageObserver((msg) => { if (msg && msg.type === 'par-sample') window.__parSeen.push(...(msg.samples || [])); });
-  });
-  await openBay(page, 'CV_APP1', 'cv-app1-final');
-  const row = page.locator('.efsp-final-row');
-  await expect(row.locator('.efsp-final-name')).toHaveText(side);
-  await expect(row.locator('span.efsp-final-name')).toHaveCount(1);
-  await expect(row.locator('button.efsp-final-name')).toHaveCount(0);
-  await expect(row.locator('.efsp-final-range')).toHaveCount(0);
-  await expect(row.locator('.efsp-final-terminal')).toHaveText(['Ball', 'Waveoff']);
-  await serverTicks(page, 3); // the PAR ticks every 500 ms, the hub's heartbeat no faster
-  expect(await page.evaluate(() => window.__parSeen.length)).toBe(0);
-  expect(await page.evaluate(() => crc.parSamples.parSamples().length)).toBe(0);
-  await row.locator('.efsp-final-terminal[data-terminal="WAVEOFF"]').click();
-  await waitStrip(page, call, s => s.state === 'BOLTER_WAVEOFF', 'waveoff');
-});
-
 test('08 an empty final: the approach values stay on the header and PAR sets one with no aircraft (H161 V2-Q1 a); the note stays', async ({ page }) => {
   await incirlik(page);
   // the harness has no wind, so no active runway: the spec's frame names the approach the server would (the active runway end's)

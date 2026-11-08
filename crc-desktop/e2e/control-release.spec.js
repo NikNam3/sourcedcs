@@ -178,7 +178,7 @@ test('CTR to CV_MARSHAL: the Marshal accepts, the flight joins the stack, Checke
     const s = crc.state.getAllEfspStrips().find(x => x.facilityId === 'CARRIER' && x.state !== 'DROPPED'
       && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
     return s && `${s.stripType}/${s.state}`;
-  }, cs)).toBe('MARSHAL/IN_STACK');
+  }, cs)).toBe('CV_RECOVERY/STACK');
   await expect(chip(a, cs, 'control')).toHaveText('CTRL: CTR');
   await goBay(m, 'CV_MARSHAL', 'cv-marshal-stack');
   await step(m, cs, 'Checked in').click();

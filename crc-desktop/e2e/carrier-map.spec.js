@@ -8,7 +8,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, lapseNlaGuard } = require('./helpers/app');
+const { openPanel } = require('./helpers/app');
 
 test.use({ viewport: { width: 1400, height: 1000 } });
 test.setTimeout(90000);
@@ -79,24 +79,14 @@ const act = (page, callsign, op) => page.evaluate(([c, o]) => {
   crc.ws.sendEfspMutation(s.ownerPositionId, s, o);
 }, [callsign, op]);
 
-/** Checks a flight into the stack and types its side number (and fuel, bingo, approach turn), as the Marshal does. */
-async function flight(page, { side, fuel, bingo, turn }) {
+/** Checks a flight into the stack by its side number with its fuel (crc-sync docs/adr/0156); the callsign is for lookups. */
+async function flight(page, { side, fuel }) {
   const callsign = `Z${side}`;
-  await page.evaluate((c) => crc.ws.sendEfspCreateStrip('CV_MARSHAL', {
-    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign: c, aircraftType: 'F-18C' },
-  }, 'CARRIER'), callsign);
-  await waitStrip(page, callsign, s => s.state === 'IN_STACK', `${callsign} checked in`);
-  const blocks = [['C18', side]];
-  if (fuel != null) blocks.push(['C12', String(fuel)]);
-  if (bingo != null) blocks.push(['C14', String(bingo)]);
-  if (turn != null) blocks.push(['C19', String(turn)]);
-  for (const [blockId, value] of blocks) await act(page, callsign, { kind: 'SetBlock', blockId, value });
-  await expect.poll(() => page.evaluate(([c, n]) => {
-    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
-    const f = crc.state.getEfspFlightData(s.flightDataId);
-    const k = f.military && f.military.carrier;
-    return k ? [k.sideNumber, k.lowStateLb, k.bingoFuelLb, k.approachTurnNm].filter((x) => x != null).length : 0;
-  }, [callsign, blocks.length])).toBe(blocks.length);
+  await page.evaluate(([c, sd, f]) => crc.ws.sendEfspCreateStrip('CV_MARSHAL', {
+    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY',
+    flightData: { sideNumber: sd, callsign: c, aircraftType: 'FA18C', ...(f != null ? { lowStateLb: f } : {}) },
+  }, 'CARRIER'), [callsign, side, fuel]);
+  await waitStrip(page, callsign, s => s.state === 'STACK', `${callsign} checked in`);
   return callsign;
 }
 
@@ -182,12 +172,12 @@ test('01 centred on the ship, north-up, the 10 nm ring at every zoom; the wheel 
   await cleanUp(page);
 });
 
-test('02 the marshal stack on the radial, aircraft by side number and altitude, amber low state, labels decluttered at the stack', async ({ browser, baseURL }) => {
+test('02 the marshal stack on the radial, aircraft by side number and altitude, all grey (no fuel rule), labels decluttered at the stack', async ({ browser, baseURL }) => {
   const page = await mapPage(browser, baseURL, 'e2e-cm2');
   const [a, b, c] = [`1${unique()}`, `2${unique()}`, `3${unique()}`];
-  const ca = await flight(page, { side: a, fuel: 7200, bingo: 4000 });
-  const cb = await flight(page, { side: b, fuel: 4500, bingo: 4000 });
-  const cc = await flight(page, { side: c, fuel: 3900, bingo: 4000 });
+  const ca = await flight(page, { side: a, fuel: 7200 });
+  const cb = await flight(page, { side: b, fuel: 4500 });
+  const cc = await flight(page, { side: c, fuel: 3900 });
   await setRange(page, 30);
   await contact(page, 'cm-a', { brg: SHIP.radial, nm: 21, altFt: 6000, callsign: ca });
   await contact(page, 'cm-b', { brg: SHIP.radial, nm: 22, altFt: 7000, callsign: cb });
@@ -199,13 +189,7 @@ test('02 the marshal stack on the radial, aircraft by side number and altitude, 
   await expect(label(page, 'cm-a')).toHaveText(`${a} 060`);
   await expect(label(page, 'cm-b')).toHaveText(`${b} 070`);
   await expect(label(page, 'cm-x')).toHaveText('Tcm-x 150');
-  await expect(label(page, 'cm-a')).toHaveAttribute('fill', '#d8e0e6');
-  await expect(label(page, 'cm-b')).toHaveAttribute('fill', /e0a83c/);
-  await expect(label(page, 'cm-c')).toHaveAttribute('fill', /ff5c5c/);
-  // the margin is the MARSHAL panel's setting
-  await page.evaluate(() => crc.settingsRegistry.setSetting('marshalLowStateMarginKlb', 4));
-  await expect(label(page, 'cm-a')).toHaveAttribute('fill', /e0a83c/);
-  await page.evaluate(() => crc.settingsRegistry.setSetting('marshalLowStateMarginKlb', 1));
+  for (const id of ['cm-a', 'cm-b', 'cm-c']) await expect(label(page, id)).toHaveAttribute('fill', '#d8e0e6');
   // a mile apart at 30 nm is 9 px: the labels must not overlap
   const boxes = await map(page).locator('[data-label]').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }));
   for (let i = 0; i < boxes.length; i++) {
@@ -221,61 +205,22 @@ test('02 the marshal stack on the radial, aircraft by side number and altitude, 
   await cleanUp(page);
 });
 
-test('03 the bolter racetrack only while a Strip is BOLTER_WAVEOFF, turning in at its approach turn (4 and 8 nm), gone after', async ({ browser, baseURL }) => {
-  const page = await mapPage(browser, baseURL, 'e2e-cm3');
-  const [a, b] = [`4${unique()}`, `5${unique()}`];
-  const ca = await flight(page, { side: a, fuel: 7000, bingo: 4000, turn: 8 });
-  const cb = await flight(page, { side: b, fuel: 7000, bingo: 4000, turn: 4 });
-  await setRange(page, 15);
-  const toFinal = async (cs) => {
-    await act(page, cs, { kind: 'InvokeNla' });
-    await waitStrip(page, cs, s => s.state === 'COMMENCED', 'commenced');
-    await lapseNlaGuard(page);
-    await act(page, cs, { kind: 'InvokeNla' });
-    await waitStrip(page, cs, s => s.state === 'ON_FINAL', 'on final');
-  };
-  await toFinal(ca);
-  await expect(pattern(page, 'bolter')).toHaveCount(0);
-  await act(page, ca, { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  await waitStrip(page, ca, s => s.state === 'BOLTER_WAVEOFF', 'bolter');
-  await expect(pattern(page, 'bolter')).toHaveCount(1);
-  await expect(pattern(page, 'bolter')).toHaveAttribute('data-turn-nm', '8');
-  await lapseNlaGuard(page);
-  await toFinal(cb);
-  await act(page, cb, { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  await waitStrip(page, cb, s => s.state === 'BOLTER_WAVEOFF', 'second bolter');
-  await expect(pattern(page, 'bolter')).toHaveCount(2);
-  await expect(map(page).locator('[data-pattern="bolter"][data-turn-nm="4"]')).toHaveCount(1);
-  await page.screenshot({ path: test.info().outputPath('03-bolters.png') });
-  await act(page, ca, { kind: 'SetState', toState: 'ON_FINAL' });
-  await waitStrip(page, ca, s => s.state === 'ON_FINAL', 'back on final');
-  await expect(pattern(page, 'bolter')).toHaveCount(1);
-  await expect(pattern(page, 'bolter')).toHaveAttribute('data-turn-nm', '4');
-  await act(page, cb, { kind: 'DropStrip', reason: 'trapped' });
-  await expect(pattern(page, 'bolter')).toHaveCount(0);
-  await cleanUp(page);
-});
-
-test('04 Case change mid-recovery: the stack gives way to port holding; the landing pattern and the initial, then the spin, only while flown', async ({ browser, baseURL }) => {
+test('04 a Case I flight holds overhead: port holding and the landing pattern while it holds, the initial, then the spin, only while flown', async ({ browser, baseURL }) => {
   const page = await mapPage(browser, baseURL, 'e2e-cm4');
   const a = `6${unique()}`;
-  const ca = await flight(page, { side: a, fuel: 7000, bingo: 4000 });
   await setRange(page, 8);
-  await expect(map(page).locator('[data-cm="stack"]')).toHaveCount(1);
-  await expect(map(page).locator('[data-cm="marshal-orbit"]')).toHaveCount(1);
-  await expect(map(page).locator('[data-cm="approach-path"] [data-fix]')).toHaveCount(3);
-  await expect(pattern(page, 'port-holding')).toHaveCount(0);
   await typeState(page, 'case', 'I');
   await expect(map(page).locator('[data-cm="case"]')).toHaveText('I');
+  const ca = await flight(page, { side: a, fuel: 7000 }); // checked in under Case I: it flies Case I (crc-sync docs/adr/0156)
   await expect(pattern(page, 'port-holding')).toHaveCount(1);
   await expect(map(page).locator('[data-cm="stack"]')).toHaveCount(0);
   // the pattern the holding flight flies next is drawn while it holds (crc-sync docs/adr/0137, U21); no marshal path in Case I
   await expect(pattern(page, 'landing')).toHaveCount(1);
   await expect(map(page).locator('[data-cm="approach-path"]')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('04-port-holding.png') });
-  // Commence in Case I hands the flight to PriFly as a PATTERN Strip
+  // TO PATTERN in Case I hands the flight to PriFly
   await act(page, ca, { kind: 'InvokeNla' });
-  await waitStrip(page, ca, s => s.stripType === 'PATTERN' && s.state === 'IN_PATTERN', 'in the pattern');
+  await waitStrip(page, ca, s => s.state === 'CV_PATTERN', 'in the pattern');
   await expect(pattern(page, 'port-holding')).toHaveCount(0);
   await expect(pattern(page, 'landing')).toHaveCount(1);
   await expect(pattern(page, 'initial')).toHaveCount(1);
@@ -334,23 +279,23 @@ test('06 the final bearing overridden moves the centreline; the ship track lost 
   await cleanUp(page);
 });
 
-test('07 the DIST Block measures from the live ship (H125): the ship moves on, the figure follows it with no Board change', async ({ browser, baseURL }) => {
-  const page = await mapPage(browser, baseURL, 'e2e-cm7');
-  const fin = await flight(page, { side: `5${unique()}`.slice(0, 3) });
-  await act(page, fin, { kind: 'InvokeNla' });
-  await waitStrip(page, fin, s => s.state === 'COMMENCED', 'commenced');
-  await lapseNlaGuard(page);
-  await act(page, fin, { kind: 'InvokeNla' });
-  await waitStrip(page, fin, s => s.stripType === 'FINAL' && s.state === 'ON_FINAL', 'on final');
-  await contact(page, 'cm71', { brg: 171, nm: 4, altFt: 1200, callsign: fin });
-  await page.locator('.efsp-position-tab[data-position-id="CV_APP1"]').click();
-  await page.locator('.efsp-bay-tab', { hasText: 'cv-app1-final' }).first().click();
-  const dist = page.locator('.efsp-strip', { has: page.getByText(fin, { exact: true }) }).first().locator('.efsp-block-C17');
-  const scope = () => page.evaluate(() => crc.changeBus.markEfspChanged('scope'));
-  await expect.poll(async () => { await scope(); return dist.textContent(); }, { timeout: 5000 }).toBe('4.0 NM');
-  // The ship steams 1 NM towards the contact (the server republishes its banner every 0.05 NM): DIST follows, nothing on the Board changed.
-  await setShip(page, { lat: SHIP.lat - 1 / 60 });
-  await expect.poll(async () => { await scope(); return dist.textContent(); }, { timeout: 5000 }).toBe('3.0 NM');
-  await setShip(page, { lat: SHIP.lat });
+test('08 the cursor reads its radial and range from the ship in the ring green; a right-drag draws the measure line, its release clears it (crc-sync docs/adr/0156)', async ({ browser, baseURL }) => {
+  const page = await mapPage(browser, baseURL, 'e2e-cm8');
+  await setRange(page, 20);
+  const g = await page.evaluate(() => crc.carrierMap.carrierMapGeometry());
+  const box = await map(page).locator('[data-cm="svg"]').boundingBox();
+  // 10 nm north of the ship
+  await page.mouse.move(box.x + g.cx, box.y + g.cy - 10 * g.k);
+  const bra = map(page).locator('[data-cm="cursor-bra"]');
+  await expect(bra).toHaveText(/^(\d{3}|---)\/010$/);
+  await expect(bra).toHaveAttribute('fill', '#3f9a55');
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(box.x + g.cx + 5 * g.k, box.y + g.cy - 10 * g.k);
+  await expect(map(page).locator('[data-cm="measure"]')).toHaveCount(1);
+  await expect(map(page).locator('[data-cm="measure"] text')).toHaveText(/^(\d{3}|---) \/ 005$/);
+  await page.screenshot({ path: test.info().outputPath('08-measure.png') });
+  await page.mouse.up({ button: 'right' });
+  await expect(map(page).locator('[data-cm="measure"]')).toHaveCount(0);
   await cleanUp(page);
 });
+

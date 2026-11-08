@@ -270,48 +270,6 @@ test('U1/U2 MISSION at TAC_C2 (TACTICAL): a long controlling agency stays in its
   await expectRemarksRow(s, LONG_REMARK);
 });
 
-const BINGO = 'INCIRLIK AIR BASE ADANA TURKEY';
-const setCase = async (page, value) => {
-  if (await page.evaluate(() => crc.carrier.carrierCaseValue()) === value) return;
-  await page.evaluate((v) => crc.ws.sendEfspCarrierMutation('CV_PRIFLY', undefined, undefined, { kind: 'SetCarrierState', field: 'case', value: v }), value);
-  await expect.poll(() => page.evaluate(() => crc.carrier.carrierCaseValue()), { timeout: 10000 }).toBe(value);
-};
-
-test('U1/U2 MARSHAL and PATTERN at the carrier: a long bingo field and note stay in their cells; RMKS on both', async ({ page }) => {
-  await openPanel(page, { signedOn: ['CV_MARSHAL', 'CV_PRIFLY'], facilityId: 'CARRIER', controller: 'u-strip-cv' });
-  await page.waitForFunction(() => typeof crc.carrier.getEfspCarrier === 'function' && !!crc.carrier.getEfspCarrier());
-  const before = await page.evaluate(() => crc.carrier.carrierCaseValue());
-  await setCase(page, 'II');
-  try {
-    const call = uniqueCallsign('CV');
-    await create(page, { positionId: 'CV_MARSHAL', facilityId: 'CARRIER', bayId: 'cv-marshal-stack', stripType: 'MARSHAL',
-      flightData: { callsign: call, aircraftType: 'F-18C' } });
-    expect(await setBlock(page, call, 'CV_MARSHAL', 'C13', BINGO)).toEqual({ ok: true, reason: null });
-    expect(await setBlock(page, call, 'CV_MARSHAL', '9E', LONG_REMARK)).toEqual({ ok: true, reason: null });
-    await openBay(page, 'CV_MARSHAL', 'cv-marshal-stack');
-    const s = stripOf(page, call);
-    await expect(s.locator('.efsp-block-C13')).toHaveText(BINGO);
-    expect(await overflowingFields(s)).toEqual([]);
-    await expectRemarksRow(s, LONG_REMARK);
-    await page.screenshot({ path: test.info().outputPath('u1-u2-marshal.png') });
-
-    // See you: the same flight as PriFly's PATTERN Strip, its remarks with it.
-    await s.locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PRIFLY"]').click();
-    await expect.poll(() => recordOf(page, call).then(r => r && `${r.stripType}/${r.owner}`)).toBe('PATTERN/CV_PRIFLY');
-    expect(await setBlock(page, call, 'CV_PRIFLY', 'C24', LONG_TEXT)).toEqual({ ok: true, reason: null });
-    await openBay(page, 'CV_PRIFLY', 'cv-prifly-pattern');
-    const p = stripOf(page, call);
-    await expect(p.locator('.efsp-block-C24')).toHaveText(LONG_TEXT);
-    expect(await overflowingFields(p)).toEqual([]);
-    await expectRemarksRow(p, LONG_REMARK);
-    await page.evaluate((cs) => {
-      const x = crc.state.getAllEfspStrips().find(y => y.state !== 'DROPPED' && crc.state.getEfspFlightData(y.flightDataId).identity.callsign === cs);
-      crc.ws.sendEfspMutation(x.ownerPositionId, x, { kind: 'DropStrip', reason: 'e2e cleanup' });
-    }, call);
-  } finally {
-    await setCase(page, before);
-  }
-});
 
 test('U4: the stereo picker lists names only; a Strip filed on a stereo route has no remarks', async ({ page }) => {
   await openPanel(page, { signedOn: ['OPS'] });

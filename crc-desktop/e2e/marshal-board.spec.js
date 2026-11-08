@@ -1,14 +1,14 @@
 'use strict';
 
-/* The MARSHAL panel, the recovery board (crc-sync docs/adr/0114; mockup docs/mockups/marshal-stack-panel.html, revision 7), in the
- * situations the mockup walks: a recovery in order, a low state, a flight past its EAT, a Delta, a bolter and Back to stack; and
+/* The MARSHAL panel, the board for every arrival (crc-sync docs/adr/0114, 0156), in the situations the mockup walks: a recovery
+ * in order, a flight past its EAT, a Delta and Back to stack; and
  * the "changed, not yet passed" marks, which live on the server (ADR 0115): two pages see the same mark, a reload keeps it. One
  * controller signed on as the Marshal and both approach lanes (07 adds a second controller at the carrier). The Board lives for the whole run, so every test drops what it made
  * and clears the ramp time; side numbers are unique per test.
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, lapseNlaGuard } = require('./helpers/app');
+const { openPanel } = require('./helpers/app');
 
 test.use({ viewport: { width: 1400, height: 1000 } });
 test.setTimeout(90000);
@@ -48,31 +48,22 @@ const stripOf = (page, callsign) => page.evaluate((c) => {
 const waitStrip = (page, callsign, pred, what) => expect.poll(async () => { const s = await stripOf(page, callsign); return !!s && pred(s); }, { message: what, timeout: 10000 }).toBe(true);
 const typeState = (page, field, value) => page.evaluate(([f, v]) => crc.ws.sendEfspCarrierMutation('CV_PRIFLY', undefined, undefined, { kind: 'SetCarrierState', field: f, value: v }), [field, value]);
 
-/** Checks a flight in and types its side number, fuel and bingo, as the Marshal does. */
-async function flight(page, { side, fuel, bingo, turn }) {
+/** Checks a flight in by its side number with its fuel, as the Marshal does (crc-sync docs/adr/0156); the callsign is for lookups. */
+async function flight(page, { side, fuel }) {
   const callsign = `Z${side}`;
-  await page.evaluate((c) => crc.ws.sendEfspCreateStrip('CV_MARSHAL', {
-    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign: c, aircraftType: 'F-18C' },
-  }, 'CARRIER'), callsign);
-  await waitStrip(page, callsign, s => s.state === 'IN_STACK', `${callsign} checked in`);
-  const blocks = [['C18', side]];
-  if (fuel != null) blocks.push(['C12', String(fuel)]);
-  if (bingo != null) blocks.push(['C14', String(bingo)]);
-  if (turn != null) blocks.push(['C19', String(turn)]);
-  for (const [blockId, value] of blocks) {
-    await page.evaluate(([c, b, v]) => {
-      const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
-      crc.ws.sendEfspMutation('CV_MARSHAL', s, { kind: 'SetBlock', blockId: b, value: v });
-    }, [callsign, blockId, value]);
-    await expect.poll(() => page.evaluate(([c, b]) => {
-      const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
-      const f = crc.state.getEfspFlightData(s.flightDataId);
-      return f.military && f.military.carrier ? f.military.carrier : null;
-    }, [callsign, blockId])).not.toBeNull();
-  }
+  await page.evaluate(([c, sd, f]) => crc.ws.sendEfspCreateStrip('CV_MARSHAL', {
+    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY',
+    flightData: { sideNumber: sd, callsign: c, aircraftType: 'FA18C', ...(f != null ? { lowStateLb: f } : {}) },
+  }, 'CARRIER'), [callsign, side, fuel]);
+  await waitStrip(page, callsign, s => s.state === 'STACK', `${callsign} checked in`);
   await expect(page.locator(`#marshal-panel [data-cell="side"]`, { hasText: side })).toBeVisible();
   return callsign;
 }
+const advance = (page, side) => row(page, side).locator('[data-marshal-action="advance"]');
+const backToStack = (page, callsign) => page.evaluate((c) => {
+  const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
+  crc.ws.sendEfspMutation('CV_MARSHAL', s, { kind: 'CarrierHandoff', transfer: 'RETURN_TO_STACK' });
+}, callsign);
 
 /** The ramp time as a HHMM Zulu string `minutes` from now on the mission clock (the harness has no DCS, so it is the wall clock). */
 const rampIn = (minutes) => {
@@ -96,46 +87,27 @@ async function cleanUp(page) {
 const panelOf = (page) => page.locator('#marshal-panel');
 const row = (page, side) => panelOf(page).locator('tr.mb-row', { has: page.locator('[data-cell="side"]', { hasText: side }) });
 
-test('01 a recovery in order: landing order, side numbers, HOLD, Commence on the next flight only, TO GO, all grey', async ({ browser, baseURL }) => {
+test('01 a recovery in order: landing order, side numbers, each row\'s button its state, the next flight\'s COMMENCE marked, TO GO, all grey', async ({ browser, baseURL }) => {
   const page = await marshalPage(browser, baseURL, 'e2e-mb1');
   const [s1, s2, s3] = [`1${unique()}`, `2${unique()}`, `3${unique()}`];
   await typeState(page, 'rampTime', rampIn(30));
-  await flight(page, { side: s1, fuel: 7200, bingo: 4000 });
-  await flight(page, { side: s2, fuel: 8300, bingo: 4500 });
-  await flight(page, { side: s3, fuel: 6100, bingo: 3000 });
+  await flight(page, { side: s1, fuel: 7200 });
+  await flight(page, { side: s2, fuel: 8300 });
+  await flight(page, { side: s3, fuel: 6100 });
   const p = panelOf(page);
   await expect(p.locator('tr.mb-row')).toHaveCount(3);
   await expect(p.locator('tr.mb-row').nth(0)).toContainText(s1);
-  await expect(row(page, s2).locator('[data-cell="status"]')).toHaveText('HOLD');
+  await expect(advance(page, s2)).toHaveText('COMMENCE');
   await expect(row(page, s1).locator('[data-cell="ang"]')).toHaveText('6');
   await expect(row(page, s3).locator('[data-cell="ang"]')).toHaveText('8');
-  await expect(row(page, s1).locator('[data-part="fuel"]')).toHaveValue('7.2');
-  await expect(p.locator('[data-marshal-action="commence"]')).toHaveCount(1);
-  await expect(row(page, s1).locator('[data-marshal-action="commence"]')).toBeVisible();
+  await expect(row(page, s1).locator('[data-part="fuel"]')).toHaveText('7.2');
+  await expect(p.locator('.mb-commence')).toHaveCount(1);
+  await expect(row(page, s1).locator('.mb-commence')).toBeVisible();
   await expect(p.locator('[data-marshal="togo"]')).toHaveText('3');
   await expect(p.locator('[data-marshal="case"]')).toHaveText('III');
-  await expect(p.locator('.mb-chg, .mb-late, .mb-fuel-attn, .mb-fuel-danger')).toHaveCount(0);
+  await expect(p.locator('.mb-chg, .mb-late')).toHaveCount(0);
   await expect(p.locator('[data-marshal="picture"]')).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('01-in-order.png') });
-  await cleanUp(page);
-});
-
-test('02 low state: amber within the margin of bingo, red at bingo, and the margin is the controller\'s setting', async ({ browser, baseURL }) => {
-  const page = await marshalPage(browser, baseURL, 'e2e-mb2');
-  const [a, b, c] = [`4${unique()}`, `5${unique()}`, `6${unique()}`];
-  await flight(page, { side: a, fuel: 4800, bingo: 3500 });   // 1.3 above
-  await flight(page, { side: b, fuel: 4200, bingo: 3500 });   // 0.7 above
-  await flight(page, { side: c, fuel: 3400, bingo: 3500 });   // below bingo
-  const p = panelOf(page);
-  await expect(row(page, a).locator('[data-part="fuel"]')).not.toHaveClass(/mb-fuel/);
-  await expect(row(page, b).locator('[data-part="fuel"]')).toHaveClass(/mb-fuel-attn/);
-  await expect(row(page, c).locator('[data-part="fuel"]')).toHaveClass(/mb-fuel-danger/);
-  await expect(p.locator('.mp-fixlabel.mp-attn')).toHaveCount(1);
-  await expect(p.locator('.mp-fixlabel.mp-danger')).toHaveCount(1);
-  await page.evaluate(() => crc.settingsRegistry.setSetting('marshalLowStateMarginKlb', 2));
-  await expect(row(page, a).locator('[data-part="fuel"]')).toHaveClass(/mb-fuel-attn/);
-  await page.evaluate(() => crc.settingsRegistry.setSetting('marshalLowStateMarginKlb', 1));
-  await page.screenshot({ path: test.info().outputPath('02-low-state.png') });
   await cleanUp(page);
 });
 
@@ -144,13 +116,13 @@ test('03 past EAT and not pushed: amber on that flight\'s EAT only', async ({ br
   const [a, b] = [`7${unique()}`, `8${unique()}`];
   // the ramp time is a quarter of an hour ago, so both EATs have passed and nobody has pushed
   await typeState(page, 'rampTime', rampIn(-15));
-  await flight(page, { side: a, fuel: 7000, bingo: 4000 });
-  await flight(page, { side: b, fuel: 7000, bingo: 4000 });
+  await flight(page, { side: a, fuel: 7000 });
+  await flight(page, { side: b, fuel: 7000 });
   await expect(row(page, a).locator('[data-part="eat"]')).toHaveClass(/mb-late/);
   await expect(row(page, b).locator('[data-part="eat"]')).toHaveClass(/mb-late/);
   // Commence clears it for that flight
-  await row(page, a).locator('[data-marshal-action="commence"]').click();
-  await expect(row(page, a).locator('[data-cell="status"]')).toHaveText('COMM');
+  await advance(page, a).click();
+  await expect(advance(page, a)).toHaveText('TO APPR');
   await expect(row(page, a).locator('[data-part="eat"]')).not.toHaveClass(/mb-late/);
   await page.screenshot({ path: test.info().outputPath('03-past-eat.png') });
   await cleanUp(page);
@@ -160,8 +132,8 @@ test('04 Delta: even minutes from four; the holding flights\' EATs move and show
   const page = await marshalPage(browser, baseURL, 'e2e-mb4');
   const [a, b] = [`9${unique()}`, `1${unique()}`];
   await typeState(page, 'rampTime', rampIn(30));
-  await flight(page, { side: a, fuel: 7000, bingo: 4000 });
-  await flight(page, { side: b, fuel: 7000, bingo: 4000 });
+  await flight(page, { side: a, fuel: 7000 });
+  await flight(page, { side: b, fuel: 7000 });
   const p = panelOf(page);
   const minutes = async (side) => Number(await row(page, side).locator('[data-part="eat"]').textContent());
   const before = await minutes(a);
@@ -182,59 +154,29 @@ test('04 Delta: even minutes from four; the holding flights\' EATs move and show
   await cleanUp(page);
 });
 
-test('05 a bolter: BOLTER on the board, and the picture draws the bolter racetrack', async ({ browser, baseURL }) => {
-  const page = await marshalPage(browser, baseURL, 'e2e-mb5');
-  const a = `2${unique()}`;
-  await typeState(page, 'rampTime', rampIn(30));
-  const cs = await flight(page, { side: a, fuel: 7000, bingo: 4000, turn: 8 });
-  const p = panelOf(page);
-  await row(page, a).locator('[data-marshal-action="commence"]').click();
-  await waitStrip(page, cs, s => s.state === 'COMMENCED', 'commenced');
-  await expect(row(page, a).locator('[data-cell="status"]')).toHaveText('COMM');
-  await lapseNlaGuard(page);
-  await page.evaluate((c) => {
-    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
-    crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'InvokeNla' });
-  }, cs);
-  await waitStrip(page, cs, s => s.state === 'ON_FINAL', 'radar contact');
-  await expect(row(page, a).locator('[data-cell="status"]')).toHaveText(/^APP [AB]$/);
-  await page.evaluate((c) => {
-    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
-    crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  }, cs);
-  await waitStrip(page, cs, s => s.state === 'BOLTER_WAVEOFF', 'bolter');
-  await expect(row(page, a).locator('[data-cell="status"]')).toHaveText('BOLTER');
-  await expect(row(page, a).locator('[data-marshal-action="back-to-stack"]')).toHaveCount(0);
-  // no radar contact in the harness, so nothing is placed by DME; the reference racetrack is drawn at the default turn-in
-  await expect(p.locator('.mp-bolter')).toHaveCount(1);
-  await expect(p.locator('.mp-bolter')).toHaveAttribute('data-turn-nm', '6');
-  await page.screenshot({ path: test.info().outputPath('05-bolter.png') });
-  await cleanUp(page);
-});
-
 test('06 Back to stack: the commenced flight returns at the top with new angels and EAT, amber until passed', async ({ browser, baseURL }) => {
   const page = await marshalPage(browser, baseURL, 'e2e-mb6');
   const [a, b, c] = [`3${unique()}`, `4${unique()}`, `5${unique()}`];
   await typeState(page, 'rampTime', rampIn(30));
-  const csA = await flight(page, { side: a, fuel: 7000, bingo: 4000 });
-  await flight(page, { side: b, fuel: 7000, bingo: 4000 });
-  await flight(page, { side: c, fuel: 7000, bingo: 4000 });
+  const csA = await flight(page, { side: a, fuel: 7000 });
+  await flight(page, { side: b, fuel: 7000 });
+  await flight(page, { side: c, fuel: 7000 });
   const p = panelOf(page);
-  await row(page, a).locator('[data-marshal-action="commence"]').click();
+  await advance(page, a).click();
   await waitStrip(page, csA, s => s.state === 'COMMENCED', 'commenced');
-  await expect(row(page, a).locator('[data-cell="status"]')).toHaveText('COMM');
+  await expect(advance(page, a)).toHaveText('TO APPR');
   await expect(p.locator('tr.mb-row').nth(0)).toContainText(a); // the commenced flight is ahead of the holding ones
-  await row(page, a).locator('[data-marshal-action="back-to-stack"]').click();
-  await waitStrip(page, csA, s => s.state === 'IN_STACK' && s.ownerPositionId === 'CV_MARSHAL', 'back in the stack');
-  await expect(row(page, a).locator('[data-cell="status"]')).toHaveText('HOLD');
+  await backToStack(page, csA); // the Strip's "…" menu: Back to stack
+  await waitStrip(page, csA, s => s.state === 'STACK' && s.ownerPositionId === 'CV_MARSHAL', 'back in the stack');
+  await expect(advance(page, a)).toHaveText('COMMENCE');
   await expect(p.locator('tr.mb-row').last()).toContainText(a);
   await expect(row(page, a).locator('[data-cell="ang"]')).toHaveText('9');
-  await expect(row(page, a).locator('[data-cell="ang"]')).toHaveClass(/mb-chg/);
+  await expect(row(page, a).locator('[data-part="angels"]')).toHaveClass(/mb-chg/);
   await expect(row(page, a).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
   await expect(row(page, b).locator('[data-part="eat"]')).not.toHaveClass(/mb-chg/);
   await page.screenshot({ path: test.info().outputPath('06-back-to-stack.png') });
   await row(page, a).locator('[data-cell="side"]').click();
-  await expect(row(page, a).locator('[data-cell="ang"]')).not.toHaveClass(/mb-chg/);
+  await expect(row(page, a).locator('[data-part="angels"]')).not.toHaveClass(/mb-chg/);
   await cleanUp(page);
 });
 
@@ -245,8 +187,8 @@ test('07 the marks are the server\'s: two pages see the same mark, a reload keep
   expect(await other.evaluate(() => crc.ws.isObserverAt('CARRIER', 'CV_MARSHAL'))).toBe(true);
   const [a, b] = [`6${unique()}`, `7${unique()}`];
   await typeState(page, 'rampTime', rampIn(30));
-  await flight(page, { side: a, fuel: 7000, bingo: 4000 });
-  await flight(page, { side: b, fuel: 7000, bingo: 4000 });
+  await flight(page, { side: a, fuel: 7000 });
+  await flight(page, { side: b, fuel: 7000 });
   for (const pg of [page, other]) {
     await expect(row(pg, a).locator('[data-part="eat"]')).not.toHaveClass(/mb-chg/);
   }
@@ -282,8 +224,8 @@ test('08 the Marshal types the fuel and assigns an EAT in the panel (U22, crc-sy
   const page = await marshalPage(browser, baseURL, 'e2e-mb8');
   const [s1, s2] = [`1${unique()}`, `2${unique()}`];
   await typeState(page, 'rampTime', rampIn(30));
-  await flight(page, { side: s1, fuel: 7200, bingo: 4000 });
-  const cs2 = await flight(page, { side: s2, fuel: 6000, bingo: 4000 });
+  await flight(page, { side: s1, fuel: 7200 });
+  const cs2 = await flight(page, { side: s2, fuel: 6000 });
   const eatOf = () => page.evaluate((c) => {
     const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c);
     const e = crc.carrier.carrierDerivedStack().find(d => d.flightDataId === s.flightDataId);
@@ -291,8 +233,9 @@ test('08 the Marshal types the fuel and assigns an EAT in the panel (U22, crc-sy
   }, cs2);
   const slotEat = (await eatOf()).t;
 
-  // fuel: typed in thousands, as spoken; it is the Strip's LOW ST
-  const fuelIn = row(page, s2).locator('input[data-marshal-input="fuel"]');
+  // fuel: typed in thousands, as spoken; it is the Strip's FUEL (a click on the figure edits it)
+  await row(page, s2).locator('[data-part="fuel"]').click();
+  const fuelIn = panelOf(page).locator('input[data-marshal-input="fuel"]');
   await expect(fuelIn).toHaveValue('6.0');
   // a figure that is not one is refused in place, marked, and Escape puts the shown fuel back
   await fuelIn.fill('4,8');
@@ -300,15 +243,13 @@ test('08 the Marshal types the fuel and assigns an EAT in the panel (U22, crc-sy
   await expect(fuelIn).toHaveClass(/mb-input-bad/);
   await expect(fuelIn).toBeFocused();
   await fuelIn.press('Escape');
-  await expect(fuelIn).not.toBeFocused();
-  await expect(fuelIn).toHaveValue('6.0');
-  await expect(fuelIn).not.toHaveClass(/mb-input-bad/);
-  await fuelIn.fill('4.8');
-  await fuelIn.press('Enter');
-  await expect(fuelIn).not.toBeFocused();
-  // the row is redrawn from the Strip once the input is left: amber within the margin of bingo (6.0 was not)
-  await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveValue('4.8');
-  await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveClass(/mb-fuel-attn/);
+  await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveText('6.0');
+  await row(page, s2).locator('[data-part="fuel"]').click();
+  const fuelIn2 = panelOf(page).locator('input[data-marshal-input="fuel"]');
+  await fuelIn2.fill('4.8');
+  await fuelIn2.press('Enter');
+  // the row is redrawn from the Strip once the input is left; there is no fuel rule (crc-sync docs/adr/0156)
+  await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveText('4.8');
 
   // EAT: five minutes after the slot's, typed HHMM; shown set (underlined, not coloured) and amber until passed
   const hhmm = (t) => { const d = new Date(t); return String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0'); };

@@ -1,10 +1,9 @@
 'use strict';
 
-/* L17 (crc-sync docs/adr/0074) — the carrier on screen, as a recovery is flown: PriFly and the Marshal
- * set the Case in the carrier management panel (crc-sync docs/adr/0113) and every Position sees it
- * change, the MARSHAL panel (crc-sync docs/adr/0114) shows the derived angels and EAT and re-sequences by one
- * drag, the four handoffs are four buttons, the talk-down (FINAL) has nothing to type, and a Case I
- * recovery is an altitude list.
+/* The carrier on screen (crc-sync docs/adr/0156, ADR 0113, 0114): PriFly and the Marshal set the Case in the carrier
+ * management panel and every Position sees it change; Strips are made and named by side number; the MARSHAL panel holds
+ * every arrival with its state's button (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, TO PATTERN, DROP), live for the Strip's
+ * owner only; a Case I flight sits in its own table beside the overhead circle; a launch goes PriFly, departure, Marshal.
  *
  * Two controllers, one browser context each: the Marshal seat (with both approach lanes) and
  * PriFly. Screenshots go to the test output directory (test-results/). The Board lives for the whole run, so every test drops
@@ -32,19 +31,21 @@ async function controller(browser, baseURL, name, signedOn) {
   return page;
 }
 
-const strip = (page, callsign) => page.locator('.efsp-strip', { has: page.locator('.efsp-block-C1', { hasText: callsign }) }).first();
-const stripOf = (page, callsign) => page.evaluate((c) => {
-  const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
+// A carrier Strip is named by its side number (crc-sync docs/adr/0156): the tests use one per flight, unique per test.
+const strip = (page, side) => page.locator('.efsp-strip', { has: page.locator('.efsp-block-C18', { hasText: side }) }).first();
+const stripOf = (page, side) => page.evaluate((c) => {
+  const sideOfFd = (fd) => (fd && fd.military && fd.military.carrier && fd.military.carrier.sideNumber) || '';
+  const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && sideOfFd(crc.state.getEfspFlightData(x.flightDataId)) === c);
   return s ? { stripId: s.stripId, flightDataId: s.flightDataId, stripType: s.stripType, state: s.state, ownerPositionId: s.ownerPositionId, bayId: s.bayId, trigger: s.carrierHandoff && s.carrierHandoff.trigger } : null;
-}, callsign);
+}, side);
 const waitStrip = (page, callsign, pred, what) => expect.poll(async () => { const s = await stripOf(page, callsign); return !!s && pred(s); }, { message: what, timeout: 10000 }).toBe(true);
 const waitCase = (page, value) => expect.poll(() => page.evaluate(() => crc.carrier.carrierCaseValue()), { timeout: 10000 }).toBe(value);
 
-async function checkIn(page, callsign) {
+async function checkIn(page, side) {
   await page.evaluate((c) => crc.ws.sendEfspCreateStrip('CV_MARSHAL', {
-    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign: c, aircraftType: 'F-18C' },
-  }, 'CARRIER'), callsign);
-  await waitStrip(page, callsign, s => s.state === 'IN_STACK', `${callsign} checked in`);
+    kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY', flightData: { sideNumber: c, aircraftType: 'FA18C' },
+  }, 'CARRIER'), side);
+  await waitStrip(page, side, s => s.stripType === 'CV_RECOVERY' && s.state === 'STACK', `${side} checked in`);
 }
 
 async function openBay(page, positionId, bayId) {
@@ -137,135 +138,120 @@ test('02 the MARSHAL panel lists the stack in landing order; a drag onto another
   await checkIn(marshal, a); await checkIn(marshal, b); await checkIn(marshal, c);
   await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
   const panel = await openMarshalPanel(marshal);
-  await expect(panel.locator('tr.mb-hold')).toHaveCount(3);
+  await expect(panel.locator('[data-marshal="board"] tr.mb-hold')).toHaveCount(3);
   await expect(rowOf(panel, a).locator('[data-cell="ang"]')).toHaveText('6');
   await expect(rowOf(panel, c).locator('[data-cell="ang"]')).toHaveText('8');
-  await expect(panel.locator('tr.mb-row').nth(0)).toContainText(a);
-  // no control anywhere takes an angels, DME or push value for Case II
+  await expect(rowOf(panel, a).locator('[data-cell="dme"]')).toHaveText('21');
+  await expect(panel.locator('[data-marshal="board"] tr.mb-row').nth(0)).toContainText(a);
+  // the Strip shows angels read-only; the Marshal assigns them on the panel
   await expect(strip(marshal, a).locator('.efsp-block-C7.efsp-block-editable')).toHaveCount(0);
-  await expect(strip(marshal, a).locator('.efsp-block-C6.efsp-block-editable')).toHaveCount(0);
-  await expect(strip(marshal, a).locator('.efsp-block-C8.efsp-block-editable')).toHaveCount(0);
   await marshal.screenshot({ path: test.info().outputPath('02-stack-board.png') });
 
   // one gesture: CCC's row dropped on AAA's
   const before = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.flightDataId));
   await rowOf(panel, c).dragTo(rowOf(panel, a));
   await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.flightDataId))).not.toEqual(before);
-  const after = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => [crc.state.getEfspFlightData(e.flightDataId).identity.callsign, e.stackIndex, e.angels]));
+  const after = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => [crc.state.getEfspFlightData(e.flightDataId).military.carrier.sideNumber, e.stackIndex, e.angels]));
   expect(after).toEqual([[c, 0, 6], [a, 1, 7], [b, 2, 8]]);
   await expect(strip(marshal, c).locator('.efsp-block-C7')).toHaveText('6');
-  await expect(panel.locator('tr.mb-row').nth(0)).toContainText(c);
+
+  // the Marshal assigns angels and a holding DME by hand: underlined until cleared
+  await rowOf(panel, b).locator('[data-part="angels"]').click();
+  await panel.locator('[data-marshal-input="angels"]').fill('14');
+  await panel.locator('[data-marshal-input="angels"]').press('Enter');
+  await expect(rowOf(panel, b).locator('[data-part="angels"]')).toHaveText('14');
+  await expect(rowOf(panel, b).locator('[data-part="angels"]')).toHaveClass(/mb-eat-set/);
+  await rowOf(panel, b).locator('[data-part="dme"]').click();
+  await panel.locator('[data-marshal-input="dme"]').fill('30');
+  await panel.locator('[data-marshal-input="dme"]').press('Enter');
+  await expect(rowOf(panel, b).locator('[data-part="dme"]')).toHaveText('30');
   await marshal.screenshot({ path: test.info().outputPath('02-after-resequence.png') });
   await cleanUp(marshal, pri);
   await setCase(pri, 'III');
 });
 
-test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar contact makes it FINAL with nothing to type, Ball and Trapped end it', async ({ browser, baseURL }) => {
-  const marshal = await controller(browser, baseURL, 'e2e-cv-marshal3', ['CV_MARSHAL', 'CV_APP1', 'CV_APP2']);
-  const pri = await controller(browser, baseURL, 'e2e-cv-prifly3', ['CV_PRIFLY']);
-  await setCase(pri, 'II');
-  const a = cs('DDD'); const b = cs('EEE');
-  await checkIn(marshal, a); await checkIn(marshal, b);
-  await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
-
-  // Commence: the NLA, labelled by its handoff, carrying its trigger type
-  const commence = strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_APPROACH"]');
-  await expect(commence).toHaveText('Commence');
-  await expect(commence).toHaveAttribute('data-carrier-trigger', 'CONTROLLER_INITIATED');
-  // and "See you" beside it: a second, distinct button with its own trigger type
-  const seeYou = strip(marshal, b).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PRIFLY"]');
-  await expect(seeYou).toHaveText('See you');
-  await expect(seeYou).toHaveAttribute('data-carrier-trigger', 'PILOT_SEE_YOU');
-  await strip(marshal, a).scrollIntoViewIfNeeded();
-  await marshal.screenshot({ path: test.info().outputPath('03-two-handoff-buttons.png') });
-  await commence.click();
-  await waitStrip(marshal, a, s => s.state === 'COMMENCED' && s.ownerPositionId === 'CV_APP1' && s.trigger === 'CONTROLLER_INITIATED', 'Commence');
-  await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => [e.stackIndex, e.status]))).toEqual([[0, 'PUSHED'], [1, 'HOLDING']]);
-
-  // See you: PRIFLY gets it as a PATTERN Strip, and the stack keeps a vacancy at 1
-  await seeYou.click();
-  await waitStrip(pri, b, s => s.stripType === 'PATTERN' && s.ownerPositionId === 'CV_PRIFLY' && s.trigger === 'PILOT_SEE_YOU', 'See you');
-  await openBay(pri, 'CV_PRIFLY', 'cv-prifly-pattern');
-  await expect(strip(pri, b)).toBeVisible();
-  await pri.screenshot({ path: test.info().outputPath('03-prifly-pattern.png') });
-  await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.stackIndex))).toEqual([0]);
-
-  // Radar contact at the lane: same Strip, now FINAL
-  await openBay(marshal, 'CV_APP1', 'cv-app1-lane');
-  await strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="APPROACH_TO_FINAL"]').click();
-  await waitStrip(marshal, a, s => s.stripType === 'FINAL' && s.state === 'ON_FINAL' && s.trigger === 'RADAR_ACQUISITION', 'Radar contact');
-  await openBay(marshal, 'CV_APP1', 'cv-app1-final');
-  const onFinal = strip(marshal, a);
-  await expect(onFinal).toBeVisible();
-  // the talk-down: nothing to type (WP7A bullet 6)
-  await expect(onFinal.locator('.efsp-block-editable')).toHaveCount(0);
-  await expect(onFinal.locator('input, select')).toHaveCount(0);
-  await expect(onFinal.locator('.efsp-block-C16')).toBeVisible();
-  await onFinal.scrollIntoViewIfNeeded();
-  await marshal.screenshot({ path: test.info().outputPath('03-final-nothing-to-type.png') });
-  await onFinal.locator('.efsp-nla-btn[data-carrier-handoff="FINAL_TO_LSO"]').click();
-  await waitStrip(marshal, a, s => s.state === 'BALL' && s.trigger === 'PILOT_BALL_CALL', 'Ball');
-  await expect(strip(marshal, a).locator('.efsp-nla-btn')).toHaveText('Trapped');
-  // Ball and Trapped are two advancing presses: the client swallows a second one inside the 400 ms double-tap window (F-101), as it does for a person's double tap.
+test('03 Case III on the MARSHAL panel: every arrival from STACK to DROP; each button is its state, live for the owner only', async ({ browser, baseURL }) => {
+  const marshal = await controller(browser, baseURL, 'e2e-cv-marshal3', ['CV_MARSHAL']);
+  const lane = await controller(browser, baseURL, 'e2e-cv-lane3', ['CV_APP1', 'CV_APP2']);
+  const a = cs('DDD');
+  await checkIn(marshal, a);
+  const mp = await openMarshalPanel(marshal);
+  const lp = await openMarshalPanel(lane);
+  const btn = (panel) => rowOf(panel, a).locator('[data-marshal-action="advance"]');
+  await expect(btn(mp)).toHaveText('COMMENCE');
+  await expect(btn(mp)).toBeEnabled();
+  await expect(btn(lp)).toHaveText('COMMENCE');
+  await expect(btn(lp)).toBeDisabled(); // the lanes see the status, the Marshal holds the Strip
+  await btn(mp).click();
+  await waitStrip(marshal, a, s => s.state === 'COMMENCED' && s.ownerPositionId === 'CV_MARSHAL', 'COMMENCE');
+  await expect(btn(mp)).toHaveText('TO APPR');
   await lapseNlaGuard(marshal);
-  await strip(marshal, a).locator('.efsp-nla-btn').click();
-  // Trapped (crc-sync docs/adr/0137, live test U20): the Strip goes to PriFly's RECOVERED Bay, and PriFly drops it from there.
-  await waitStrip(pri, a, s => s.stripType === 'PATTERN' && s.state === 'RECOVERED' && s.ownerPositionId === 'CV_PRIFLY' && s.bayId === 'cv-prifly-recovered', 'Trapped');
-  await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().length)).toBe(0);
-  await openBay(pri, 'CV_PRIFLY', 'cv-prifly-recovered');
-  await expect(strip(pri, a).locator('.efsp-nla-btn')).toHaveText('Drop');
-  await pri.screenshot({ path: test.info().outputPath('03-prifly-recovered.png') });
-  await strip(pri, a).locator('.efsp-nla-btn').click();
-  await expect.poll(() => stripOf(pri, a)).toBeNull();
-
-  await cleanUp(marshal, pri);
-  await setCase(pri, 'III');
+  await btn(mp).click();
+  await waitStrip(lane, a, s => s.state === 'FINAL_APPROACH' && s.ownerPositionId === 'CV_APP1' && s.bayId === 'cv-app1-approach', 'TO APPR');
+  await expect(btn(mp)).toBeDisabled();
+  for (const [label, next] of [['DIRTY UP', 'DIRTY'], ['FLY BULLS', 'BULLSEYE'], ['TO PATTERN', 'CV_PATTERN']]) {
+    await expect(btn(lp)).toHaveText(label);
+    await lapseNlaGuard(lane);
+    await btn(lp).click();
+    await waitStrip(lane, a, s => s.state === next, label);
+  }
+  await lane.screenshot({ path: test.info().outputPath('03-lane-pattern.png') });
+  await expect(btn(lp)).toHaveText('DROP');
+  await lapseNlaGuard(lane);
+  await btn(lp).click();
+  await expect.poll(() => stripOf(lane, a)).toBeNull();
+  await cleanUp(marshal, lane);
 });
 
-test('04 Case I is an altitude list: no push column, the flight goes to the pattern with its own button', async ({ browser, baseURL }) => {
+test('04 Case I: its own table and the overhead circle, angels by hand, TO PATTERN hands it to PriFly; Abort waits for Case II/III', async ({ browser, baseURL }) => {
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal4', ['CV_MARSHAL']);
   const pri = await controller(browser, baseURL, 'e2e-cv-prifly4', ['CV_PRIFLY']);
-  const a = cs('FFF');
-  await checkIn(marshal, a);
   await setCase(pri, 'I');
   await waitCase(marshal, 'I');
-  await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
+  const a = cs('FFF');
+  await checkIn(marshal, a);
   const panel = await openMarshalPanel(marshal);
-  await expect(panel.locator('[data-marshal="case"]')).toHaveText('I');
-  await expect(panel.locator('[data-marshal-action="commence"]')).toHaveCount(0); // Case I has no push time
-  await expect(panel.locator('[data-marshal="picture"]')).toBeHidden(); // the Case III picture is for II and III
-  await expect(panel.locator('tr.mb-hold')).toHaveCount(1);
-  const angels = panel.locator('[data-marshal-input="angels"]').first();
-  await expect(angels).toHaveValue(''); // no altitude until the squadron assigns one
-  await angels.fill('3'); await angels.press('Enter');
-  await expect(panel.locator('[data-marshal-input="angels"]').first()).toHaveValue('3');
-  await marshal.screenshot({ path: test.info().outputPath('04-case-i-list.png') });
-  const toPattern = strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PATTERN_CASE_I"]');
-  await expect(toPattern).toHaveText('To pattern');
-  await expect(strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PRIFLY"]')).toHaveCount(0);
-  await toPattern.click();
-  await waitStrip(pri, a, s => s.stripType === 'PATTERN' && s.ownerPositionId === 'CV_PRIFLY', 'Case I to pattern');
-  await cleanUp(marshal, pri);
+  await expect(panel.locator('[data-marshal="board-case-i"] tr.mb-hold')).toHaveCount(1);
+  await expect(panel.locator('[data-marshal="circle"]')).toBeVisible();
+  await expect(rowOf(panel, a).locator('[data-cell="eat"]')).toHaveCount(0); // Case I: no EAT, no DME column
+  await rowOf(panel, a).locator('[data-part="angels"]').click();
+  await panel.locator('[data-marshal-input="angels"]').fill('3');
+  await panel.locator('[data-marshal-input="angels"]').press('Enter');
+  await expect(rowOf(panel, a).locator('[data-part="angels"]')).toHaveText('3');
+  await marshal.screenshot({ path: test.info().outputPath('04-case-i.png') });
+  // Abort is in the menu, disabled while the ship is in Case I
+  await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
+  expect(await marshal.evaluate((c) => {
+    const s = crc.state.getAllEfspStrips().find(x => ((crc.state.getEfspFlightData(x.flightDataId).military || {}).carrier || {}).sideNumber === c);
+    return s ? crc.carrier.carrierFlightCase(s) : null;
+  }, a)).toBe('I');
+  await rowOf(panel, a).locator('[data-marshal-action="advance"]').click();
+  await waitStrip(pri, a, s => s.state === 'CV_PATTERN' && s.ownerPositionId === 'CV_PRIFLY' && s.bayId === 'cv-prifly-pattern', 'Case I to pattern');
+  // the ship goes to Case III; the flight keeps Case I and still shows in the Case I table
   await setCase(pri, 'III');
+  await expect(panel.locator('[data-marshal="board-case-i"] tr.mb-row')).toHaveCount(1);
+  await cleanUp(marshal, pri);
 });
 
-test('05 a refusal is visible: an approach lane cannot set the carrier state, and a frequency is not a button', async ({ browser, baseURL }) => {
+test('05 a refusal is visible: an approach lane cannot set the carrier state; a Case I flight takes no heading', async ({ browser, baseURL }) => {
   const lane = await controller(browser, baseURL, 'e2e-cv-lane5', ['CV_APP1']);
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal5', ['CV_MARSHAL']);
-  const a = cs('GGG');
-  await checkIn(marshal, a);
-  // the server refuses a state op from a lane, and the panel says so
   await typeState(lane, 'case', 'I', 'CV_APP1');
   await expect(lane.locator('#efsp-mutation-error')).toContainText(/PERMISSION_DENIED|carrier state/i);
   expect(await lane.evaluate(() => crc.carrier.carrierCaseValue())).toBe('III');
-  await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
+  await typeState(marshal, 'case', 'I', 'CV_MARSHAL');
+  await waitCase(marshal, 'I');
+  const a = cs('GGG');
+  await checkIn(marshal, a);
   await marshal.evaluate((c) => {
-    const s = crc.state.getAllEfspStrips().find(x => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c);
-    crc.ws.sendEfspMutation('CV_MARSHAL', s, { kind: 'SetBlock', blockId: 'C10', value: '251.000' });
+    const s = crc.state.getAllEfspStrips().find(x => ((crc.state.getEfspFlightData(x.flightDataId).military || {}).carrier || {}).sideNumber === c);
+    crc.ws.sendEfspMutation('CV_MARSHAL', s, { kind: 'SetBlock', blockId: '9A-VECTOR', value: '270' });
   }, a);
-  await expect(marshal.locator('#efsp-mutation-error')).toContainText(/frequency/i);
+  await expect(marshal.locator('#efsp-mutation-error')).toContainText(/Case I/i);
   await marshal.screenshot({ path: test.info().outputPath('05-refusals.png') });
   await cleanUp(marshal);
+  await typeState(marshal, 'case', 'III', 'CV_MARSHAL');
+  await waitCase(marshal, 'III');
 });
 
 test('06 the carrier panel: typing over a value, where it comes from, "Use default", PriFly and the Marshal at once, the ramp time on the recovery board', async ({ browser, baseURL }) => {
@@ -341,28 +327,34 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   await setCase(pri, 'III');
 });
 
-test('07 the Marshal creates a recovery and PriFly a launch Strip from the toolbar (U18, crc-sync docs/adr/0137, 0155); the launch goes PriFly, departure, Marshal', async ({ browser, baseURL }) => {
+test('07 the toolbar creates by side number (crc-sync docs/adr/0156); a Case III launch goes PriFly, departure control to KILO, then TO MARSHAL as the recovery', async ({ browser, baseURL }) => {
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal7', ['CV_MARSHAL']);
   const pri = await controller(browser, baseURL, 'e2e-cv-prifly7', ['CV_PRIFLY']);
   const dep = await controller(browser, baseURL, 'e2e-cv-dep7', ['CV_DEP']);
   await expect(dep.locator('#efsp-create-strip-btn')).toBeDisabled();
   const [rec, lau] = [cs('REC'), cs('LAU')];
+  await expect(marshal.locator('#efsp-new-strip-callsign')).toHaveAttribute('placeholder', 'SIDE');
   await marshal.locator('#efsp-new-strip-callsign').fill(rec);
+  await marshal.locator('#efsp-new-strip-actype').fill('FA18C');
+  await marshal.locator('#efsp-new-strip-extra').fill('6.2');
   await marshal.locator('#efsp-create-strip-btn').click();
-  await waitStrip(marshal, rec, s => s.stripType === 'MARSHAL' && s.state === 'IN_STACK' && s.bayId === 'cv-marshal-stack', 'recovery created');
-  await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().length)).toBe(1);
+  await waitStrip(marshal, rec, s => s.stripType === 'CV_RECOVERY' && s.state === 'STACK' && s.bayId === 'cv-marshal-stack', 'recovery created');
   await pri.locator('#efsp-new-strip-callsign').fill(lau);
+  await pri.locator('#efsp-new-strip-extra').fill('090');
   await pri.locator('#efsp-create-strip-btn').click();
-  await waitStrip(pri, lau, s => s.stripType === 'MARSHAL' && s.state === 'LAUNCH' && s.ownerPositionId === 'CV_PRIFLY' && s.bayId === 'cv-prifly-launch', 'launch created');
-  await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
-  await expect(strip(marshal, rec)).toBeVisible();
-  // Case III (the default): Launched goes to departure control, To Marshal to the Marshal's airborne Bay
+  await waitStrip(pri, lau, s => s.stripType === 'CV_LAUNCH' && s.state === 'ON_DECK' && s.ownerPositionId === 'CV_PRIFLY' && s.bayId === 'cv-prifly-launch', 'launch created');
   await openBay(pri, 'CV_PRIFLY', 'cv-prifly-launch');
+  await expect(strip(pri, lau).locator('.efsp-block-C20')).toContainText('90');
   await strip(pri, lau).locator('.efsp-nla-btn[data-carrier-handoff="LAUNCH_TO_DEPARTURE"]').click();
-  await waitStrip(dep, lau, s => s.state === 'LAUNCHED' && s.ownerPositionId === 'CV_DEP' && s.bayId === 'cv-dep-departures', 'Launched');
+  await waitStrip(dep, lau, s => s.state === 'CV_AIRBORNE' && s.ownerPositionId === 'CV_DEP' && s.bayId === 'cv-dep-departures', 'LAUNCHED');
   await openBay(dep, 'CV_DEP', 'cv-dep-departures');
-  await strip(dep, lau).locator('.efsp-nla-btn[data-carrier-handoff="DEPARTURE_TO_MARSHAL"]').click();
-  await waitStrip(marshal, lau, s => s.state === 'LAUNCHED' && s.ownerPositionId === 'CV_MARSHAL' && s.bayId === 'cv-marshal-airborne', 'To Marshal');
-  await marshal.screenshot({ path: test.info().outputPath('07-marshal-created.png') });
+  await expect(strip(dep, lau).locator('.efsp-nla-btn')).toHaveText('KILO');
+  await strip(dep, lau).locator('.efsp-nla-btn').click();
+  await waitStrip(dep, lau, s => s.state === 'KILO', 'KILO');
+  await strip(dep, lau).locator('[data-carrier-handoff="DEPARTURE_TO_MARSHAL"]').click();
+  await waitStrip(marshal, lau, s => s.stripType === 'CV_RECOVERY' && s.state === 'STACK' && s.ownerPositionId === 'CV_MARSHAL', 'TO MARSHAL');
+  const panel = await openMarshalPanel(marshal);
+  await expect(rowOf(panel, lau)).toBeVisible();
+  await marshal.screenshot({ path: test.info().outputPath('07-launch-became-recovery.png') });
   await cleanUp(marshal);
 });
