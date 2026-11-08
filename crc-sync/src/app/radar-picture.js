@@ -12,6 +12,7 @@
 // code for own/neutral AI), who it is (its flight, a tag, or its track number), and the datalink feed. Moved out of createApp.
 
 const { buildRadars, loadSensorSpecs } = require('../radars');
+const { isCarrierStrip } = require('../efsp/carrier/strip-types');
 const { TerrainStore } = require('../terrain');
 const { CoverageEngine } = require('../coverage');
 const { PositionCoverage } = require('../efsp/position-coverage');
@@ -84,6 +85,15 @@ function buildRadarPicture({ env, hubLink, trackStore, efsp, facilityConfig, own
     ownCoalition,
     correlationStore: efsp.correlationStore,
     flightDataStore: efsp.flightDataStore,
+    // docs/adr/0156: the flights a live carrier Strip holds (presentation.js shows their name only at TACTICAL).
+    carrierFlightIds: () => {
+      const ids = new Set();
+      for (const facilityId of facilityConfig.getFacilityIds()) {
+        const board = efsp.boardStoreFor(facilityId);
+        if (board) for (const s of board.getAll()) if (s.state !== 'DROPPED' && isCarrierStrip(s)) ids.add(s.flightDataId);
+      }
+      return ids;
+    },
     env: () => ({ weather: grpcClient.getWeather(), transitionAltFt: theaterContext.transitionAltFt() }),
   });
 

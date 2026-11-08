@@ -29,6 +29,12 @@ const NO_PICTURE = {
   radars: () => [],
 };
 
+/** Does this session hold a Position of the Facility (docs/adr/0156: a carrier flight's name reaches TACTICAL only)? */
+function _holdsFacility(session, facilityId) {
+  const held = session && session.coverage && session.coverage.signedOnPositions;
+  return Array.isArray(held) && held.some(p => p && p.facilityId === facilityId);
+}
+
 class WsHub {
   /**
    * @param {object} deps
@@ -390,7 +396,7 @@ class WsHub {
       const d = this._surv.describe(track);
       described.set(id, d);
       const w = d.who;
-      const fp = [d.iffOverride, w.flightDataId, w.correlation, w.flightDataCallsign, w.flightDataType, w.tag].join('|');
+      const fp = [d.iffOverride, w.flightDataId, w.correlation, w.flightDataCallsign, w.flightDataType, w.carrierFlight, w.tag].join('|');
       const prev = this._labels.get(id);
       if (!prev) this._labels.set(id, { fp, rev: 1 });
       else if (prev.fp !== fp) this._labels.set(id, { fp, rev: prev.rev + 1 });
@@ -453,6 +459,7 @@ class WsHub {
       who: d.who, mode4: d.mode4, iffOverride: d.iffOverride, transponder: d.transponder,
       env: this._surv.env(), missionData: this._missionData,
       atcSession: !!(session && session.coverage && session.coverage.conflictAlert),
+      tacticalSession: _holdsFacility(session, 'TACTICAL'),
     });
   }
 
@@ -496,7 +503,8 @@ class WsHub {
     const next = this._picture.coverageFor(session.controllerId);
     // `conflictAlert` is whether an ATC Position is held, which decides the draw scheme
     // of every contact (docs/adr/0088) — a change of it re-sends the picture too.
-    const key = (c) => [...c.radars.map(r => r.id)].sort().join(',') + (c.datalink ? '+DL' : '') + (c.conflictAlert ? '+ATC' : '');
+    const key = (c) => [...c.radars.map(r => r.id)].sort().join(',') + (c.datalink ? '+DL' : '') + (c.conflictAlert ? '+ATC' : '')
+      + (_holdsFacility({ coverage: c }, 'TACTICAL') ? '+TAC' : '');
     const before = key(session.coverage);
     const after = key(next);
     this._setCoverage(session, next);

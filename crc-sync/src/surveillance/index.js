@@ -24,7 +24,7 @@ const NO_FLIGHT_DATA_LIST = { getFlightData: () => null };
  * @param {() => {weather:object, transitionAltFt:number}} [deps.env]
  * @param {number} [deps.ownCoalition]        which DCS coalition is own (iff.js's ownCoalitionFrom)
  */
-function createSurveillance({ collab, srs = null, sensorSpecs = loadSensorSpecs(), correlationStore, flightDataStore, datalink = null, env, ownCoalition }) {
+function createSurveillance({ collab, srs = null, sensorSpecs = loadSensorSpecs(), correlationStore, flightDataStore, datalink = null, env, ownCoalition, carrierFlightIds }) {
   const transponders = new Transponders({ srs, config: sensorSpecs.transponder, ownCoalition });
   const trackNumbers = new TrackNumbers();
   const identity = new Identity({
@@ -32,6 +32,7 @@ function createSurveillance({ collab, srs = null, sensorSpecs = loadSensorSpecs(
     flightDataStore: flightDataStore || NO_FLIGHT_DATA_LIST,
     collab,
     trackNumbers,
+    carrierFlightIds,
   });
   return {
     transponders, trackNumbers, identity, datalink,

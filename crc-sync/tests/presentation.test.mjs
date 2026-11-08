@@ -238,3 +238,18 @@ test('hysteresis: a tactical radar holds the contact TACTICAL for two of its swe
 test('a radar with no presentation class never makes a contact TACTICAL', () => {
   assert.equal(schemeOf([{ ...AWACS, at: 1000 }], 1000, false, true), 'ATC');
 });
+
+test('docs/adr/0156: a carrier flight is named from its Strip only at a tactical session; elsewhere its sensors alone', () => {
+  const carrier = { ...NOBODY, flightDataId: 'f', correlation: 'CORRELATED', flightDataCallsign: 'VIPER11', flightDataType: 'FA18C', carrierFlight: true };
+  const atc = present({ who: carrier, atcSession: true });
+  assert.notEqual(atc.label.callsign, 'VIPER11');
+  assert.notEqual(atc.label.source, 'FLIGHT_DATA');
+  assert.equal(atc.type, null);
+  assert.deepEqual(atc.ssr, SQUAWK, 'its transponder reply is still shown');
+  const tac = present({ who: carrier, tacticalSession: true });
+  assert.deepEqual([tac.label.callsign, tac.label.source, tac.type], ['VIPER11', 'FLIGHT_DATA', 'FA18C']);
+  const noCallsign = present({ who: { ...carrier, flightDataCallsign: null }, tacticalSession: true });
+  assert.notEqual(noCallsign.label.source, 'FLIGHT_DATA');
+  const land = present({ who: { ...carrier, carrierFlight: false }, atcSession: true });
+  assert.deepEqual([land.label.callsign, land.label.source], ['VIPER11', 'FLIGHT_DATA'], 'any other flight is unchanged');
+});

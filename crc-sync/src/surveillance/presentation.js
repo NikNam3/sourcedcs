@@ -112,6 +112,7 @@ function schemeOf(radars, at, datalink, atcSession) {
  * @param {{weather:object, transitionAltFt:number}} ctx.env
  * @param {object|null} ctx.missionData
  * @param {boolean} [ctx.atcSession]  the session is signed on to an ATC Position (docs/adr/0088)
+ * @param {boolean} [ctx.tacticalSession]  the session holds a Position of the TACTICAL Facility (docs/adr/0156)
  * @returns {object|null} the wire track, or null when the controller must not be told about it
  */
 function presentTrack(track, ctx) {
@@ -147,7 +148,10 @@ function presentTrack(track, ctx) {
   const who = ctx.who;
   let callsign = null;
   let source = null;
-  if (who.flightDataCallsign && who.correlation === 'CORRELATED') { callsign = who.flightDataCallsign; source = 'FLIGHT_DATA'; }
+  // docs/adr/0156: a carrier Strip's flight is named from its Strip only on the tactical datalink picture; every other scope
+  // sees what its sensors give (the carrier map labels it by side number itself, client side).
+  const named = who.correlation === 'CORRELATED' && (!who.carrierFlight || !!ctx.tacticalSession);
+  if (who.flightDataCallsign && named) { callsign = who.flightDataCallsign; source = 'FLIGHT_DATA'; }
   else if (dl && dl.callsign) { callsign = dl.callsign; source = 'DATALINK'; }
   else if (who.tag) { callsign = who.tag; source = 'TAG'; }
 
@@ -162,7 +166,7 @@ function presentTrack(track, ctx) {
     iffState,
     iffOverride: ctx.iffOverride || null,
     label: { callsign, source, tag: who.tag || null, trackNumber: who.trackNumber },
-    type: (who.correlation && who.flightDataType) || (dl && dl.type) || null,
+    type: (named && who.flightDataType) || (dl && dl.type) || null,
     ssr: squawking ? { code: ctx.transponder.code, ident: ctx.transponder.ident, emergency: ctx.transponder.emergency } : null,
     altitude,
     dl: dl ? { lock: dl.lock || null } : null,

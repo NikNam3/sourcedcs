@@ -23,8 +23,12 @@ class Identity {
    * @param {{get:(trackId:string)=>object|null}} deps.collab
    * @param {{get:(trackId:string)=>string}} deps.trackNumbers
    */
-  constructor({ correlationStore, flightDataStore, collab, trackNumbers }) {
+  constructor({ correlationStore, flightDataStore, collab, trackNumbers, carrierFlightIds = () => new Set() }) {
     this._correlations = correlationStore;
+    // docs/adr/0156: the flights with a live carrier Strip, read once per tick (a carrier Strip names its contact only
+    // where presentation.js lets it).
+    this._carrierFlightIds = carrierFlightIds;
+    this._carrier = new Set();
     this._flightDataList = flightDataStore;
     this._collab = collab;
     this._trackNumbers = trackNumbers;
@@ -34,6 +38,7 @@ class Identity {
   /** Rebuilds the trackId -> correlation index. Once per tick, before any identify(). */
   indexTick() {
     this._index = this._correlations.trackIndex();
+    this._carrier = this._carrierFlightIds();
   }
 
   _correlationOf(id) {
@@ -45,7 +50,7 @@ class Identity {
 
   /**
    * @returns {{flightDataId:string|null, correlation:'CORRELATED'|null,
-   *            flightDataCallsign:string|null, flightDataType:string|null, tag:string|null, trackNumber:string}}
+   *            flightDataCallsign:string|null, flightDataType:string|null, carrierFlight:boolean, tag:string|null, trackNumber:string}}
    */
   identify(trackId) {
     const id = String(trackId);
@@ -57,6 +62,7 @@ class Identity {
       correlation: flightData ? hit.state : null,
       flightDataCallsign: (flightData && flightData.identity && flightData.identity.callsign) || null,
       flightDataType: (flightData && flightData.identity && flightData.identity.aircraftType) || null,
+      carrierFlight: !!flightData && this._carrier.has(hit.flightDataId),
       tag: (entry && entry.rename && entry.rename.value) || null,
       trackNumber: this._trackNumbers.get(id),
     };
