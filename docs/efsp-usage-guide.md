@@ -2011,17 +2011,17 @@ the Case II/III stack at the next free slot. Offered only on a Case I flight, an
 ### The MARSHAL panel: every arrival (`adr/0114`, `0115`, `0156`)
 
 - Every recovery from STACK to its drop is on it, in landing order, in **its own Case's table**: **Case II / III**
-  (SEQ, SIDE, TYPE, FUEL, EAT, ANG, DME) beside the Case III picture, **Case I** (SEQ, SIDE, TYPE, FUEL, ANG) beside the
+  (SEQ, SIDE, TYPE, FUEL, DME, ANG, EAT) beside the Case III picture, **Case I** (SEQ, SIDE, TYPE, FUEL, ANG) beside the
   **overhead circle** (ship-up, each aircraft at its bearing and range from the ship, labelled side number and angels; a
   Case I flight with no track bound is not drawn). A Case I flight still finishing after the ship goes to Case III stays
   in the Case I table. Departures are not on it.
-- **The header** reads `CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 04 APPR 15`: the
-  staffed approach lanes, then what the **next flight to check in** gets (its holding DME, angels and EAT, the stack's next
-  slot; angels 6 at the first fix on an empty stack) and the approach button of the lane the next flight to check in is
-  given (**15** for APP 1, **17** for APP 2, ours), which you tell it on initial contact. The flight keeps that lane (TO APPR
-  sends it there, or to the other lane when its own is unstaffed), even when a flight below it leaves; Back to stack gives
-  it a new one. In Case I it ends at **ANG**, the next altitude: one above the highest, from 2,
-  which a Case I check-in is given.
+- **The header** reads `CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 00 APPR 15`: the
+  staffed approach lanes, then the figures of the **last flight in the stack** (the one you just checked in and are reading
+  its clearance to): its holding DME, angels, EAT minute and the approach button of the lane it was told (**15** for
+  APP 1, **17** for APP 2, ours). With nobody in the stack it reads 21 NM, angels 6, EAT 00 and the first lane. A flight
+  keeps its lane (TO APPR sends it there, or to the other lane when its own is unstaffed), even when a flight below it
+  leaves; Back to stack gives it a new one. In Case I it ends at **ANG**: the last flight's altitude (2 with nobody); a
+  Case I check-in is given one above the highest, from 2.
 - **Checking a flight in from the panel**: the Marshal types the side number, and in Case II/III the squawk the pilot was
   given, beside **+ New Strip** in the header (Enter sends). The flight joins the stack at the next slot. With a squawk, and a
   contact squawking it, its EAT is worked out from where it is: ((range − 20 nm) + 2π·20 nm × (the angle between its radial

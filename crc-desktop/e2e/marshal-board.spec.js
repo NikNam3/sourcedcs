@@ -279,12 +279,10 @@ test('08 the Marshal types the fuel and assigns an EAT in the panel (U22, crc-sy
   await cleanUp(page);
 });
 
-test('09 the Marshal checks a flight in from the panel: side number and squawk, it joins at the next slot the header showed (crc-sync docs/adr/0156)', async ({ browser, baseURL }) => {
+test('09 the Marshal checks a flight in from the panel: side number and squawk; the header then reads its figures (crc-sync docs/adr/0156)', async ({ browser, baseURL }) => {
   const page = await marshalPage(browser, baseURL, 'e2e-mb9');
   const p = panelOf(page);
   const side = `4${unique()}`.slice(0, 6);
-  await expect(p.locator('[data-marshal="next-angels"]')).toHaveText(/^\d+$/);
-  const angels = await p.locator('[data-marshal="next-angels"]').textContent();
   await p.locator('[data-marshal-input="create-side"]').fill(side);
   await p.locator('[data-marshal-input="create-squawk"]').fill('4589');
   await p.locator('[data-marshal-action="create"]').click();
@@ -292,7 +290,8 @@ test('09 the Marshal checks a flight in from the panel: side number and squawk, 
   await p.locator('[data-marshal-input="create-squawk"]').fill('4521');
   await p.locator('[data-marshal-input="create-squawk"]').press('Enter');
   await expect(row(page, side)).toBeVisible();
-  await expect(row(page, side).locator('[data-cell="ang"]')).toHaveText(angels);
+  const angels = await row(page, side).locator('[data-cell="ang"]').textContent();
+  await expect(p.locator('[data-marshal="next-angels"]')).toHaveText(angels); // the last flight in the stack is this one
   expect(await page.evaluate((sd) => {
     const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && ((crc.state.getEfspFlightData(x.flightDataId).military || {}).carrier || {}).sideNumber === sd);
     return s && crc.state.getEfspFlightData(s.flightDataId).identity.beaconAssigned;

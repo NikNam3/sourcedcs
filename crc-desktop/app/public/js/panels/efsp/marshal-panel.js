@@ -11,7 +11,7 @@ import { carrierCreateSeed } from './panel/carrier-create.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { nlaButtonLabel } from './efsp-nla.js';
 import {
-  buildBoard, checkInEatUtc, clockText, dropSlot, eatMinuteText, fuelBlockOp, fuelText, headerParts, marksOf, nextAvailable, passClearanceOp, setAngelsOp, setDmeOp, setEatOp
+  buildBoard, checkInEatUtc, clockText, dropSlot, eatMinuteText, fuelBlockOp, fuelText, headerFigures, headerParts, marksOf, passClearanceOp, setAngelsOp, setDmeOp, setEatOp
 } from './marshal-board-model.js';
 import { pictureModel, renderMarshalPicture } from './marshal-picture.js';
 import { circleModel, renderMarshalCircle } from './marshal-circle.js';
@@ -83,7 +83,7 @@ function _advance(row) {
 }
 
 const COLUMNS = Object.freeze({
-  sequenced: ['SEQ', 'SIDE', 'TYPE', 'FUEL', 'EAT', 'ANG', 'DME', ''],
+  sequenced: ['SEQ', 'SIDE', 'TYPE', 'FUEL', 'DME', 'ANG', 'EAT', ''],
   caseI: ['SEQ', 'SIDE', 'TYPE', 'FUEL', 'ANG', ''],
 });
 
@@ -268,10 +268,11 @@ function _drawRow(r, m, ctx) {
   cell('fuel', _figure(r, 'fuel', fuelText(r.fuelLb), { edit: _marshalEdits(r, canSequence) ? {
     value: fuelText(r.fuelLb), placeholder: 'k lb', bad: 'the fuel in thousands of pounds (4.8), or empty to clear it', send: (t) => _sendFuel(r, t),
   } : null }));
+  // Case II/III: DME, ANG, EAT (the human's order, 2026-11-09); Case I: ANG
   if (section === 'sequenced') {
-    cell('eat', _figure(r, 'eat', eatMinuteText(r.eatUtc), { set: r.eatSet, chg: m.eat, late: r.late, edit: edits ? {
-      value: r.eatUtc != null ? carrierHhmm(r.eatUtc) : '', placeholder: 'HHMM', bad: 'a Zulu time as HHMM, or empty for the slot\'s EAT',
-      send: (t) => _sendOp(setEatOp(r, t)),
+    cell('dme', _figure(r, 'dme', r.marshalDme != null ? String(r.marshalDme) : '', { set: r.dmeSet, edit: edits ? {
+      value: r.marshalDme != null ? String(r.marshalDme) : '', placeholder: 'DME', bad: 'a whole DME (21), or empty for the slot\'s',
+      send: (t) => _sendOp(setDmeOp(r, t)),
     } : null }));
   }
   cell('ang', _figure(r, 'angels', r.angels != null ? String(r.angels) : '', { set: r.angelsSet, chg: m.angels, edit: edits ? {
@@ -279,9 +280,9 @@ function _drawRow(r, m, ctx) {
     send: (t) => _sendOp(setAngelsOp(r, t)),
   } : null }));
   if (section === 'sequenced') {
-    cell('dme', _figure(r, 'dme', r.marshalDme != null ? String(r.marshalDme) : '', { set: r.dmeSet, edit: edits ? {
-      value: r.marshalDme != null ? String(r.marshalDme) : '', placeholder: 'DME', bad: 'a whole DME (21), or empty for the slot\'s',
-      send: (t) => _sendOp(setDmeOp(r, t)),
+    cell('eat', _figure(r, 'eat', eatMinuteText(r.eatUtc), { set: r.eatSet, chg: m.eat, late: r.late, edit: edits ? {
+      value: r.eatUtc != null ? carrierHhmm(r.eatUtc) : '', placeholder: 'HHMM', bad: 'a Zulu time as HHMM, or empty for the slot\'s EAT',
+      send: (t) => _sendOp(setEatOp(r, t)),
     } : null }));
   }
   const act = _el('td', 'mb-act');
@@ -408,9 +409,9 @@ function _drawVacancy(v, canSequence) {
   tr.appendChild(_el('td', 'mb-side', '—'));
   tr.appendChild(_el('td', 'mb-type', ''));
   tr.appendChild(_el('td', 'mb-fuel', ''));
-  tr.appendChild(_el('td', 'mb-eat', 'vacant'));
-  tr.appendChild(_el('td', 'mb-ang', v.angels != null ? String(v.angels) : ''));
   tr.appendChild(_el('td', 'mb-dme', v.marshalDme != null ? String(v.marshalDme) : ''));
+  tr.appendChild(_el('td', 'mb-ang', v.angels != null ? String(v.angels) : ''));
+  tr.appendChild(_el('td', 'mb-eat', 'vacant'));
   const act = _el('td', 'mb-act');
   if (canSequence) {
     const b = _el('button', 'mb-btn', 'Close up');
@@ -496,7 +497,7 @@ export function renderMarshal() {
     fbText: st.finalBearing.value != null ? carrierBearingText(st.finalBearing.display) : '',
     altimeterInHg: st.weather && st.weather.altimeter ? st.weather.altimeter.value : null,
     radialText: st.radial.value != null ? carrierBearingText(st.radial.display) : '',
-    next: nextAvailable(view, getAllEfspStrips(), (p) => { const x = getEfspPosition(p); return !!(x && x.primary); }),
+    next: headerFigures(view, (p) => { const x = getEfspPosition(p); return !!(x && x.primary); }),
   });
   const sig = JSON.stringify(parts);
   if (_els.line.dataset.sig !== sig) {

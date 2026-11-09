@@ -274,7 +274,7 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   const board = await openMarshalPanel(marshal);
   const eatOf = (n) => board.locator(`tr.mb-hold[data-seq="${n}"] [data-part="eat"]`);
   const dmeOf = (i) => marshal.evaluate((k) => crc.carrier.carrierDerivedStack()[k].marshalDme, i);
-  await expect(board.locator('[data-marshal="next-eat"]')).toHaveText('—');
+  await expect(board.locator('[data-marshal="next-eat"]')).toHaveText('—'); // the last flight has no EAT without a ramp time
   await expect(eatOf(1)).toHaveText('--');
   await marshal.screenshot({ path: test.info().outputPath('06-before.png') });
 
@@ -293,9 +293,9 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   await expect(lp.locator('[data-carrier-value="rampTime"]')).toHaveText('2040');
   await expect(lp.locator('[data-carrier-field="rampTime"]')).toBeHidden();
   await expect(lp.locator('[data-carrier-reset="firstFix"]')).toBeHidden(); // the lanes only read
-  // the header gives the next check-in's slot: angels 8, its holding DME and EAT (2040Z ramp + 2 min - 6 min)
-  await expect(board.locator('[data-marshal="next-angels"]')).toHaveText('8');
-  await expect(board.locator('[data-marshal="next-eat"]')).toHaveText('36');
+  // the header reads the last flight in the stack: angels 7, its EAT (2040Z ramp + 1 min - 6 min)
+  await expect(board.locator('[data-marshal="next-angels"]')).toHaveText('7');
+  await expect(board.locator('[data-marshal="next-eat"]')).toHaveText('35');
   // the first fix moved every slot's DME, and an EAT now exists, worked back from the ramp time
   expect([await dmeOf(0), await dmeOf(1)]).toEqual([24, 25]);
   await expect(eatOf(1)).toHaveText(/^\d\d$/);

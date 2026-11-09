@@ -1224,6 +1224,7 @@
   ],
   "panels/efsp/marshal-board-model.js": [
    "APPROACH_BUTTON",
+   "HEADER_DEFAULTS",
    "KIND_OF_STATE",
    "KIND_RANK",
    "buildBoard",
@@ -1234,9 +1235,9 @@
    "eatMinuteText",
    "fuelBlockOp",
    "fuelText",
+   "headerFigures",
    "headerParts",
    "marksOf",
-   "nextAvailable",
    "passClearanceOp",
    "setAngelsOp",
    "setDmeOp",

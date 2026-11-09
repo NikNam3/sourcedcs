@@ -199,47 +199,40 @@ export function dropSlot(rows, draggedId, targetId) {
   return target.slot;
 }
 
-// ── the header: what the next flight checking in is given (the human's layout, 2026-11-09) ─────────────
+// ── the header: the last flight in the stack (the human's layout, 2026-11-09) ─────────────
 
 /** The approach button each lane is worked on: APP 1 on 15, APP 2 on 17 ([SOURCE-DEFINED], the squadron's). */
 export const APPROACH_BUTTON = Object.freeze({ CV_APP1: 15, CV_APP2: 17 });
 const LANES = Object.freeze(['CV_APP1', 'CV_APP2']);
-const CASE_I_FIRST_ANGELS = 2;
+/** What the header reads with nobody in the stack: the first fix, angels 6, EAT minute 00 (Case I: angels 2). */
+export const HEADER_DEFAULTS = Object.freeze({ dme: 21, angels: 6, eatText: '00', caseIAngels: 2 });
 
 /**
- * What the next flight to check in would be given, from the server's hull view: in Case II/III the stack's next free slot
- * (its angels, holding DME and EAT, as `view.slots.MAIN` derives them; angels 6 at the first fix on an empty stack), in
- * Case I the next altitude above the highest one assigned (from 2). And the lane the next check-in will be fed to, whose
- * approach button the Marshal gives on initial contact (push-order alternation, the other lane when that one is
- * unstaffed, handoffs.js `laneFor`).
+ * The figures the header reads: those of the LAST flight in the stack (the one just checked in, whose clearance the Marshal
+ * reads out): its holding DME, angels, EAT minute and the approach lane it was told. With nobody in the stack, the defaults
+ * (21, 6, 00) and the lane the first check-in will be told (APP 1, the other when that one is unstaffed). Case I: the last
+ * flight's angels, else 2.
  *
  * @param {object} view                      the hull view
- * @param {object[]} [strips]                unused (kept for the call sites)
- * @param {(positionId:string)=>boolean} isStaffed
- * @returns {{angels:number|null, dme:number|null, eatUtc:number|null, lane:string|null}}
+ * @param {(positionId:string)=>boolean} [isStaffed]
+ * @returns {{angels:number|null, dme:number|null, eatText:string, lane:string|null}}
  */
-export function nextAvailable(view, strips, isStaffed = () => true) {
+export function headerFigures(view, isStaffed = () => true) {
   const caseValue = view && view.recoveryCase ? view.recoveryCase.value : null;
   const derived = (view && view.derived) || {};
+  const lastOf = (list) => (list || []).reduce((m, e) => (Number.isInteger(e.stackIndex) && (!m || e.stackIndex > m.stackIndex) ? e : m), null);
   if (caseValue === 'I') {
-    const assigned = (derived.CASE_I || []).map((e) => e.angels).filter(Number.isFinite);
-    return { angels: assigned.length ? Math.max(...assigned) + 1 : CASE_I_FIRST_ANGELS, dme: null, eatUtc: null, lane: null };
+    const last = lastOf(derived.CASE_I);
+    return { angels: last ? last.angels : HEADER_DEFAULTS.caseIAngels, dme: null, eatText: '', lane: null };
   }
-  const slots = (view && view.slots && view.slots.MAIN) || [];
-  const slot = slots.length ? slots[slots.length - 1] : null; // the slot above the top of the stack (slot 0 when empty)
-  // The lane the NEXT check-in will be fed to: the Marshal gives it its approach button on initial contact. Its push
-  // ordinal is the number of flights already in the stack (handoffs.js `laneFor`: alternating, the other lane when that
-  // one is unstaffed).
-  const ordinal = (derived.MAIN || []).length;
-  const preferred = LANES[ordinal % 2];
-  const other = LANES[(ordinal + 1) % 2];
-  const lane = isStaffed(preferred) ? preferred : isStaffed(other) ? other : null;
-  return {
-    angels: slot && Number.isFinite(slot.angels) ? slot.angels : null,
-    dme: slot && Number.isFinite(slot.marshalDme) ? slot.marshalDme : null,
-    eatUtc: slot && Number.isFinite(slot.pushTimeUtc) ? slot.pushTimeUtc : null,
-    lane,
-  };
+  const last = lastOf(derived.MAIN);
+  if (last) {
+    // the lane it was told is on its stored stack entry (the record the view carries), not a derived figure
+    const stored = ((view.stacks && view.stacks.MAIN && view.stacks.MAIN.entries) || []).find((e) => e.flightDataId === last.flightDataId);
+    return { angels: last.angels, dme: last.marshalDme, eatText: eatMinuteText(last.pushTimeUtc), lane: (stored && stored.lane) || null };
+  }
+  const lane = isStaffed(LANES[0]) ? LANES[0] : isStaffed(LANES[1]) ? LANES[1] : null;
+  return { angels: HEADER_DEFAULTS.angels, dme: HEADER_DEFAULTS.dme, eatText: HEADER_DEFAULTS.eatText, lane };
 }
 
 /**
@@ -264,7 +257,7 @@ export function headerParts({ hullId, caseValue, lanesText, brcText, fbText, alt
   }
   parts.push({ k: 'ANG', v: dash(next && next.angels), id: 'next-angels' });
   if (caseValue !== 'I') {
-    parts.push({ k: 'EAT', v: next && Number.isFinite(next.eatUtc) ? eatMinuteText(next.eatUtc) : '—', id: 'next-eat' });
+    parts.push({ k: 'EAT', v: dash(next && next.eatText), id: 'next-eat' });
     parts.push({ k: 'APPR', v: dash(next && next.lane ? APPROACH_BUTTON[next.lane] : null), id: 'next-appr' });
   }
   return parts;

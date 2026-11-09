@@ -125,32 +125,30 @@ test('typed in the panel: fuel, EAT, angels, DME (crc-sync docs/adr/0156); empty
   assert.deepEqual([b.sequenced[0].eatSet, b.sequenced[0].angelsSet, b.sequenced[0].dmeSet], [true, true, true]);
 });
 
-test('the header: CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 04 APPR 15, single spaces', () => {
-  const slots = [{ stackIndex: 0, angels: 6, marshalDme: 21, pushTimeUtc: Date.UTC(2026, 5, 1, 21, 4) }];
-  const emptyIII = { recoveryCase: { value: 'III' }, derived: { MAIN: [], CASE_I: [] }, slots: { MAIN: slots }, lanes: { MAIN: [] } };
-  const next = m.nextAvailable(emptyIII, [], () => true);
-  assert.deepEqual(next, { angels: 6, dme: 21, eatUtc: slots[0].pushTimeUtc, lane: 'CV_APP1' });
-  const text = m.headerParts({ hullId: 'CVN-72', caseValue: 'III', lanesText: 'CV-1', brcText: '082M', fbText: '073M', altimeterInHg: 30.06, radialText: '270M', next })
+test('the header reads the last flight in the stack: CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 23NM ANG 8 EAT 39 APPR 15', () => {
+  const v = (main) => ({ recoveryCase: { value: 'III' }, derived: { MAIN: main, CASE_I: [] },
+    stacks: { MAIN: { entries: main.map(e => ({ flightDataId: e.flightDataId, stackIndex: e.stackIndex, lane: e.lane })) } } });
+  const line = (next) => m.headerParts({ hullId: 'CVN-72', caseValue: 'III', lanesText: 'CV-1', brcText: '082M', fbText: '073M', altimeterInHg: 30.06, radialText: '270M', next })
     .map(p => (p.k ? `${p.k} ${p.v}` : p.v)).join(' ');
-  assert.equal(text, 'CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 04 APPR 15');
-  // the next free slot above the stack; APPR is the lane the NEXT check-in gets (two in the stack: the third, APP 1)
-  const two = { ...emptyIII, derived: { MAIN: [{ flightDataId: 'a', stackIndex: 0 }, { flightDataId: 'b', stackIndex: 1 }], CASE_I: [] },
-    slots: { MAIN: [...slots, { stackIndex: 1, angels: 7, marshalDme: 22 }, { stackIndex: 2, angels: 8, marshalDme: 23, pushTimeUtc: null }] },
-    lanes: { MAIN: [{ flightDataId: 'a', lane: 'CV_APP1' }, { flightDataId: 'b', lane: 'CV_APP2' }] } };
-  const strips = [strip('a', 'FINAL_APPROACH', 'CV_APP1'), strip('b', 'COMMENCED')];
-  assert.deepEqual(m.nextAvailable(two, strips), { angels: 8, dme: 23, eatUtc: null, lane: 'CV_APP1' });
-  assert.equal(m.headerParts({ caseValue: 'III', next: m.nextAvailable(two, strips) }).find(p => p.id === 'next-appr').v, '15');
-  const three = { ...two, derived: { ...two.derived, MAIN: [...two.derived.MAIN, { flightDataId: 'c', stackIndex: 2 }] } };
-  assert.equal(m.headerParts({ caseValue: 'III', next: m.nextAvailable(three, strips) }).find(p => p.id === 'next-appr').v, '17', 'it changes with each check-in');
-  // nobody waiting, APP 1 unstaffed: the next check-in goes to APP 2
-  assert.equal(m.nextAvailable(emptyIII, [], (p) => p === 'CV_APP2').lane, 'CV_APP2');
+  // nobody in the stack: the defaults, and the lane the first check-in is told
+  assert.equal(line(m.headerFigures(v([]))), 'CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 00 APPR 15');
+  assert.equal(m.headerFigures(v([]), (p) => p === 'CV_APP2').lane, 'CV_APP2');
+  // the last one in the stack (highest slot), whatever order the list is in
+  const main = [
+    { flightDataId: 'b', stackIndex: 2, angels: 8, marshalDme: 23, pushTimeUtc: Date.UTC(2026, 5, 1, 21, 39), lane: 'CV_APP1' },
+    { flightDataId: 'a', stackIndex: 0, angels: 6, marshalDme: 21, pushTimeUtc: Date.UTC(2026, 5, 1, 21, 37), lane: 'CV_APP1' },
+  ];
+  assert.equal(line(m.headerFigures(v(main))), 'CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 23NM ANG 8 EAT 39 APPR 15');
+  assert.equal(line(m.headerFigures(v([{ ...main[0], lane: 'CV_APP2' }]))).endsWith('APPR 17'), true);
+  // no ramp time yet: the last flight has no EAT
+  assert.equal(m.headerFigures(v([{ ...main[0], pushTimeUtc: null }])).eatText, '');
 });
 
-test('the header in Case I: the next altitude from 2, one above the highest assigned; no marshal fix, EAT or approach', () => {
-  const v = (angels) => ({ recoveryCase: { value: 'I' }, derived: { MAIN: [], CASE_I: angels.map((a, i) => ({ flightDataId: `f${i}`, angels: a })) } });
-  assert.equal(m.nextAvailable(v([]), []).angels, 2);
-  assert.equal(m.nextAvailable(v([2, 3, null]), []).angels, 4);
-  const text = m.headerParts({ hullId: 'CVN-72', caseValue: 'I', lanesText: 'CV-1', brcText: '082M', fbText: '073M', altimeterInHg: 30.06, next: m.nextAvailable(v([]), []) })
+test('the header in Case I: the last flight\'s angels, 2 with nobody; no marshal fix, EAT or approach', () => {
+  const v = (entries) => ({ recoveryCase: { value: 'I' }, derived: { MAIN: [], CASE_I: entries } });
+  assert.equal(m.headerFigures(v([])).angels, 2);
+  assert.equal(m.headerFigures(v([{ stackIndex: 0, angels: 2 }, { stackIndex: 1, angels: 3 }])).angels, 3);
+  const text = m.headerParts({ hullId: 'CVN-72', caseValue: 'I', lanesText: 'CV-1', brcText: '082M', fbText: '073M', altimeterInHg: 30.06, next: m.headerFigures(v([])) })
     .map(p => (p.k ? `${p.k} ${p.v}` : p.v)).join(' ');
   assert.equal(text, 'CVN-72 CASE I CV-1 BRC 082M FB 073M ALTIMETER 30.06 ANG 2');
 });
