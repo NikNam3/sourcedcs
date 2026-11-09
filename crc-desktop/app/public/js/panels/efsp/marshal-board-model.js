@@ -269,3 +269,25 @@ export function headerParts({ hullId, caseValue, lanesText, brcText, fbText, alt
   }
   return parts;
 }
+
+// ── the EAT a flight checking in from the MARSHAL panel is given (the human's rule, 2026-11-09) ────────────
+
+const ARC_NM = 20;          // the arc it flies to the marshal radial
+const GROUND_NM_PER_MIN = 5; // 300 kt
+const SPARE_MIN = 5;
+
+/**
+ * minutes = ((range - 20) + 2π·20·(Δradial / 360)) / 5 + 5: in to 20 nm, round the 20 nm arc to the marshal radial, at 5 nm a
+ * minute, and five minutes to spare. The EAT is that far from now, rounded up to the minute, and always after the latest EAT
+ * already in the stack (at least a minute after it). Δradial is the smaller angle between the flight's radial from the ship
+ * and the marshal radial (both true). Inside 20 nm the run-in counts nothing.
+ * @returns {number} epoch ms, a whole minute
+ */
+export function checkInEatUtc({ rangeNm, radialDeg, marshalRadialDeg, nowMs, latestEatUtc = null }) {
+  const diff = Math.abs(((radialDeg - marshalRadialDeg) % 360 + 540) % 360 - 180);
+  const minutes = (Math.max(0, rangeNm - ARC_NM) + 2 * Math.PI * ARC_NM * (diff / 360)) / GROUND_NM_PER_MIN + SPARE_MIN;
+  const atMinute = (ms) => Math.ceil(ms / 60_000) * 60_000;
+  let eat = atMinute(nowMs + minutes * 60_000);
+  if (Number.isFinite(latestEatUtc) && eat <= latestEatUtc) eat = atMinute(latestEatUtc + 60_000);
+  return eat;
+}

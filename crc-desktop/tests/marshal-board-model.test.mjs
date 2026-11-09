@@ -154,3 +154,15 @@ test('the header in Case I: the next altitude from 2, one above the highest assi
     .map(p => (p.k ? `${p.k} ${p.v}` : p.v)).join(' ');
   assert.equal(text, 'CVN-72 CASE I CV-1 BRC 082M FB 073M ALTIMETER 30.06 ANG 2');
 });
+
+test('the check-in EAT: ((range - 20) + 2π·20·Δradial/360) / 5 + 5 minutes from now, to the minute, after the latest EAT', () => {
+  const now = Date.UTC(2026, 5, 1, 21, 0, 0);
+  // 50 nm on the 200 radial, marshal radial 270: (30 + 2π·20·70/360) / 5 + 5 = (30 + 24.43) / 5 + 5 = 15.89 → 16 minutes
+  assert.equal(m.checkInEatUtc({ rangeNm: 50, radialDeg: 200, marshalRadialDeg: 270, nowMs: now }), now + 16 * MIN);
+  // across north: 350 and 10 are 20° apart
+  assert.equal(m.checkInEatUtc({ rangeNm: 20, radialDeg: 350, marshalRadialDeg: 10, nowMs: now }), now + Math.ceil(2 * Math.PI * 20 * 20 / 360 / 5 + 5) * MIN);
+  // inside 20 nm on the radial: the five minutes
+  assert.equal(m.checkInEatUtc({ rangeNm: 12, radialDeg: 270, marshalRadialDeg: 270, nowMs: now }), now + 5 * MIN);
+  // never at or before the latest EAT in the stack
+  assert.equal(m.checkInEatUtc({ rangeNm: 12, radialDeg: 270, marshalRadialDeg: 270, nowMs: now, latestEatUtc: now + 9 * MIN }), now + 10 * MIN);
+});

@@ -1,5 +1,6 @@
 ### Changed in 2.1.3
 - **MARSHAL: APPR in the header is the next check-in's approach button**, changing with every flight that checks in, so you can give it on initial contact. A flight keeps the lane it was told even when a flight below it leaves; Back to stack tells it a new one
+- **MARSHAL: a flight checked in from the panel with its squawk gets its EAT from where it is**: ((range − 20 nm) + the 20 nm arc to the marshal radial) ÷ 5 nm a minute + 5 minutes, and always after the latest EAT in the stack. With no contact squawking that code, the slot's EAT
 - This release changes the wire protocol: update CRC, an older version shows "Update required"
 
 ### Changed in 2.1.2

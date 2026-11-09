@@ -35,10 +35,21 @@ export function shipDistanceNm(strip) {
  * (crc-sync docs/adr/0156: the Case I circle puts each aircraft there).
  */
 export function shipBearingRangeOf(strip) {
-  const rangeNm = shipDistanceNm(strip);
-  if (rangeNm == null) return null;
-  const s = getEfspCarrier().shipState;
-  const track = getLatestTrack(correlatedTrackIdForStrip(strip));
+  const trackId = strip ? correlatedTrackIdForStrip(strip) : null;
+  const track = trackId ? getLatestTrack(trackId) : null;
+  return track ? shipBearingRangeTo(track.lat, track.lon) : null;
+}
+
+/** True bearing (degrees) and range (nm) from the ship to a position, or null when either is unknown. */
+export function shipBearingRangeTo(lat, lon) {
+  const view = getEfspCarrier();
+  const s = view && view.shipState;
+  if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const track = { lat, lon };
+  const dLat = (track.lat - s.lat) * RAD;
+  const dLon = (track.lon - s.lon) * RAD;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(s.lat * RAD) * Math.cos(track.lat * RAD) * Math.sin(dLon / 2) ** 2;
+  const rangeNm = 2 * NM_EARTH_R * Math.asin(Math.min(1, Math.sqrt(a)));
   const y = Math.sin((track.lon - s.lon) * RAD) * Math.cos(track.lat * RAD);
   const x = Math.cos(s.lat * RAD) * Math.sin(track.lat * RAD) - Math.sin(s.lat * RAD) * Math.cos(track.lat * RAD) * Math.cos((track.lon - s.lon) * RAD);
   const bearingDeg = ((Math.atan2(y, x) / RAD) + 360) % 360;

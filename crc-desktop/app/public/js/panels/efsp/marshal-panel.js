@@ -3,14 +3,15 @@ import { missionNow } from '../../mission-clock.js';
 import { registerSettingsTab, getSetting } from '../../settings-registry.js';
 import { carrierBearingText, carrierHhmm, carrierStateOf, getEfspCarrier } from './carrier-state.js';
 import { carrierActingFor, sendCarrier, signedOnCarrierIds } from './carrier-send.js';
-import { shipBearingRangeOf } from './carrier-final-distance.js';
+import { shipBearingRangeOf, shipBearingRangeTo } from './carrier-final-distance.js';
+import { getAllTracks } from '../../picture.js';
 import { getAllEfspStrips, getEfspFlightData, getEfspPosition, getEfspPositionLetter, getEfspStrip } from './efsp-state.js';
 import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from './efsp-ws.js';
 import { carrierCreateSeed } from './panel/carrier-create.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { nlaButtonLabel } from './efsp-nla.js';
 import {
-  buildBoard, clockText, dropSlot, eatMinuteText, fuelBlockOp, fuelText, headerParts, marksOf, nextAvailable, passClearanceOp, setAngelsOp, setDmeOp, setEatOp
+  buildBoard, checkInEatUtc, clockText, dropSlot, eatMinuteText, fuelBlockOp, fuelText, headerParts, marksOf, nextAvailable, passClearanceOp, setAngelsOp, setDmeOp, setEatOp
 } from './marshal-board-model.js';
 import { pictureModel, renderMarshalPicture } from './marshal-picture.js';
 import { circleModel, renderMarshalCircle } from './marshal-circle.js';
@@ -59,6 +60,21 @@ function _approachText() {
 }
 
 function _sendStackOp(op) { return sendCarrier('sequencesStack', op); }
+
+/**
+ * The EAT for a flight checking in with this squawk, from the contact squawking it (checkInEatUtc), or null when there is no
+ * such contact, no marshal radial or no ship.
+ */
+function _checkInEat(squawk) {
+  const st = carrierStateOf(getEfspCarrier());
+  const marshalRadialDeg = st && st.radial && st.radial.ref !== 'GRID' && Number.isFinite(st.radial.value) ? st.radial.value : null;
+  const track = getAllTracks().find(t => t.ssr && t.ssr.code === squawk);
+  const pos = track ? shipBearingRangeTo(track.lat, track.lon) : null;
+  if (!pos || marshalRadialDeg == null) return null;
+  const eats = ((getEfspCarrier().derived || {}).MAIN || []).map(e => e.pushTimeUtc).filter(Number.isFinite);
+  return checkInEatUtc({ rangeNm: pos.rangeNm, radialDeg: pos.bearingDeg, marshalRadialDeg, nowMs: missionNow(),
+    latestEatUtc: eats.length ? Math.max(...eats) : null });
+}
 
 /** The row's button: its Strip's next step (the server's NLA), live only for the controller who holds the Strip. */
 function _advance(row) {
@@ -162,10 +178,18 @@ function _build() {
     sqIn.classList.toggle('mb-input-bad', !!seed.ok && !!bad);
     createNote.textContent = bad;
     if (bad) return;
+    const eatUtc = squawk ? _checkInEat(squawk) : null;
     sendEfspCreateStrip('CV_MARSHAL', {
       kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY',
       flightData: { ...seed.flightData, ...(squawk ? { beaconCode: squawk } : {}) },
-    }, 'CARRIER');
+    }, 'CARRIER', {
+      // the flight's EAT from where it is now (checkInEatUtc), once the server says which flight it is
+      onAck: (ack) => {
+        if (ack && ack.ok && eatUtc != null && ack.strip) _sendStackOp({ kind: 'SetEat', flightDataId: ack.strip.flightDataId, eat: carrierHhmm(eatUtc) });
+        return false;
+      },
+    });
+    createNote.textContent = squawk && eatUtc == null ? `no contact squawking ${squawk}: the EAT is the slot's` : '';
     sideIn.value = ''; sqIn.value = '';
     sideIn.focus();
   };

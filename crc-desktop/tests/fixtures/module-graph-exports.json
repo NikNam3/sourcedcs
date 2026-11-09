@@ -732,6 +732,7 @@
    "carrierDistanceNm",
    "carrierFinalDistanceText",
    "shipBearingRangeOf",
+   "shipBearingRangeTo",
    "shipDistanceNm"
   ],
   "panels/efsp/carrier-management-panel.js": [
@@ -1226,6 +1227,7 @@
    "KIND_OF_STATE",
    "KIND_RANK",
    "buildBoard",
+   "checkInEatUtc",
    "clockText",
    "compareLanding",
    "dropSlot",

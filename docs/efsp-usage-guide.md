@@ -2023,7 +2023,10 @@ the Case II/III stack at the next free slot. Offered only on a Case I flight, an
   it a new one. In Case I it ends at **ANG**, the next altitude: one above the highest, from 2,
   which a Case I check-in is given.
 - **Checking a flight in from the panel**: the Marshal types the side number, and in Case II/III the squawk the pilot was
-  given, beside **+ New Strip** in the header (Enter sends). The flight joins the stack at the next slot.
+  given, beside **+ New Strip** in the header (Enter sends). The flight joins the stack at the next slot. With a squawk, and a
+  contact squawking it, its EAT is worked out from where it is: ((range − 20 nm) + 2π·20 nm × (the angle between its radial
+  and the marshal radial) / 360) ÷ 5 nm a minute + 5 minutes from now, rounded up to the minute and always after the latest
+  EAT in the stack (the squadron's rule). It is an assigned EAT (underlined), so the Marshal can change or clear it.
 - **The Marshal and both approach controllers look at the same panel.** Each row's button is the flight's state
   (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, TO PATTERN, DROP) and is live only for the controller who holds the Strip;
   everyone else sees it greyed as the status. The next flight to push has the blue COMMENCE.
