@@ -57,7 +57,10 @@ const { isSequencedCase, isCase } = require('./recovery-case');
 // `angelsOverride` and `dmeOverride` (docs/adr/0156): the Marshal sets everything a flight is told. They win over the slot's
 // value until cleared; a Case I flight's angels is only ever this (it has no slot arithmetic). Present only while set, cleared
 // when the flight returns to the stack.
-const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'angelsOverride', 'dmeOverride', 'pushedAtUtc', 'eatUtc', 'unpassed', 'eatOverrideUtc']);
+// `lane` (the human, 2026-11-09): the approach lane a Case II/III flight is told on initial contact (its approach button), fixed
+// at check-in so a flight leaving below it does not change it. Present only once given.
+const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'angelsOverride', 'dmeOverride', 'pushedAtUtc', 'eatUtc', 'unpassed', 'eatOverrideUtc', 'lane']);
+const LANE_IDS = Object.freeze(['CV_APP1', 'CV_APP2']);
 const OVERRIDE_KEYS = Object.freeze(['eatOverrideUtc', 'angelsOverride', 'dmeOverride']);
 const CLEARANCE_FIELDS = Object.freeze(['angels', 'eat']);
 const STACK_KEYS = Object.freeze(['stackId', 'hullId', 'entries', 'deltaMs']);
@@ -179,6 +182,7 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
     if (e.status === 'HOLDING' && (e.pushedAtUtc != null || e.eatUtc != null)) {
       return _fail(`entry ${e.flightDataId}: a holding flight has no push time on record`);
     }
+    if (e.lane !== undefined && !LANE_IDS.includes(e.lane)) return _fail(`entry ${e.flightDataId}: lane must be one of ${LANE_IDS.join(', ')}`);
     if (e.unpassed !== undefined && !_validUnpassed(e.unpassed)) {
       return _fail(`entry ${e.flightDataId}: unpassed must be a list of ${CLEARANCE_FIELDS.join(', ')}, each once`);
     }
@@ -223,6 +227,7 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
     const angels = e.angelsOverride != null ? e.angelsOverride : e.caseIAngels;
     if (angels != null && _validAngels(angels)) override.angelsOverride = angels;
     if (e.dmeOverride != null && _validDme(e.dmeOverride)) override.dmeOverride = e.dmeOverride;
+    if (LANE_IDS.includes(e.lane)) override.lane = e.lane;
     cleaned.push({
       ...override,
       flightDataId: e.flightDataId,

@@ -2017,8 +2017,10 @@ the Case II/III stack at the next free slot. Offered only on a Case I flight, an
   in the Case I table. Departures are not on it.
 - **The header** reads `CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 04 APPR 15`: the
   staffed approach lanes, then what the **next flight to check in** gets (its holding DME, angels and EAT, the stack's next
-  slot; angels 6 at the first fix on an empty stack) and the approach button of the lane the next flight goes to on TO APPR
-  (**15** for APP 1, **17** for APP 2, ours). In Case I it ends at **ANG**, the next altitude: one above the highest, from 2,
+  slot; angels 6 at the first fix on an empty stack) and the approach button of the lane the next flight to check in is
+  given (**15** for APP 1, **17** for APP 2, ours), which you tell it on initial contact. The flight keeps that lane (TO APPR
+  sends it there, or to the other lane when its own is unstaffed), even when a flight below it leaves; Back to stack gives
+  it a new one. In Case I it ends at **ANG**, the next altitude: one above the highest, from 2,
   which a Case I check-in is given.
 - **Checking a flight in from the panel**: the Marshal types the side number, and in Case II/III the squawk the pilot was
   given, beside **+ New Strip** in the header (Enter sends). The flight joins the stack at the next slot.

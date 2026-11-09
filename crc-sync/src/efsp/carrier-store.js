@@ -135,7 +135,12 @@ class CarrierStore extends SyncedStore {
     const r = this._records.get(hullId);
     if (!r) return null;
     const { inputs } = this._resolve(r);
-    // Only the Case II/III stack feeds the lanes.
+    // Only the Case II/III stack feeds the lanes. The lane the flight was told at check-in, the other one when it is unstaffed.
+    const entry = r.stacks[carrier.DEFAULT_STACK_ID].entries.find(e => e.flightDataId === flightDataId);
+    if (entry && entry.lane) {
+      const other = entry.lane === 'CV_APP1' ? 'CV_APP2' : 'CV_APP1';
+      return this._isStaffed(entry.lane) ? entry.lane : this._isStaffed(other) ? other : null;
+    }
     const derived = carrier.deriveStack(r.stacks[carrier.DEFAULT_STACK_ID], this._inputsFor(carrier.DEFAULT_STACK_ID, inputs));
     const lane = carrier.assignLanes(derived, { isStaffed: this._isStaffed }).find(l => l.flightDataId === flightDataId);
     return lane ? lane.lane : null;
@@ -461,8 +466,24 @@ class CarrierStore extends SyncedStore {
     if (!op) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown stack effect ${effect}` };
     const before = deepClone(record);
     const r = this._stackOp(record, op, by, false);
+    // Back to stack: a new arrival, told its lane again
+    if (r.ok && effect === 'RETURN_TO_STACK') { this._giveLane(record, flightDataId); r.record = deepClone(record); }
     this._audit({ clientMutationId, op: { kind: `Stack:${op.kind}` }, hullId }, actingPositionId, by, before, r);
     return r;
+  }
+
+  /**
+   * The lane a Case II/III flight is told on initial contact (the approach button the Marshal gives it), fixed on its entry:
+   * alternating by the flights already in the stack (handoffs.js `laneFor`, the other lane when that one is unstaffed).
+   * The MARSHAL header's APPR is this rule for the next check-in.
+   */
+  _giveLane(record, flightDataId) {
+    const stack = record.stacks[carrier.DEFAULT_STACK_ID];
+    const entry = stack.entries.find(e => e.flightDataId === flightDataId);
+    if (!entry) return;
+    const ordinal = stack.entries.length - 1; // the flights already there
+    const lane = carrier.laneFor(ordinal, { isStaffed: this._isStaffed }) || carrier.APP_LANES[ordinal % 2];
+    stack.entries = stack.entries.map(e => (e.flightDataId === flightDataId ? { ...e, lane } : e));
   }
 
   /** The stack a flight is in, or null. */
@@ -492,6 +513,7 @@ class CarrierStore extends SyncedStore {
     }
     record.stacks[carrier.CASE_I_STACK_ID] = out.stack;
     record.stacks[carrier.DEFAULT_STACK_ID] = into.stack;
+    this._giveLane(record, flightDataId);
     this._markChanges(record, derivedBefore);
     this._touch(record, by, 'Recase', flightDataId);
     const r = { ok: true, record: deepClone(record), changed: [flightDataId] };
@@ -575,6 +597,7 @@ class CarrierStore extends SyncedStore {
     // docs/adr/0156: the flight takes the ship's Case now, and keeps it: the stack it joins is its Case.
     const stackId = carrier.stackIdForCase(record.recoveryCase.value);
     const r = this._stackOp(record, { kind: 'Append', flightDataId, stackId }, by, false);
+    if (r.ok && stackId === carrier.DEFAULT_STACK_ID) { this._giveLane(record, flightDataId); r.record = deepClone(record); }
     // Case I: the flight is given the next altitude, one above the highest assigned, from 2 (the human's rule, 2026-11-09).
     if (r.ok && stackId === carrier.CASE_I_STACK_ID) {
       const assigned = record.stacks[stackId].entries.map(e => e.angelsOverride).filter(Number.isInteger);

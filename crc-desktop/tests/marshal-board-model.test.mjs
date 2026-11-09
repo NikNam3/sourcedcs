@@ -133,13 +133,15 @@ test('the header: CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 
   const text = m.headerParts({ hullId: 'CVN-72', caseValue: 'III', lanesText: 'CV-1', brcText: '082M', fbText: '073M', altimeterInHg: 30.06, radialText: '270M', next })
     .map(p => (p.k ? `${p.k} ${p.v}` : p.v)).join(' ');
   assert.equal(text, 'CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 04 APPR 15');
-  // the next free slot above the stack; the next lane is the first flight's not yet handed to an approach
+  // the next free slot above the stack; APPR is the lane the NEXT check-in gets (two in the stack: the third, APP 1)
   const two = { ...emptyIII, derived: { MAIN: [{ flightDataId: 'a', stackIndex: 0 }, { flightDataId: 'b', stackIndex: 1 }], CASE_I: [] },
     slots: { MAIN: [...slots, { stackIndex: 1, angels: 7, marshalDme: 22 }, { stackIndex: 2, angels: 8, marshalDme: 23, pushTimeUtc: null }] },
     lanes: { MAIN: [{ flightDataId: 'a', lane: 'CV_APP1' }, { flightDataId: 'b', lane: 'CV_APP2' }] } };
   const strips = [strip('a', 'FINAL_APPROACH', 'CV_APP1'), strip('b', 'COMMENCED')];
-  assert.deepEqual(m.nextAvailable(two, strips), { angels: 8, dme: 23, eatUtc: null, lane: 'CV_APP2' });
-  assert.equal(m.headerParts({ caseValue: 'III', next: m.nextAvailable(two, strips) }).find(p => p.id === 'next-appr').v, '17');
+  assert.deepEqual(m.nextAvailable(two, strips), { angels: 8, dme: 23, eatUtc: null, lane: 'CV_APP1' });
+  assert.equal(m.headerParts({ caseValue: 'III', next: m.nextAvailable(two, strips) }).find(p => p.id === 'next-appr').v, '15');
+  const three = { ...two, derived: { ...two.derived, MAIN: [...two.derived.MAIN, { flightDataId: 'c', stackIndex: 2 }] } };
+  assert.equal(m.headerParts({ caseValue: 'III', next: m.nextAvailable(three, strips) }).find(p => p.id === 'next-appr').v, '17', 'it changes with each check-in');
   // nobody waiting, APP 1 unstaffed: the next check-in goes to APP 2
   assert.equal(m.nextAvailable(emptyIII, [], (p) => p === 'CV_APP2').lane, 'CV_APP2');
 });

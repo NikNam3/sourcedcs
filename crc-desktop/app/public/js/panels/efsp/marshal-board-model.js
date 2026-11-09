@@ -209,12 +209,12 @@ const CASE_I_FIRST_ANGELS = 2;
 /**
  * What the next flight to check in would be given, from the server's hull view: in Case II/III the stack's next free slot
  * (its angels, holding DME and EAT, as `view.slots.MAIN` derives them; angels 6 at the first fix on an empty stack), in
- * Case I the next altitude above the highest one assigned (from 2). And the lane the next flight goes to on TO APPR: the
- * lane of the first flight not yet handed to an approach, else the one the next check-in would get (push-order
- * alternation, the other lane when that one is unstaffed, handoffs.js `laneFor`).
+ * Case I the next altitude above the highest one assigned (from 2). And the lane the next check-in will be fed to, whose
+ * approach button the Marshal gives on initial contact (push-order alternation, the other lane when that one is
+ * unstaffed, handoffs.js `laneFor`).
  *
  * @param {object} view                      the hull view
- * @param {object[]} strips                  every Strip the client holds
+ * @param {object[]} [strips]                unused (kept for the call sites)
  * @param {(positionId:string)=>boolean} isStaffed
  * @returns {{angels:number|null, dme:number|null, eatUtc:number|null, lane:string|null}}
  */
@@ -227,17 +227,13 @@ export function nextAvailable(view, strips, isStaffed = () => true) {
   }
   const slots = (view && view.slots && view.slots.MAIN) || [];
   const slot = slots.length ? slots[slots.length - 1] : null; // the slot above the top of the stack (slot 0 when empty)
-  const main = (derived.MAIN || []).slice().sort((a, b) => a.stackIndex - b.stackIndex);
-  const stateOf = new Map();
-  for (const s of strips || []) if (s && s.stripType === 'CV_RECOVERY' && s.state !== 'DROPPED') stateOf.set(s.flightDataId, s.state);
-  const lanes = new Map(((view && view.lanes && view.lanes.MAIN) || []).map((l) => [l.flightDataId, l.lane]));
-  const waiting = main.find((e) => ['STACK', 'COMMENCED'].includes(stateOf.get(e.flightDataId)));
-  let lane = waiting ? lanes.get(waiting.flightDataId) || null : null;
-  if (!waiting) {
-    const preferred = LANES[main.length % 2];
-    const other = LANES[(main.length + 1) % 2];
-    lane = isStaffed(preferred) ? preferred : isStaffed(other) ? other : null;
-  }
+  // The lane the NEXT check-in will be fed to: the Marshal gives it its approach button on initial contact. Its push
+  // ordinal is the number of flights already in the stack (handoffs.js `laneFor`: alternating, the other lane when that
+  // one is unstaffed).
+  const ordinal = (derived.MAIN || []).length;
+  const preferred = LANES[ordinal % 2];
+  const other = LANES[(ordinal + 1) % 2];
+  const lane = isStaffed(preferred) ? preferred : isStaffed(other) ? other : null;
   return {
     angels: slot && Number.isFinite(slot.angels) ? slot.angels : null,
     dme: slot && Number.isFinite(slot.marshalDme) ? slot.marshalDme : null,

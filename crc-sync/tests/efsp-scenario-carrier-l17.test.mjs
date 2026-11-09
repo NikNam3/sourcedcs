@@ -324,3 +324,16 @@ test('the MARSHAL panel\'s create: a squawk typed with the side number is the fl
   const angels = (s) => view(efsp).derived.CASE_I.find(e => e.flightDataId === s.flightDataId).angels;
   assert.deepEqual([angels(one), angels(two)], [2, 3]);
 });
+
+test('the lane a flight is told at check-in is its lane: a flight leaving below it does not change it; Back to stack tells it a new one', async () => {
+  const { efsp, c } = fresh();
+  const a = recoveryCheckIn(efsp, c, '301');
+  const b = recoveryCheckIn(efsp, c, '302');
+  const lane = (s) => efsp.carrierStore.getRecord().stacks.MAIN.entries.find(e => e.flightDataId === s.flightDataId).lane;
+  assert.deepEqual([lane(a), lane(b)], ['CV_APP1', 'CV_APP2']);
+  mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, a.stripId), { kind: 'DropStrip' });
+  await press(efsp, c, 'CV_MARSHAL', b);
+  assert.equal((await press(efsp, c, 'CV_MARSHAL', b)).ownerPositionId, 'CV_APP2', 'still the lane it was told');
+  const d = recoveryCheckIn(efsp, c, '303');
+  assert.equal(lane(d), 'CV_APP2', 'one flight in the stack: the next is told APP 2');
+});

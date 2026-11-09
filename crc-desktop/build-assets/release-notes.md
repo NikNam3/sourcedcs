@@ -1,3 +1,7 @@
+### Changed in 2.1.3
+- **MARSHAL: APPR in the header is the next check-in's approach button**, changing with every flight that checks in, so you can give it on initial contact. A flight keeps the lane it was told even when a flight below it leaves; Back to stack tells it a new one
+- This release changes the wire protocol: update CRC, an older version shows "Update required"
+
 ### Changed in 2.1.2
 - **MARSHAL: check a flight in from the panel.** Type the side number (and the squawk, Case II/III) beside **+ New Strip** in the MARSHAL header: the flight joins the stack at the next slot
 - **MARSHAL header** reads as one line: `CVN-72 CASE III CV-1 BRC 082M FB 073M ALTIMETER 30.06 MARSHAL 270 21NM ANG 6 EAT 04 APPR 15`, where the NM, ANG and EAT are what the next flight to check in gets and APPR the approach the next flight goes to (15 for APP 1, 17 for APP 2). In Case I it ends at ANG, the next altitude from 2
