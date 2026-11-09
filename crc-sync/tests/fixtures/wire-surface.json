@@ -1,5 +1,5 @@
 {
-  "protocol": 4,
+  "protocol": 5,
   "surface": {
     "clientToServer": [
       "aptConfigSet",
@@ -225,6 +225,7 @@
         "eatOverrideUtc",
         "eatUtc",
         "flightDataId",
+        "lane",
         "pushedAtUtc",
         "stackIndex",
         "status",
