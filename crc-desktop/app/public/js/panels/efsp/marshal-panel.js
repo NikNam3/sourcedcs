@@ -237,12 +237,20 @@ function _drawRow(r, m, ctx) {
   const side = _el('td', 'mb-side', r.side || '—');
   side.dataset.cell = 'side';
   tr.appendChild(side);
-  tr.appendChild(_el('td', 'mb-type', r.type));
   const edits = _marshalEdits(r, canSequence) && r.kind === 'hold';
   const cell = (name, child) => { const td = _el('td', `mb-${name}`); td.dataset.cell = name; td.appendChild(child); tr.appendChild(td); };
-  cell('fuel', _figure(r, 'fuel', fuelText(r.fuelLb), { edit: _marshalEdits(r, canSequence) ? {
-    value: fuelText(r.fuelLb), placeholder: 'k lb', bad: 'the fuel in thousands of pounds (4.8), or empty to clear it', send: (t) => _sendFuel(r, t),
-  } : null }));
+  // TYPE and FUEL are standing boxes on a row the Marshal holds (typed on check-in, any state): Enter sends, Escape puts it back
+  const box = (part, value, placeholder, bad, send, size) => {
+    const inp = _panelInput({ part, value, placeholder, className: 'mb-fe-input', size, bad, send, onLeave: (el, sent) => { if (sent) _redrawRowOf(el); } });
+    inp.dataset.part = part;
+    return inp;
+  };
+  const own = _marshalEdits(r, canSequence);
+  const typeText = _el('span', null, r.type);
+  typeText.dataset.part = 'type';
+  cell('type', own ? box('type', r.type, 'TYPE', 'a type, or empty to clear it', (t) => _sendBlock(r, 'C2', t.trim().toUpperCase()), 6) : typeText);
+  cell('fuel', own ? box('fuel', fuelText(r.fuelLb), 'k lb', 'the fuel in thousands of pounds (4.8), or empty to clear it', (t) => _sendFuel(r, t), 4)
+    : _figure(r, 'fuel', fuelText(r.fuelLb)));
   // Case II/III: DME, ANG, EAT (the human's order, 2026-11-09); Case I: ANG
   if (section === 'sequenced') {
     cell('dme', _figure(r, 'dme', r.marshalDme != null ? String(r.marshalDme) : '', { set: r.dmeSet, edit: edits ? {
@@ -340,6 +348,14 @@ function _editable(span, part, value, placeholder, bad, send) {
 function _ownsStrip(row) {
   const strip = row.stripId ? getEfspStrip(row.stripId) : null;
   return !!strip && signedOnCarrierIds().includes(strip.ownerPositionId);
+}
+
+/** One of the Strip's Blocks typed in the panel, sent as the Strip's owner when this controller holds it. */
+function _sendBlock(row, blockId, value) {
+  const strip = row.stripId ? getEfspStrip(row.stripId) : null;
+  if (!strip || !_ownsStrip(row)) return false;
+  sendEfspMutation(strip.ownerPositionId, strip, { kind: 'SetBlock', blockId, value });
+  return true;
 }
 
 /** The fuel as the Strip's FUEL Block (C12), sent as the Strip's owner when this controller holds it. */

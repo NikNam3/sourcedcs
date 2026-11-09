@@ -100,7 +100,7 @@ test('01 a recovery in order: landing order, side numbers, each row\'s button it
   await expect(advance(page, s2)).toHaveText('COMMENCE');
   await expect(row(page, s1).locator('[data-cell="ang"]')).toHaveText('6');
   await expect(row(page, s3).locator('[data-cell="ang"]')).toHaveText('8');
-  await expect(row(page, s1).locator('[data-part="fuel"]')).toHaveText('7.2');
+  await expect(row(page, s1).locator('[data-part="fuel"]')).toHaveValue('7.2');
   await expect(p.locator('.mb-commence')).toHaveCount(1);
   await expect(row(page, s1).locator('.mb-commence')).toBeVisible();
   await expect(p.locator('[data-marshal="togo"]')).toHaveText('3');
@@ -233,23 +233,26 @@ test('08 the Marshal types the fuel and assigns an EAT in the panel (U22, crc-sy
   }, cs2);
   const slotEat = (await eatOf()).t;
 
-  // fuel: typed in thousands, as spoken; it is the Strip's FUEL (a click on the figure edits it)
-  await row(page, s2).locator('[data-part="fuel"]').click();
-  const fuelIn = panelOf(page).locator('input[data-marshal-input="fuel"]');
+  // fuel: typed in thousands, as spoken; it is the Strip's FUEL, a standing box on a row the Marshal holds
+  const fuelIn = row(page, s2).locator('input[data-marshal-input="fuel"]');
   await expect(fuelIn).toHaveValue('6.0');
+  await fuelIn.focus();
   // a figure that is not one is refused in place, marked, and Escape puts the shown fuel back
   await fuelIn.fill('4,8');
   await fuelIn.press('Enter');
   await expect(fuelIn).toHaveClass(/mb-input-bad/);
   await expect(fuelIn).toBeFocused();
   await fuelIn.press('Escape');
-  await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveText('6.0');
-  await row(page, s2).locator('[data-part="fuel"]').click();
-  const fuelIn2 = panelOf(page).locator('input[data-marshal-input="fuel"]');
-  await fuelIn2.fill('4.8');
-  await fuelIn2.press('Enter');
-  // the row is redrawn from the Strip once the input is left; there is no fuel rule (crc-sync docs/adr/0156)
-  await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveText('4.8');
+  await expect(fuelIn).toHaveValue('6.0');
+  await fuelIn.fill('4.8');
+  await fuelIn.press('Enter');
+  // the row is redrawn from the Strip once the box is left; there is no fuel rule (crc-sync docs/adr/0156)
+  await expect(row(page, s2).locator('input[data-marshal-input="fuel"]')).toHaveValue('4.8');
+  // the type is a box too: the Strip's TYPE
+  const typeIn = row(page, s2).locator('input[data-marshal-input="type"]');
+  await typeIn.fill('f14b');
+  await typeIn.press('Enter');
+  await expect(row(page, s2).locator('input[data-marshal-input="type"]')).toHaveValue('F14B');
 
   // EAT: five minutes after the slot's, typed HHMM; shown set (underlined, not coloured) and amber until passed
   const hhmm = (t) => { const d = new Date(t); return String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0'); };
