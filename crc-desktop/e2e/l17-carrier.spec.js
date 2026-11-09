@@ -149,7 +149,7 @@ test('02 the MARSHAL panel lists the stack in landing order; a drag onto another
 
   // one gesture: CCC's row dropped on AAA's
   const before = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.flightDataId));
-  await rowOf(panel, c).dragTo(rowOf(panel, a));
+  await rowOf(panel, c).locator('[data-cell="side"]').dragTo(rowOf(panel, a).locator('[data-cell="side"]')); // by its side number: TYPE and FUEL are boxes
   await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.flightDataId))).not.toEqual(before);
   const after = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => [crc.state.getEfspFlightData(e.flightDataId).military.carrier.sideNumber, e.stackIndex, e.angels]));
   expect(after).toEqual([[c, 0, 6], [a, 1, 7], [b, 2, 8]]);
