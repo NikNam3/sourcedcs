@@ -51,7 +51,7 @@ const CARRIER_HANDOFFS = Object.freeze({
     stripType: 'CV_RECOVERY', states: ['COMMENCED'], toStripType: 'CV_RECOVERY', toState: 'FINAL_APPROACH',
   }),
   CASE_I_TO_PRIFLY: _row({
-    label: 'TO PATTERN', from: ['CV_MARSHAL'], to: ['CV_PRIFLY'], cases: ['I'], caseOf: 'FLIGHT',
+    label: 'SGNL C', from: ['CV_MARSHAL'], to: ['CV_PRIFLY'], cases: ['I'], caseOf: 'FLIGHT',
     stripType: 'CV_RECOVERY', states: ['STACK'], toStripType: 'CV_RECOVERY', toState: 'CV_PATTERN',
   }),
   // Back to stack: the Marshal from COMMENCED on, the lane from its own approach. The flight starts afresh (next free slot,

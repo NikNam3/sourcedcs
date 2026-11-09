@@ -337,3 +337,12 @@ test('the lane a flight is told at check-in is its lane: a flight leaving below 
   const d = recoveryCheckIn(efsp, c, '303');
   assert.equal(lane(d), 'CV_APP2', 'one flight in the stack: the next is told APP 2');
 });
+
+test('a carrier Strip made from a contact on the CARRIER MAP is bound to that contact at once (any Case)', () => {
+  const { efsp, c } = fresh();
+  setCase(efsp, c, 'I');
+  const a = mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, { kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'CV_RECOVERY',
+    flightData: { sideNumber: '310' }, trackId: 't-310' });
+  const rec = efsp.correlationStore.getCorrelation(a.flightDataId);
+  assert.equal(rec && rec.binding && rec.binding.trackId, 't-310');
+});

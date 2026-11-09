@@ -43,3 +43,12 @@ role-based Positions of ADR 0132. Nothing of these is briefed yet.
 
 - sourcedcs-web booking still offers PROHIBITED areas (always in force, ADR 0144): drop them from the booking list.
 - After a decider acknowledges a completed transit, `COORD <name>` returns if the filed route still crosses the area (`filedThrough` checks the whole route, not the remaining part): needs a remaining-route check.
+
+## Primary-only tracking (the human, 2026-11-09)
+
+- A Strip correlated without a transponder is bound to the contact's id (ADR 0142 rung 1) and nothing more: there is no
+  primary-only tracker. If the contact leaves the picture and comes back as a new contact (a coverage gap, a respawn) the
+  binding is gone and nothing re-acquires it; two primary contacts are never told apart by where they were predicted to
+  be. v3: a real primary-only tracker (predict each bound contact's position, re-associate a returning or swapped contact
+  within a gate, warn when the association is uncertain), as an ADR beside 0142. Today this matters for carrier Case II/III
+  flights checked in from the CARRIER MAP without a squawk (ADR 0156: the warning there names it).

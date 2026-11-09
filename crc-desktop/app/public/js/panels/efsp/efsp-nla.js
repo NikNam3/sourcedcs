@@ -95,7 +95,7 @@ export const CARRIER_HANDOFFS = {
   DEPARTURE_TO_MARSHAL: { label: 'TO MARSHAL',           trigger: 'CONTROLLER_INITIATED', from: ['CV_DEP'], cases: ['I', 'II', 'III'], caseOf: 'SHIP' },
   COMMENCE:             { label: 'COMMENCE',             trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'], caseOf: 'FLIGHT' },
   TO_APPROACH:          { label: 'TO APPR',              trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'], caseOf: 'FLIGHT' },
-  CASE_I_TO_PRIFLY:     { label: 'TO PATTERN',           trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'], caseOf: 'FLIGHT' },
+  CASE_I_TO_PRIFLY:     { label: 'SGNL C',               trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'], caseOf: 'FLIGHT' },
   RETURN_TO_STACK:      { label: 'BACK TO STACK',        trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL', 'CV_APP1', 'CV_APP2'], cases: ['II', 'III'], caseOf: 'FLIGHT' },
   ABORT_TO_STACK:       { label: 'ABORT TO CASE II/III', trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'], caseOf: 'SHIP' },
 };

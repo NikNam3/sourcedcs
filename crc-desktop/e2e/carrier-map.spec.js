@@ -299,3 +299,41 @@ test('08 the cursor reads its radial and range from the ship in the ring green; 
   await cleanUp(page);
 });
 
+
+test('09 a click on an uncorrelated contact checks it in by side number (crc-sync docs/adr/0156): with a squawk it takes the code and an EAT; with none it warns and still checks in', async ({ browser, baseURL }) => {
+  const page = await mapPage(browser, baseURL, 'e2e-cm9');
+  await setRange(page, 30);
+  const g = () => page.evaluate(() => crc.carrierMap.carrierMapGeometry());
+  const clickContact = async (brg, nm) => {
+    const geo = await g();
+    const box = await map(page).locator('[data-cm="svg"]').boundingBox();
+    await page.mouse.click(box.x + geo.cx + nm * Math.sin(brg * Math.PI / 180) * geo.k, box.y + geo.cy - nm * Math.cos(brg * Math.PI / 180) * geo.k);
+  };
+  const flightOfSide = (sd) => page.evaluate((s) => {
+    const strip = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && ((crc.state.getEfspFlightData(x.flightDataId).military || {}).carrier || {}).sideNumber === s);
+    if (!strip) return null;
+    const d = (crc.carrier.getEfspCarrier().derived.MAIN || []).find(e => e.flightDataId === strip.flightDataId);
+    return { code: crc.state.getEfspFlightData(strip.flightDataId).identity.beaconAssigned, eatSet: !!(d && d.eatSet) };
+  }, sd);
+
+  // a squawking contact 40 nm out on 200
+  await contact(page, 'cm-sq', { brg: 200, nm: 20, altFt: 9000 });
+  await page.evaluate(() => { const t = crc.picture.latestFromServer.get('cm-sq'); t.ssr = { code: '4521', ident: false, emergency: null }; crc.carrierMap.renderCarrierMap(); });
+  await clickContact(200, 20);
+  const menu = page.locator('.label-menu');
+  await expect(menu.locator('[data-field="checkin-side"]')).toBeFocused();
+  await expect(menu.locator('[data-field="checkin-warning"]')).toHaveCount(0);
+  await page.keyboard.type('211');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => flightOfSide('211')).toEqual({ code: '4521', eatSet: true });
+
+  // a contact with no transponder: the warning, and the Strip all the same
+  await contact(page, 'cm-ps', { brg: 90, nm: 10, altFt: null });
+  await clickContact(90, 10);
+  await expect(menu.locator('[data-field="checkin-warning"]')).toContainText('No transponder');
+  await page.screenshot({ path: test.info().outputPath('09-checkin-no-transponder.png') });
+  await menu.locator('[data-field="checkin-side"]').fill('212');
+  await menu.locator('.label-menu-checkin').click();
+  await expect.poll(async () => (await flightOfSide('212')) !== null).toBe(true);
+  await cleanUp(page);
+});

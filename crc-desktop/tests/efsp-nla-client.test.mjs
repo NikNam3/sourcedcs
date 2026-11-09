@@ -194,7 +194,7 @@ test('every carrier state has its plain button label (docs/adr/0156); a drop rea
   assert.equal(L('CV_RECOVERY', 'FINAL_APPROACH', { toState: 'DIRTY' }), 'DIRTY UP');
   assert.equal(L('CV_RECOVERY', 'DIRTY', { toState: 'BULLSEYE' }), 'FLY BULLS');
   assert.equal(L('CV_RECOVERY', 'BULLSEYE', { toState: 'CV_PATTERN' }), 'TO PATTERN');
-  assert.equal(L('CV_RECOVERY', 'STACK', { toState: 'CV_PATTERN', carrierHandoff: 'CASE_I_TO_PRIFLY' }), 'TO PATTERN');
+  assert.equal(L('CV_RECOVERY', 'STACK', { toState: 'CV_PATTERN', carrierHandoff: 'CASE_I_TO_PRIFLY' }), 'SGNL C');
   assert.equal(L('CV_RECOVERY', 'CV_PATTERN', { toState: 'DROPPED' }), 'DROP');
   assert.equal(L('CV_LAUNCH', 'ON_DECK', { toState: 'DROPPED', alsoHandoff: 'LAUNCH_TO_MARSHAL' }), 'DROP', 'Case I on deck');
   assert.equal(L('CV_LAUNCH', 'ON_DECK', { toState: 'CV_AIRBORNE', carrierHandoff: 'LAUNCH_TO_DEPARTURE' }), 'LAUNCHED');

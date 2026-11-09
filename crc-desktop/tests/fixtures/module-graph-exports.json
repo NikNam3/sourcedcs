@@ -728,6 +728,11 @@
    "getAllEfspStrips",
    "getEfspStrip"
   ],
+  "panels/efsp/carrier-checkin.js": [
+   "carrierCheckIn",
+   "checkInEatFor",
+   "trackSquawking"
+  ],
   "panels/efsp/carrier-final-distance.js": [
    "carrierDistanceNm",
    "carrierFinalDistanceText",

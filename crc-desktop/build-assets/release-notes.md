@@ -1,4 +1,6 @@
 ### Changed in 2.1.4
+- **CARRIER MAP: click a contact.** On one with no Strip, type a side number and **CREATE STRIP**: it is checked in at the Marshal's stack, bound to that contact (Case II/III: its squawk and an EAT from where it is; no transponder: a warning, and the Strip all the same). On one whose Strip you hold: HDG, SPD and ALT, as on the main map
+- **Case I:** the Marshal's TO PATTERN is now **SGNL C**
 - **MARSHAL header reads the last flight in the stack**: its DME, ANG, EAT and APPR (the one you just checked in), or 21 NM, angels 6, EAT 00 with nobody in the stack
 - **MARSHAL table columns** are now SEQ, SIDE, TYPE, FUEL, DME, ANG, EAT
 

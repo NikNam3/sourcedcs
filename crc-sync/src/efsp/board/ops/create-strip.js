@@ -190,7 +190,13 @@ function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } 
     else if (a && a.changed && a.changed.length) carrierChanged = true;
   }
   if (codeWarning) warnings = [...(warnings || []), codeWarning];
-  return { ok: true, strip, flightData: created.flightData, warnings, carrierChanged };
+  // docs/adr/0156: a carrier Strip made from a contact on the CARRIER MAP is bound to it at once (ADR 0142 rung 1).
+  let correlationChanged;
+  if (carrierStrip && typeof op.trackId === 'string' && op.trackId) {
+    const c = ctx.rules.bindTrackOnStart(strip.flightDataId, op.trackId, { actingPositionId, by, note: 'carrier check-in' });
+    if (c) correlationChanged = [c];
+  }
+  return { ok: true, strip, flightData: created.flightData, warnings, carrierChanged, ...(correlationChanged ? { correlationChanged } : {}) };
 }
 
 module.exports = {

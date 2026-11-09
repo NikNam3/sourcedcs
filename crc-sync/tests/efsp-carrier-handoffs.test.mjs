@@ -15,7 +15,7 @@ test('the ADR 0156 handoffs: the table, the buttons\' labels, nothing else', () 
   const labels = Object.fromEntries(Object.entries(CARRIER_HANDOFFS).map(([k, r]) => [k, r.label]));
   assert.deepEqual(labels, {
     LAUNCH_TO_DEPARTURE: 'LAUNCHED', LAUNCH_TO_MARSHAL: 'TO MARSHAL', DEPARTURE_TO_MARSHAL: 'TO MARSHAL', COMMENCE: 'COMMENCE',
-    TO_APPROACH: 'TO APPR', CASE_I_TO_PRIFLY: 'TO PATTERN', RETURN_TO_STACK: 'BACK TO STACK', ABORT_TO_STACK: 'ABORT TO CASE II/III',
+    TO_APPROACH: 'TO APPR', CASE_I_TO_PRIFLY: 'SGNL C', RETURN_TO_STACK: 'BACK TO STACK', ABORT_TO_STACK: 'ABORT TO CASE II/III',
   });
   for (const r of Object.values(CARRIER_HANDOFFS)) {
     assert.ok(TRIGGER_TYPES.includes(r.trigger));

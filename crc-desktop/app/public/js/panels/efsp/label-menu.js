@@ -5,6 +5,9 @@ import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { resolveBlockValue } from './strip-template.js';
 import { getOpenEfspBayIds } from './bay/open-bays.js';
 import { labelAssignOps, labelAssignmentFor } from './label-assign-rules.js';
+import { carrierCheckIn } from './carrier-checkin.js';
+import { carrierCaseValue } from './carrier-state.js';
+import { getLatestTrack } from '../../picture.js';
 import {
   acceptVfrHandoff, assignCode, canAssignCode, canRecallVfrHandoff, canTagTrack, canTerminateRadarService, recallVfrHandoff,
   tagProblem, tagTrack, terminateRadarService, initiateVfrHandoff, vfrTagPositions, vfrTagPosition, pickVfrTagPosition,
@@ -68,13 +71,15 @@ export function labelVfrAcceptFor(trackId) {
   return stripIdsForTrackId(trackId).map(getEfspStrip).find(s => s && vfrHandoffAcceptAs(s)) || null;
 }
 
-export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo } = {}) {
+export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo, carrier = false } = {}) {
   closeLabelMenu();
   const offer = labelAssignmentForTrack(trackId);
   const conflicts = offer ? labelSuppressibleConflicts(trackId) : [];
-  const acceptStrip = labelVfrAcceptFor(trackId);
-  const tag = !offer && !acceptStrip && canTagTrack(trackId);
-  if (!offer && !acceptStrip && !tag) return false;
+  const acceptStrip = carrier ? null : labelVfrAcceptFor(trackId);
+  const tag = !carrier && !offer && !acceptStrip && canTagTrack(trackId);
+  // crc-sync docs/adr/0156: on the CARRIER MAP an uncorrelated contact is checked in by the Marshal, by side number.
+  const checkIn = carrier && !offer && stripIdsForTrackId(trackId).length === 0 && getActingPositions('CARRIER').includes('CV_MARSHAL');
+  if (!offer && !acceptStrip && !tag && !checkIn) return false;
   const { strip = null, actingPositionId = null, cells = [] } = offer || {};
   const flightData = strip ? getEfspFlightData(strip.flightDataId) : null;
 
@@ -196,20 +201,68 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo } = {}) {
     }
   }
 
+  // CHECK IN (crc-sync docs/adr/0156): a side number, and the Strip is made at the Marshal's stack, bound to this contact. In
+  // Case II/III the contact's squawk is the flight's and its EAT is worked out from where it is; a contact with no squawk is
+  // still checked in, with the warning (bound to this primary contact only; give it a squawk on the Strip).
+  let sideInput = null;
+  if (checkIn) {
+    const contact = getLatestTrack(trackId);
+    const caseValue = carrierCaseValue();
+    const code = contact && contact.ssr ? contact.ssr.code : '';
+    const row = document.createElement('label');
+    row.className = 'label-menu-row';
+    const name = document.createElement('span');
+    name.className = 'label-menu-name';
+    name.textContent = 'SIDE';
+    sideInput = document.createElement('input');
+    sideInput.type = 'text';
+    sideInput.className = 'label-menu-input';
+    sideInput.dataset.field = 'checkin-side';
+    sideInput.maxLength = 8;
+    sideInput.autocomplete = 'off';
+    sideInput.spellcheck = false;
+    row.append(name, sideInput);
+    el.append(row);
+    if (caseValue !== 'I' && !code) {
+      const w = document.createElement('div');
+      w.className = 'label-menu-warning';
+      w.dataset.field = 'checkin-warning';
+      w.textContent = 'No transponder: bound to this primary contact only, no altitude, and it will not re-correlate by itself if the contact is lost. Give it a squawk on the Strip.';
+      el.append(w);
+    }
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'label-menu-action label-menu-checkin';
+    go.textContent = 'CREATE STRIP';
+    go.title = 'check this flight in at the Marshal\'s stack, bound to this contact';
+    go.addEventListener('click', () => commit());
+    el.append(go);
+  }
+
   // TRACK: on an untagged contact with an ACID typed it starts the track (the tag, as Enter does); otherwise today's
   // click, the track panel.
-  const track = document.createElement('button');
-  track.type = 'button';
-  track.className = 'label-menu-track';
-  track.textContent = 'TRACK';
-  track.addEventListener('click', () => {
-    if (tag && String(tagInputs[0].value || '').trim()) { commit(); return; }
-    closeLabelMenu();
-    if (onTrackInfo) onTrackInfo();
-  });
-  el.append(track);
+  if (onTrackInfo || tag) {
+    const track = document.createElement('button');
+    track.type = 'button';
+    track.className = 'label-menu-track';
+    track.textContent = 'TRACK';
+    track.addEventListener('click', () => {
+      if (tag && String(tagInputs[0].value || '').trim()) { commit(); return; }
+      closeLabelMenu();
+      if (onTrackInfo) onTrackInfo();
+    });
+    el.append(track);
+  }
 
   const commit = () => {
+    if (checkIn) {
+      const contact = getLatestTrack(trackId);
+      const code = carrierCaseValue() !== 'I' && contact && contact.ssr ? contact.ssr.code || '' : '';
+      const r = carrierCheckIn({ side: sideInput.value, squawk: code, track: contact || { id: trackId } });
+      if (!r.ok) { sideInput.classList.add('label-menu-input-bad'); sideInput.title = r.msg; sideInput.focus(); return; }
+      closeLabelMenu();
+      return;
+    }
     if (tag) {
       const [cs, ty] = tagInputs.map(i => i.value);
       if (!String(cs || '').trim()) { closeLabelMenu(); return; }
@@ -238,7 +291,8 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo } = {}) {
   document.body.append(el);
   _clampIntoViewport(el);
   _open = { el, stripId: strip ? strip.stripId : null, trackId: String(trackId), onOutside };
-  if (rows.length) { rows[0].input.focus(); rows[0].input.select(); }
+  if (sideInput) sideInput.focus();
+  else if (rows.length) { rows[0].input.focus(); rows[0].input.select(); }
   else if (tagInputs.length) tagInputs[0].focus();
   return true;
 }

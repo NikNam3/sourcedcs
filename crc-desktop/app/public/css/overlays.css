@@ -138,6 +138,8 @@
       padding: 0 3px;
     }
     .label-menu-at-pos.label-menu-at-on { border-color: var(--ui-border-3); color: var(--ui-text-bright); }
+    /* crc-sync docs/adr/0156: a CARRIER MAP check-in of a contact with no transponder; amber, the one thing worth reading */
+    .label-menu-warning { grid-column: 1 / -1; color: var(--efsp-attn, #e0a83c); max-width: 22em; white-space: normal; line-height: 1.3; }
     /* crc-sync's docs/adr/0145: SUPPRESS one conflict alert; crc-sync docs/adr/0146: the VFR strip's actions (ACCEPT,
        HO, RECALL, CODE, RADAR SVC TERM). Grey like every other item (dark cockpit) */
     .label-menu-suppress, .label-menu-action {

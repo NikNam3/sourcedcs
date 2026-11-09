@@ -9,6 +9,7 @@ import { correlatedTrackIdForStrip, getAllEfspStrips, getEfspFlightData, getEfsp
 import { onEfspChanged } from './efsp-change-bus.js';
 import { buildBoard } from './marshal-board-model.js';
 import { magneticText } from '../../magnetic.js';
+import { openLabelMenu } from './label-menu.js';
 import {
   RANGE_DEFAULT_NM, RANGE_MAX_NM, RANGE_MIN_NM, approachPath, bearingRangeOf, bolterRacetrack, braText, extendedCentreline, clampRange, declutter, distanceNm, fromPixel,
   landingPattern, marshalHolding, marshalStack, occupancy, portHolding, ringSpacingFor, ringsFor, scaleFor, spinCircle, tankerRacetrack, toFrame, wheelRange,
@@ -146,6 +147,9 @@ function _build() {
 // ── the cursor readout and the measure line (crc-sync docs/adr/0156) ──────
 
 let _measureFrom = null; // ship-frame point the right-drag started at
+let _contactsAt = [];     // the contacts drawn last, panel pixels: a click picks the nearest (crc-sync docs/adr/0156)
+const PICK_PX = 12;
+let _menuTimer = null;
 let _cursorAt = null;    // the last pointer position, panel pixels
 
 function _shipNow() {
@@ -197,6 +201,21 @@ function _wirePointer(wrap, overlay) {
   });
   wrap.addEventListener('mouseup', (e) => { if (e.button === 2) { _measureFrom = null; _drawOverlay(overlay); } });
   wrap.addEventListener('contextmenu', (e) => e.preventDefault());
+  // A click on a contact opens its menu (label-menu.js, carrier: the check-in by side number on an uncorrelated contact, the
+  // heading, speed and altitude on one whose Strip this controller holds).
+  wrap.addEventListener('click', (e) => {
+    if (e.button !== 0) return;
+    const at = local(e);
+    let best = null;
+    for (const c of _contactsAt) {
+      const d = Math.hypot(c.x - at.x, c.y - at.y);
+      if (d <= PICK_PX && (!best || d < best.d)) best = { id: c.id, d };
+    }
+    // held a moment, so a double click (zoom in) never opens the menu under the second press
+    clearTimeout(_menuTimer);
+    if (best && e.detail === 1) _menuTimer = setTimeout(() => openLabelMenu(best.id, e.clientX, e.clientY, { carrier: true }), 250);
+  });
+  wrap.addEventListener('dblclick', () => clearTimeout(_menuTimer));
 }
 
 /** True bearing of a carrier state value, or null when it is unknown or not true (a grid bearing would draw the line in the wrong place). */
@@ -374,6 +393,7 @@ function _draw(svg, m, w, h) {
   // contacts: history dots, the radar map's hollow diamond, and the label, decluttered
   const inView = (p) => p.x >= -20 && p.x <= w + 20 && p.y >= -20 && p.y <= h + 20;
   const shown = m.aircraft.map((a) => ({ ...a, p: P(a.at) })).filter((a) => inView(a.p));
+  _contactsAt = shown.map((a) => ({ id: a.id, x: a.p.x, y: a.p.y }));
   const rank = (a) => (a.tanker ? 0 : 1);
   shown.sort((a, b) => rank(a) - rank(b) || distanceNm(a.at) - distanceNm(b.at) || (a.id < b.id ? -1 : 1));
   const lineH = Math.round(font * 1.2);

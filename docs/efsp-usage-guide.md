@@ -1950,7 +1950,7 @@ next (CTR, a GCI) creates their own Strip.
 
 **Arrivals, Case II and III.** The Marshal: **COMMENCE** (STACK to COMMENCED: the flight keeps the EAT it was working to),
 **TO APPR** (hands it to APP 1 or APP 2, alternately in push order; ⋯ → **To APP 1 / To APP 2** names the other lane). The
-lane: **DIRTY UP**, **FLY BULLS**, **TO PATTERN**, **DROP**. **Arrivals, Case I.** The Marshal's **TO PATTERN** hands
+lane: **DIRTY UP**, **FLY BULLS**, **TO PATTERN**, **DROP**. **Arrivals, Case I.** The Marshal's **SGNL C** hands
 the flight to PriFly (`cv-prifly-pattern`), whose **DROP** ends it.
 
 **Back to stack** (⋯): the Marshal from COMMENCED, FINAL APP or DIRTY (on the lane's Strip too), the lane on its own
@@ -2051,6 +2051,12 @@ the Case II/III stack at the next free slot. Offered only on a Case I flight, an
   Carrier map**.
 - **The cursor reads its radial and range from the ship** (`RRR/DDD`, magnetic, in the ring green). **A right-button
   drag draws a measure line** with its heading and range (`RRR / DDD`); releasing the button clears it.
+- **A click on a contact** opens its menu. On a contact with no Strip the Marshal types a **SIDE** number and presses
+  **CREATE STRIP** (or Enter): the flight is checked in at the stack, bound to that contact. In Case II/III a squawking
+  contact gives the flight its code and its EAT from where it is; a contact with **no transponder** is checked in all the
+  same, with a warning: it is bound to that primary contact only, has no altitude and will not re-correlate by itself if
+  the contact is lost, so give it a squawk on the Strip. On a contact whose Strip you hold, the menu has its **HDG**, **SPD**
+  and **ALT** (Case II/III), as on the main map; an emptied cell clears the assignment.
 - **The only labels for carrier aircraft are here**: side number and altitude in hundreds of feet. On every other scope
   (your own main map included) a carrier aircraft shows as its sensors see it: a primary contact, or with its transponder
   reply when it squawks. A tactical Position sees its callsign (and its ATO mission) once one is set.
