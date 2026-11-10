@@ -20,3 +20,17 @@
    off"), so it is not caused by the band-pass or the mixer.
 2. **The controller cuts out for pilots now and then** (TX). Suspect the same main-thread stalls bunching the frames
    sent; measure the send spacing at the local server before changing anything.
+3. **A pilot tuned to two frequencies of one network hears themselves, and everyone else double.** Read in the SRS source
+   (ciribob master `d01f540`, 2026-10-12):
+   - One packet carrying several frequencies plays once, on the best radio (`UDPClientAudioProcessor.cs`: `i == 0 ||
+     IRL_RADIO_RX_INTERFERENCE`). So a controller's own group transmission is not doubled.
+   - The pilot's original and crc-sync's relayed copy are two packets. Each plays on its own radio: the jitter buffer is
+     per `OriginalClientGuid` and per receiving radio (`ClientAudioProvider.cs`), so nothing de-duplicates them.
+   - The receive path has no `OriginalClientGuid == own` check, so a pilot's own relayed voice plays. (The commented-out
+     check at `RetransmitAudio` covers retransmission only.)
+   - The relay cannot send as the pilot to be excluded from the recipients: the server stores the sender's address
+     against the packet's `Guid` (`UDPVoiceRouter.cs`, `client.VoipPort = udpPacket.ReceivedFrom`), so that would break
+     the pilot's own audio.
+   - Possible mitigation, not built: crc-sync sees every client's radios (the server's `RADIO_UPDATE`), so it can skip a
+     target frequency when nobody tuned to it needs the copy, i.e. everyone on it already hears a source frequency.
+     What is left: a pilot on both while another pilot is only on the second. Only a change in the SRS client removes that.
