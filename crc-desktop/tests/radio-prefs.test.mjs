@@ -9,6 +9,7 @@ test('nothing stored: the defaults', () => {
   assert.deepEqual(P.normalizeRadioPrefs(null), {
     audio: {}, groups: [], membership: {}, manual: [],
     devices: { input: null, output: null }, intercom: null, pttKey: 'Space', maxTxS: null, pttTarget: null,
+    globalPtt: { enabled: null, binding: null },
     soundSet: 'RADIO_TRANS', noise: true, inputGain: 0.5, outputGain: 1,
   });
   assert.deepEqual(P.normalizeRadioPrefs('junk'), P.normalizeRadioPrefs(undefined));
@@ -114,4 +115,23 @@ test('first load: the old panel\'s PTT key and maximum transmit time carry over,
   assert.deepEqual(p.manual, []); // RQ19: no manual radios are seeded
   const none = P.seedFromOldPanel(P.normalizeRadioPrefs(null), { pttKey: null, maxTxS: null });
   assert.deepEqual(none, P.normalizeRadioPrefs(null));
+});
+
+test('Global PTT: unset is off in the full app and on in radio-only; a choice wins', (t) => {
+  t.after(() => { delete globalThis.RADIO_ONLY; });
+  const unset = P.normalizeRadioPrefs(null);
+  assert.equal(P.globalPttEnabled(unset), false);
+  globalThis.RADIO_ONLY = false;
+  assert.equal(P.globalPttEnabled(unset), false);
+  globalThis.RADIO_ONLY = true;
+  assert.equal(P.globalPttEnabled(unset), true);
+  assert.equal(P.globalPttEnabled(P.withGlobalPtt(unset, { enabled: false })), false);
+  delete globalThis.RADIO_ONLY;
+  assert.equal(P.globalPttEnabled(P.withGlobalPtt(unset, { enabled: true })), true);
+});
+
+test('Global PTT: every listener\'s binding survives a save, and junk is dropped', () => {
+  const keep = (binding) => P.normalizeRadioPrefs(JSON.parse(JSON.stringify(P.withGlobalPtt(P.normalizeRadioPrefs(null), { binding })))).globalPtt.binding;
+  for (const b of [{ type: 'key', code: 91, name: 'F13' }, { type: 'mouse', button: 4, name: 'Mouse 4' }, { type: 'portal', id: 'crc_ptt', name: 'Meta+F' }]) assert.deepEqual(keep(b), b);
+  for (const b of [{ type: 'key', code: 'x', name: 'F13' }, { type: 'key', code: 91 }, { type: 'joystick', button: 1, name: 'B1' }, 'junk']) assert.equal(keep(b), null);
 });

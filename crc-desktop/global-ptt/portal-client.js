@@ -28,10 +28,11 @@ function busAddress(env) {
 }
 
 /** @param {{env:object, load?:()=>object}} o  @returns {Promise<object>} the client */
-async function connectPortal({ env, load = () => require('@homebridge/dbus-native') }) {
+async function connectPortal({ env, load }) {
   const address = busAddress(env);
   if (!address) throw new Error('no session bus');
-  const bus = load().sessionBus({ busAddress: address });
+  const dbus = load ? load() : require('@homebridge/dbus-native');
+  const bus = dbus.sessionBus({ busAddress: address });
   // Before anything else: an 'error' with no listener is thrown, and would take the app down.
   let onLost = () => {};
   bus.connection.on('error', (err) => onLost(err));
