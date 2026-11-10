@@ -3,7 +3,8 @@
 // The radio panel's preferences (docs/adr/0158 §2, the shape of S-RADIO-1 RQ17): per radio identity (never per
 // frequency, so a retune keeps them) the volume, pan and mute; the link-group membership (an explicit null is
 // "unlinked") and the controller's groups; the manual radios; the devices `{ deviceId, label }` (RQ9); the PTT key, its
-// maximum transmit time and the PTT target; the audio options (gains, TX sound set, noise, RQ18). A leaf: it imports
+// maximum transmit time and the PTT target; the audio options (gains, TX sound set, noise, RQ18); the intercom
+// `{ unitId }` or null for none (H183: unitId null is the shared, non-DCS intercom). A leaf: it imports
 // nothing. It persists through whatever `bindRadioPrefsStorage` gives it (the panel binds settings.js's one `radio`
 // object + `saveSettings`), so node:test drives it with a plain object.
 //
@@ -55,6 +56,7 @@ export function normalizeRadioPrefs(raw) {
   return {
     audio, groups, membership, manual,
     devices: { input: normalizeDevice(d.input), output: normalizeDevice(d.output) },
+    intercom: isObj(r.intercom) ? { unitId: Number.isInteger(r.intercom.unitId) && r.intercom.unitId > 0 ? r.intercom.unitId : null } : null,
     pttKey: str(r.pttKey) || PTT_KEY_DEFAULT,
     maxTxS: Number.isFinite(r.maxTxS) ? r.maxTxS : null, // null: ptt-controller.js's default; clamped where used
     pttTarget: str(r.pttTarget),
@@ -134,6 +136,22 @@ export function removeManualRadio(prefs, id) {
     manual: prefs.manual.filter(m => m.id !== id),
     pttTarget: prefs.pttTarget === radioId ? null : prefs.pttTarget,
   };
+}
+
+/** Adds the intercom (one at most), on the shared unit. */
+export function addIntercom(prefs) { return prefs.intercom ? prefs : { ...prefs, intercom: { unitId: null } }; }
+
+/** Joins the intercom of SRS unit `unitId` (a positive integer), or the shared one with null. */
+export function withIntercomUnit(prefs, unitId) {
+  if (!prefs.intercom) return prefs;
+  return { ...prefs, intercom: { unitId: Number.isInteger(unitId) && unitId > 0 ? unitId : null } };
+}
+
+/** Removes the intercom, and what is kept for it (audio, the PTT target). */
+export function removeIntercom(prefs) {
+  const audio = { ...prefs.audio };
+  delete audio.INTERCOM;
+  return { ...prefs, intercom: null, audio, pttTarget: prefs.pttTarget === 'INTERCOM' ? null : prefs.pttTarget };
 }
 
 // ── the store ────────────────────────────────────────────────────────────────

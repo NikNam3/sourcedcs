@@ -8,7 +8,7 @@ import { buildRadioSet } from '../app/public/js/radio/radio-set.js';
 test('nothing stored: the defaults', () => {
   assert.deepEqual(P.normalizeRadioPrefs(null), {
     audio: {}, groups: [], membership: {}, manual: [],
-    devices: { input: null, output: null }, pttKey: 'Space', maxTxS: null, pttTarget: null,
+    devices: { input: null, output: null }, intercom: null, pttKey: 'Space', maxTxS: null, pttTarget: null,
     soundSet: 'RADIO_TRANS', noise: true, inputGain: 0.5, outputGain: 1,
   });
   assert.deepEqual(P.normalizeRadioPrefs('junk'), P.normalizeRadioPrefs(undefined));

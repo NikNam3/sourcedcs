@@ -10,7 +10,7 @@ import { replaceFrequencyRows } from '../app/public/js/panels/efsp/frequency-sta
 import { markEfspChanged } from '../app/public/js/panels/efsp/efsp-change-bus.js';
 import { initRadioPanel } from '../app/public/js/radio/radio-panel.js';
 import { getRadioPrefs } from '../app/public/js/radio/radio-prefs.js';
-import { _stubInspect, _stubReceive } from '../app/public/js/radio/radio-engine-stub.js';
+import { _stubInspect, _stubReceive, _stubSrsClients } from '../app/public/js/radio/radio-engine-stub.js';
 import { settings } from '../app/public/js/settings.js';
 
 const require = createRequire(import.meta.url);
@@ -133,4 +133,23 @@ test('an Observer\'s Position radios are receive-only: unlinked, the link menu o
   fire(ptt, 'mousedown');
   assert.ok(!_stubInspect().txRadioIds.includes('POSITION:P1:UHF'));
   fire(ptt, 'mouseup');
+});
+
+test('the intercom: + INTERCOM adds it unlinked with no link menu, its unit is picked from the SRS clients, then removed', () => {
+  fire(byClass('radio-small-btn').find(b => b.textContent === '+ INTERCOM'), 'click');
+  const row = rowOf('INTERCOM');
+  assert.ok(row);
+  assert.equal(within(row, 'radio-link').className.includes('radio-intercom-unit'), true); // the unit picker, not a link menu
+  assert.equal(_stubInspect().radios.find(r => r.id === 'INTERCOM').groupId, null);
+  assert.equal(byClass('radio-small-btn').find(b => b.textContent === '+ INTERCOM'), undefined); // one at most
+  _stubSrsClients([{ name: 'Viper 1-1', unitId: 42 }]);
+  const sel = within(rowOf('INTERCOM'), 'radio-intercom-unit');
+  assert.ok(descendants(sel).some(o => o.textContent === 'Viper 1-1 (ID 42)'));
+  sel.value = '42';
+  fire(sel, 'change');
+  assert.deepEqual(getRadioPrefs().intercom, { unitId: 42 });
+  assert.equal(_stubInspect().intercomUnit, 42);
+  fire(within(rowOf('INTERCOM'), 'radio-remove'), 'click');
+  assert.equal(rowOf('INTERCOM'), undefined);
+  assert.equal(_stubInspect().intercomUnit, null);
 });

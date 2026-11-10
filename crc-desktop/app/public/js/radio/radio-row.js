@@ -1,7 +1,8 @@
 'use strict';
 
 // One radio's row in the radio panel: the PTT target mark, label, frequency, band (and AM/FM on a manual radio),
-// RX/TX lit from the engine, volume, pan, mute, the link menu, and for a manual radio retune and remove. Dark cockpit:
+// RX/TX lit from the engine, volume, pan, mute, the link menu, and for a manual radio retune and remove. The
+// intercom (H183) has its unit picker instead of the link menu, and a remove. Dark cockpit:
 // grey throughout; RX and TX light while they happen; a conflict is amber because it is a problem; a receive-only
 // radio says RX ONLY in grey, and so does a radio with no SRS slot (S-RADIO-1 RQ13).
 
@@ -9,12 +10,14 @@ import { el } from './radio-dom.js';
 import { radioBandText, radioFrequencyText } from './radio-panel-model.js';
 import { VOLUME_MAX, VOLUME_MIN, PAN_MAX, PAN_MIN } from './radio-prefs.js';
 import { NO_SLOT_CONFLICT, mayTransmit } from './link-groups.js';
+import { buildIntercomUnitSelect } from './intercom-unit-select.js';
 
 function slider(className, min, max, step, value, title) {
   return el('input', className, null, { type: 'range', min, max, step, value, title });
 }
 
 function frequencyCell(radio, ctx) {
+  if (radio.kind === 'INTERCOM') return el('span', 'radio-freq', '--');
   if (radio.kind !== 'MANUAL') return el('span', 'radio-freq', radioFrequencyText(radio));
   if (ctx.editing) {
     const input = el('input', 'radio-freq-input', null, { type: 'text', inputmode: 'decimal', value: radioFrequencyText(radio), 'aria-label': 'Frequency MHz' });
@@ -45,7 +48,8 @@ function linkMenu(options, onMove, disabled) {
  * @param {object} radio      a radio of the set
  * @param {object} ctx
  *   audio `{ volume, pan, muted }`, isTarget, linkOptions (radio-panel-model.js linkMenuOptions), editing, editError,
- *   onTarget(), onMove(groupId|null), onAudio(patch, commit), onEdit(on), onRetune(text), onModulation(), onRemove()
+ *   onTarget(), onMove(groupId|null), onAudio(patch, commit), onEdit(on), onRetune(text), onModulation(), onRemove(),
+ *   and for the intercom srsClients, intercomUnitId, onIntercomUnit(unitId|null)
  */
 export function buildRadioRow(radio, ctx) {
   const row = el('div', 'radio-row', null, { dataset: { radioId: radio.id } });
@@ -66,7 +70,7 @@ export function buildRadioRow(radio, ctx) {
     mod.addEventListener('click', () => ctx.onModulation());
     row.appendChild(mod);
   } else {
-    row.appendChild(el('span', 'radio-mod radio-mod-fixed', radio.modulation));
+    row.appendChild(el('span', 'radio-mod radio-mod-fixed', radio.kind === 'INTERCOM' ? 'IC' : radio.modulation));
   }
   row.appendChild(el('span', 'radio-rx', 'RX'));
   row.appendChild(el('span', 'radio-tx', 'TX'));
@@ -83,9 +87,11 @@ export function buildRadioRow(radio, ctx) {
   mute.addEventListener('click', () => ctx.onAudio({ muted: !ctx.audio.muted }, true));
   row.append(vol, volLbl, pan, mute);
 
-  row.appendChild(linkMenu(ctx.linkOptions, ctx.onMove, radio.receiveOnly));
+  // The intercom is never linked (H183): its unit picker stands where the link menu is.
+  if (radio.kind === 'INTERCOM') row.appendChild(buildIntercomUnitSelect(ctx.srsClients || [], ctx.intercomUnitId ?? null, ctx.onIntercomUnit));
+  else row.appendChild(linkMenu(ctx.linkOptions, ctx.onMove, radio.receiveOnly));
 
-  if (radio.kind === 'MANUAL') {
+  if (radio.kind === 'MANUAL' || radio.kind === 'INTERCOM') {
     const rm = el('button', 'radio-remove', '✕', { type: 'button', title: 'Remove this radio' });
     rm.addEventListener('click', () => ctx.onRemove());
     row.appendChild(rm);

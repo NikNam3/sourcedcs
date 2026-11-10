@@ -5,16 +5,19 @@
 //    (S-RADIO-1 RQ14: Primary and Observer; an Observer's radios are receive-only and unlinked);
 //  - `rows`: the frequency table rows (panels/efsp/frequency-state.js, ADR 0131/0138);
 //  - the two guards, always 243.000 UHF and 121.500 VHF, each its own radio, linked to nothing by default;
-//  - `manual`: the controller's manual radios `[{ id, label, mhz, modulation }]` (radio-prefs.js; AM or FM, RQ18).
+//  - `manual`: the controller's manual radios `[{ id, label, mhz, modulation }]` (radio-prefs.js; AM or FM, RQ18);
+//  - `intercom`: the controller's intercom `{ unitId }`, or null when there is none (H183). Its own kind and
+//    modulation `INTERCOM`, identity `INTERCOM`, no frequency (`mhz` null: the engine owns its SRS tuning), never linked.
 // A Position's radio in a band is its first row in that band, in table order: shipped rows first, then added rows in
 // the order they were added. Further rows of the band stay in the FREQUENCIES panel. A row outside both bands gets no
 // radio (`rowsWithoutRadio`), nor does a Position with no row (`positionsWithoutRow`); the panel notes both in grey.
 //
 // SRS slots (RQ13): the engine tunes one SRS slot per distinct frequency and modulation, 11 at most. Past 11, the
-// overflow radios get `conflict: NO_SLOT_CONFLICT`, in the order guards, Position radios, manual radios.
+// overflow radios get `conflict: NO_SLOT_CONFLICT`, in the order guards, the intercom, Position radios, manual radios.
 //
 // The output is the contract with the radio engine (docs/parallel/radio/README.md, amended by S-RADIO-1):
-// `{ radios: [{ id, kind, positionId, band, mhz, modulation, label, groupId, conflict, receiveOnly }], groups: [...] }`.
+// `{ radios: [{ id, kind, positionId, band, mhz, modulation, label, groupId, conflict, receiveOnly }], groups: [...] }`,
+// `kind` POSITION | GUARD | MANUAL | INTERCOM, `modulation` AM | FM | INTERCOM (H183).
 
 import { bandOf } from './bands.js';
 import { NO_SLOT_CONFLICT, SRS_SLOTS, assignLinkGroups } from './link-groups.js';
@@ -29,6 +32,7 @@ const BAND_ORDER = ['UHF', 'VHF'];
 export function positionRadioId(positionId, band) { return `POSITION:${positionId}:${band}`; }
 export function guardRadioId(band) { return `GUARD:${band}`; }
 export function manualRadioId(id) { return `MANUAL:${id}`; }
+export const INTERCOM_RADIO_ID = 'INTERCOM';
 
 /** A staffed Position's own frequency rows, in table order (shipped first, then added in the order they came). */
 export function positionRowsOf(rows, { facilityId, positionId }) {
@@ -88,12 +92,22 @@ export function manualRadios(manual = []) {
   }));
 }
 
-/** The SRS slot a radio takes: one per distinct frequency (to the kHz) and modulation. */
-export function slotKeyOf(radio) { return `${Math.round(radio.mhz * 1000)}/${radio.modulation}`; }
+/** The intercom, when the controller has one (H183). */
+export function intercomRadios(intercom) {
+  if (!intercom) return [];
+  return [{
+    id: INTERCOM_RADIO_ID, kind: 'INTERCOM', positionId: null,
+    band: null, mhz: null, modulation: 'INTERCOM', label: 'INTERCOM', receiveOnly: false,
+  }];
+}
+
+/** The SRS slot a radio takes: one per distinct frequency (to the kHz) and modulation; the intercom its own. */
+export function slotKeyOf(radio) { return radio.kind === 'INTERCOM' ? 'INTERCOM' : `${Math.round(radio.mhz * 1000)}/${radio.modulation}`; }
 
 /** Sets `conflict: NO_SLOT_CONFLICT` on the radios past the 11th distinct slot, guards first, then the rest in order. */
 export function assignSlots(radios, slots = SRS_SLOTS) {
-  const order = [...radios.filter(r => r.kind === 'GUARD'), ...radios.filter(r => r.kind === 'POSITION'), ...radios.filter(r => r.kind !== 'GUARD' && r.kind !== 'POSITION')];
+  const first = ['GUARD', 'INTERCOM', 'POSITION'];
+  const order = [...first.flatMap(k => radios.filter(r => r.kind === k)), ...radios.filter(r => !first.includes(r.kind))];
   const used = new Set();
   const refused = new Set();
   for (const r of order) {
@@ -106,10 +120,10 @@ export function assignSlots(radios, slots = SRS_SLOTS) {
 }
 
 /**
- * The whole radio set. The radios come in the order Position radios, guards, manual radios, which is also the
+ * The whole radio set. The radios come in the order Position radios, guards, manual radios, the intercom, which is also the
  * precedence of the one-frequency-per-group rule. `groups` and `membership` are the controller's (radio-prefs.js).
  */
-export function buildRadioSet({ staffed = [], rows = [], manual = [], groups = [], membership = {} } = {}) {
-  const radios = assignSlots([...positionRadios(staffed, rows), ...guardRadios(), ...manualRadios(manual)]);
+export function buildRadioSet({ staffed = [], rows = [], manual = [], intercom = null, groups = [], membership = {} } = {}) {
+  const radios = assignSlots([...positionRadios(staffed, rows), ...guardRadios(), ...manualRadios(manual), ...intercomRadios(intercom)]);
   return assignLinkGroups(radios, { groups, membership });
 }

@@ -18,7 +18,7 @@ import {
 } from './link-groups.js';
 import {
   getRadioPrefs, onRadioPrefsChanged, radioAudioOf, removeManualRadio, retuneManualRadio, updateRadioPrefs,
-  withGroups, withMembership, withPttTarget, withRadioAudio, addManualRadio,
+  withGroups, withMembership, withPttTarget, withRadioAudio, addManualRadio, addIntercom, removeIntercom, withIntercomUnit,
 } from './radio-prefs.js';
 import { bindRadioPrefsToSettings } from './radio-prefs-storage.js';
 import {
@@ -45,6 +45,8 @@ let _lastKey = null;
 const _sync = createEngineSync(engine);
 // What the controller is in the middle of: one inline edit at a time, and the last refusal it got.
 const _ui = { editing: null, editError: null, renaming: null, renameError: null, groupError: null, manualOpen: false, manualError: null };
+
+const srsClientsOf = (state) => (state && Array.isArray(state.srsClients) ? state.srsClients : []);
 
 function setUi(patch) { Object.assign(_ui, patch); render(); }
 const update = (fn) => updateRadioPrefs(fn);
@@ -74,7 +76,10 @@ function rowCtx(radio, prefs) {
       update(p => retuneManualRadio(p, manualId, { mhz: r.mhz }));
     },
     onModulation: () => update(p => retuneManualRadio(p, manualId, { modulation: radio.modulation === 'AM' ? 'FM' : 'AM' })),
-    onRemove: () => update(p => removeManualRadio(p, manualId)),
+    onRemove: () => update(p => (radio.kind === 'INTERCOM' ? removeIntercom(p) : removeManualRadio(p, manualId))),
+    srsClients: srsClientsOf(_engineState),
+    intercomUnitId: prefs.intercom ? prefs.intercom.unitId : null,
+    onIntercomUnit: (unitId) => update(p => withIntercomUnit(p, unitId)),
   };
 }
 
@@ -121,6 +126,11 @@ function buildBody(prefs, notes) {
     buildGroupCreate(onCreateGroup, _ui.groupError),
     buildManualRadioForm({ open: _ui.manualOpen, error: _ui.manualError, onOpen: (on) => setUi({ manualOpen: on, manualError: null }), onAdd: onAddManual }),
   );
+  if (!prefs.intercom) { // one intercom at most (H183)
+    const ic = el('button', 'radio-small-btn', '+ INTERCOM', { type: 'button', title: 'An intercom (one at most), never linked' });
+    ic.addEventListener('click', () => update(p => addIntercom(p)));
+    foot.appendChild(ic);
+  }
   frag.appendChild(foot);
   _bodyEl.replaceChildren(frag);
 }
@@ -129,12 +139,12 @@ function buildBody(prefs, notes) {
 export function render() {
   const prefs = getRadioPrefs();
   const { staffed, rows } = readRadioInputs();
-  _set = buildRadioSet({ staffed, rows, manual: prefs.manual, groups: prefs.groups, membership: prefs.membership });
+  _set = buildRadioSet({ staffed, rows, manual: prefs.manual, intercom: prefs.intercom, groups: prefs.groups, membership: prefs.membership });
   _sync.push(_set, prefs);
   _target = resolvePttTarget(_set, prefs.pttTarget);
   if (!_bodyEl) return;
   const notes = [...noRowNotes(positionsWithoutRow(staffed, rows)), outOfBandNote(rowsWithoutRadio(staffed, rows))].filter(Boolean);
-  const key = structureKey(_set, { pttTarget: _target, editing: [_ui, notes] });
+  const key = structureKey(_set, { pttTarget: _target, editing: [_ui, notes, prefs.intercom, srsClientsOf(_engineState)] });
   if (key !== _lastKey) { _lastKey = key; buildBody(prefs, notes); }
   paint();
 }
@@ -180,7 +190,12 @@ export function initRadioPanel() {
   setupBtn.addEventListener('click', () => { setup.element.hidden = !setup.element.hidden; setupBtn.classList.toggle('radio-small-btn-on', !setup.element.hidden); });
   _root.replaceChildren(head, setup.element, _bodyEl);
   onRadioPrefsChanged(() => render());
-  engine.onState((s) => { _engineState = s; paint(); });
+  engine.onState((s) => {
+    const clientsBefore = JSON.stringify(srsClientsOf(_engineState));
+    _engineState = s;
+    if (JSON.stringify(srsClientsOf(s)) !== clientsBefore) render(); // the intercom's unit picker lists them
+    else paint();
+  });
   render();
   return { onShow: () => render() };
 }

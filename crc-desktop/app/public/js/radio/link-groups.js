@@ -11,6 +11,8 @@
 //   first keeps it and the second is left out of its group with `conflict` set (and `groupId` null, so the engine
 //   treats it as unlinked). Its membership is kept, so it rejoins as soon as the conflict is gone.
 //
+// - The intercom (H183) is never linked: not in the automatic group, never moved into a user group; a stored
+//   membership for it is refused with `conflict: INTERCOM_CONFLICT` and the intercom stays alone.
 // - A receive-only radio (an Observer's Position, S-RADIO-1 RQ14) and a radio that already carries a conflict (no SRS
 //   slot, radio-set.js) are in no group, whatever the membership says.
 //
@@ -25,6 +27,8 @@ export const GROUP_NAME_MAX = 12;
 export const SRS_SLOTS = 11;
 /** The conflict on a radio left without an SRS slot: tuned nowhere, linked nowhere, never keyed. */
 export const NO_SLOT_CONFLICT = `no SRS slot (${SRS_SLOTS} in use)`;
+/** The conflict on an intercom that a stored membership tried to link (H183: the intercom is never linked). */
+export const INTERCOM_CONFLICT = 'the intercom is never linked';
 
 const khzOf = (mhz) => Math.round(mhz * 1000);
 
@@ -50,6 +54,10 @@ export function assignLinkGroups(radios, { groups = [], membership = {} } = {}) 
   const groupOfKhz = new Map(); // kHz -> the group id that holds it
   const out = radios.map((r) => {
     if (r.conflict) return { ...r, groupId: null }; // already refused (no SRS slot): tuned nowhere, linked nowhere
+    if (r.kind === 'INTERCOM') {
+      const asked = Object.hasOwn(membership, r.id) && membership[r.id] != null;
+      return { ...r, groupId: null, conflict: asked ? INTERCOM_CONFLICT : null };
+    }
     const want = intendedGroupOf(r, membership, groupIds);
     if (want === null) return { ...r, groupId: null, conflict: null };
     const khz = khzOf(r.mhz);
@@ -120,6 +128,7 @@ export function deleteGroup({ groups = [], membership = {} }, id) {
 /** The membership with `radio` (`{ id, kind }`) moved into group `groupId`, or out of every group when null. */
 export function moveRadio(membership = {}, radio, groupId) {
   const next = { ...membership };
+  if (radio.kind === 'INTERCOM') { delete next[radio.id]; return next; } // never linked (H183): any move clears it
   const target = groupId == null ? null : groupId;
   if (target === defaultGroupOf(radio.kind)) delete next[radio.id];
   else next[radio.id] = target;

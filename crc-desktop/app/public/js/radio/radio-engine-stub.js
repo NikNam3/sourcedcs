@@ -12,10 +12,12 @@ const _audio = new Map();
 let _devices = { inputId: null, outputId: null };
 let _options = null;
 let _micTests = 0;
+let _intercomUnit = null;
+let _srsClients = [];
 const _listeners = new Set();
 
 function state() {
-  return { connected: false, error: 'radio engine not joined yet (stub)', rxRadioIds: [..._rxIds], txRadioIds: [..._txIds], opusSupported: true };
+  return { connected: false, error: 'radio engine not joined yet (stub)', rxRadioIds: [..._rxIds], txRadioIds: [..._txIds], opusSupported: true, srsClients: _srsClients.map(c => ({ ...c })) };
 }
 function emit() { const s = state(); for (const fn of [..._listeners]) fn(s); }
 
@@ -50,9 +52,14 @@ export function setAudioOptions(options) { _options = { ...options }; }
 /** S-RADIO-2 RQ18: record a moment and play it back. A no-op here. */
 export function testMic() { _micTests++; }
 
+/** H183: the intercom joins SRS unit `unitId`, or the shared (non-DCS) intercom with null. A no-op here. */
+export function setIntercomUnit(unitId) { _intercomUnit = unitId == null ? null : unitId; }
+
 /** `fn(state)` now and on every change. Returns the unsubscribe. */
 export function onState(fn) { _listeners.add(fn); fn(state()); return () => _listeners.delete(fn); }
 
 /** Tests and hand checks only: what the stub was told, and a received transmission on some radios. */
-export function _stubInspect() { return { radios: _radios, txRadioIds: [..._txIds], audio: Object.fromEntries(_audio), devices: { ..._devices }, options: _options, micTests: _micTests }; }
+export function _stubInspect() { return { radios: _radios, txRadioIds: [..._txIds], audio: Object.fromEntries(_audio), devices: { ..._devices }, options: _options, micTests: _micTests, intercomUnit: _intercomUnit }; }
+/** Tests only: the SRS clients the state lists (`[{ name, unitId }]`), for the intercom unit picker. */
+export function _stubSrsClients(list) { _srsClients = list.map(c => ({ ...c })); emit(); }
 export function _stubReceive(radioIds) { _rxIds = [...radioIds]; emit(); }

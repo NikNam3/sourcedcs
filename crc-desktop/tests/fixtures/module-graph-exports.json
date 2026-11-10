@@ -1761,6 +1761,10 @@
    "devicesByKind",
    "resolveDevice"
   ],
+  "radio/intercom-unit-select.js": [
+   "buildIntercomUnitSelect",
+   "intercomUnitOptions"
+  ],
   "radio/link-group-editor.js": [
    "buildGroupCreate",
    "buildGroupHeader"
@@ -1769,6 +1773,7 @@
    "AUTO_GROUP_ID",
    "AUTO_GROUP_NAME",
    "GROUP_NAME_MAX",
+   "INTERCOM_CONFLICT",
    "NO_SLOT_CONFLICT",
    "SRS_SLOTS",
    "assignLinkGroups",
@@ -1794,9 +1799,11 @@
   "radio/radio-engine-stub.js": [
    "_stubInspect",
    "_stubReceive",
+   "_stubSrsClients",
    "onState",
    "setAudioOptions",
    "setDevices",
+   "setIntercomUnit",
    "setPtt",
    "setRadioAudio",
    "setRadios",
@@ -1840,6 +1847,7 @@
    "VOLUME_MAX",
    "VOLUME_MIN",
    "_resetRadioPrefsForTest",
+   "addIntercom",
    "addManualRadio",
    "audioOptionsOf",
    "bindRadioPrefsStorage",
@@ -1847,6 +1855,7 @@
    "normalizeRadioPrefs",
    "onRadioPrefsChanged",
    "radioAudioOf",
+   "removeIntercom",
    "removeManualRadio",
    "retuneManualRadio",
    "seedFromOldPanel",
@@ -1854,6 +1863,7 @@
    "withAudioOptions",
    "withDevices",
    "withGroups",
+   "withIntercomUnit",
    "withMaxTx",
    "withMembership",
    "withPttKey",
@@ -1871,11 +1881,13 @@
   ],
   "radio/radio-set.js": [
    "GUARDS",
+   "INTERCOM_RADIO_ID",
    "MODULATIONS",
    "assignSlots",
    "buildRadioSet",
    "guardRadioId",
    "guardRadios",
+   "intercomRadios",
    "manualRadioId",
    "manualRadios",
    "positionRadioId",
