@@ -110,6 +110,18 @@ The per-frame `version: 1` is unrelated and stays 1.
 - Clients installed before the handshake send no protocol: they are refused and keep reconnecting every 2 s with the topbar showing
   disconnected, until electron-updater installs the new release on their next launch. This is a one-time, accepted cost.
 
+## crc-desktop 2.2.0 — the built-in radio (ADRs 0157–0159): before the deploy
+
+- **SRS server: `RETRANSMISSION_NODE_LIMIT` must be ≥ 1** (set to 1 on 2026-11-10), or linked-frequency relay is
+  silently dropped: the server discards every packet with a retransmission count above the limit, and nothing on the
+  client shows it.
+- Wire protocol 6: crc-sync and crc-desktop 2.2.0 go out together (the deploy gate above holds crc-sync otherwise).
+- Before the tag, boot the new crc-sync against a copy of prod's `state/` (read-only copy, `CRCSYNC_STATE_DIR`, a
+  spare `PORT`) and check it reaches "server listening" with no shape error; ADR 0157 renamed the PriFly Bay to
+  `cv-prifly-charlie` and added the `SIGNAL_CHARLIE` state.
+- After the release, controllers add their Positions' VHF frequencies in the FREQUENCIES panel (H183); a Position
+  with none gets UHF only.
+
 ## 2026-10 — crc-sync / crc-desktop vocabulary and structure release: before the deploy
 
 Every EFSP wire name changed, so **ship the client (a crc-desktop release) and the crc-sync image together**; an old

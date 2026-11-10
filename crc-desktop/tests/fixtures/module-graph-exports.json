@@ -1871,9 +1871,11 @@
    "setDevices",
    "setIdentity",
    "setIntercomUnit",
+   "setLinkGroups",
    "setPtt",
    "setRadioAudio",
    "setRadios",
+   "setRelayLeases",
    "testMic"
   ],
   "radio/radio-inputs.js": [
@@ -1939,6 +1941,9 @@
    "isRadioPanelClient",
    "setRadioPanelIsClient"
   ],
+  "radio/radio-relay-sync.js": [
+   "createRelaySync"
+  ],
   "radio/radio-row.js": [
    "buildRadioRow",
    "paintRadioActivity"
@@ -1963,6 +1968,21 @@
   ],
   "radio/radio-setup.js": [
    "buildRadioSetup"
+  ],
+  "radio/relay-groups.js": [
+   "channelKey",
+   "leaseKeysOf",
+   "relayGroupsOf",
+   "relayingGroupIds"
+  ],
+  "radio/relay-lease.js": [
+   "CHECK_MS",
+   "CLAIM_TYPE",
+   "_resetRelayLeaseForTest",
+   "getHeldRelayLeases",
+   "initRelayLease",
+   "onRelayLeasesChanged",
+   "wantRelayLeases"
   ],
   "radio/rx-activity.js": [
    "createRxActivity"
