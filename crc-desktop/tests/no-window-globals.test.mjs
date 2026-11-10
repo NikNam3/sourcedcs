@@ -2,7 +2,7 @@
  *
  * The client is native ES modules: a module imports what it uses. A custom `window.<name>` is a channel the module-graph
  * test cannot see (`window.getLatestTrack` was one, read by five modules; it is now `picture.js`'s `getLatestTrack`).
- * The only custom names that may be read are the two the Electron preload bridges in (`crcLinks`, `crcUpdate`,
+ * The only custom names that may be read are the ones the Electron preload bridges in (`crcLaunch`, `crcLinks`, `crcUpdate`,
  * `crc-desktop/app/preload.js`); everything else must be a standard browser API. The test-only `window.crc`
  * (`e2e/helpers/modules.js`) is written by the specs, never by production code.
  */
@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const JS = path.join(import.meta.dirname, '../app/public/js');
-const BRIDGED = new Set(['crcLinks', 'crcUpdate']);
+const BRIDGED = new Set(['crcLaunch', 'crcLinks', 'crcUpdate']);
 // `window.fromUtc` / `window.toUtc`: a booking record's `window` (a local variable of that name), not the global.
 const LOCAL_WINDOW_FIELDS = new Set(['fromUtc', 'toUtc']);
 const BROWSER = new Set([

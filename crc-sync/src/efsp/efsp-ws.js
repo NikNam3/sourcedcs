@@ -651,6 +651,11 @@ function _snapshotMessage(ctx, session = null) {
   return { ...readScope.filterSnapshot(full, readScopeOf(ctx, session)), self: { controllerId: session.controllerId || null } };
 }
 
+/** The frequency table as one `efsp-frequency-delta` per Facility: what a radio-only session gets in place of a snapshot (decisions S-RO-1 RO1). */
+function frequencyFrames(ctx) {
+  return ctx.frequencyTable ? ctx.facilityConfig.getFacilityIds().map(f => frames.frequencyDelta(ctx.frequencyTable, f)) : [];
+}
+
 /** The snapshot keys the families own, in registry order (airspaces, correlations, marsa, runwayStatuses, carriers). */
 function familySnapshots(ctx) {
   const out = {};
@@ -716,4 +721,4 @@ function _fullSnapshotMessage(ctx) {
   };
 }
 
-module.exports = { handleMessage, signOffController, directedFor, carrierDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, signOffController, directedFor, carrierDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores, frequencyFrames, RESYNC_RING_WINDOW };

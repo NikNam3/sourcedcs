@@ -1,5 +1,6 @@
 'use strict';
-import { _setSyncSocket, getSyncFeedUrl, _syncAuthHeaders } from './sync.js';
+import { _setSyncSocket, getSyncFeedUrl, getSyncToken, _syncAuthHeaders } from './sync.js';
+import { loadMaptilerKey } from './maptiler-key.js';
 import { loadTerrainGrid } from './terrain-grid.js';
 import { noteCoveragePositions, redeclareEfspPositions } from './panels/efsp/efsp-ws.js';
 import { UPDATE_REQUIRED_CLOSE, hideUpdateRequired, isUpdateRequiredShown, showUpdateRequired } from './update-required.js';
@@ -288,6 +289,7 @@ async function connect() {
   // existing reconnect timer below just keeps retrying until login completes.
   const url = await getSyncFeedUrl();
   if (!url) { setTimeout(connect, 2000); return; }
+  loadMaptilerKey(getSyncToken());
 
   const ws = new WebSocket(url);
   _ws = ws;

@@ -1520,6 +1520,14 @@
    "sfaPoolEntryForFrequency",
    "sfaRows"
   ],
+  "panels/efsp/signed-on-state.js": [
+   "getActingPositions",
+   "getSignedOnPositions",
+   "isObserverAt",
+   "observerKeys",
+   "setObserverKeys",
+   "setSignedOnAt"
+  ],
   "panels/efsp/strip-alerts.js": [
    "ALERT_SLOT_KEYS",
    "INDICATOR_ORDER",
@@ -1775,6 +1783,10 @@
   "radio/device-pick.js": [
    "pickDevice"
   ],
+  "radio/frequency-picks.js": [
+   "buildFrequencyPickSelect",
+   "frequencyPicks"
+  ],
   "radio/intercom-unit-select.js": [
    "buildIntercomUnitSelect",
    "intercomUnitOptions"
@@ -1880,7 +1892,17 @@
   "radio/radio-inputs.js": [
    "readRadioInputs"
   ],
+  "radio/radio-only-bar.js": [
+   "initRadioOnlyBar",
+   "linkLine"
+  ],
+  "radio/radio-only-feed.js": [
+   "LINK",
+   "RETRY_MS",
+   "startRadioOnlyFeed"
+  ],
   "radio/radio-panel-model.js": [
+   "RADIO_ONLY_SRS_NAME",
    "engineLine",
    "linkMenuOptions",
    "noRowNotes",
@@ -1889,7 +1911,8 @@
    "radioActivity",
    "radioBandText",
    "radioFrequencyText",
-   "structureKey"
+   "structureKey",
+   "withoutEmptyAutoGroup"
   ],
   "radio/radio-panel.js": [
    "initRadioPanel",
@@ -2043,16 +2066,23 @@
    "settings"
   ],
   "srs-radio.js": [],
+  "sync-connection.js": [
+   "applyConnOverrides",
+   "showConnWidget"
+  ],
   "sync.js": [
    "_setSyncSocket",
    "_syncAuthHeaders",
    "casdoorAuthorizeUrl",
    "getSyncFeedUrl",
+   "getSyncFeedUrlNoGate",
+   "getSyncToken",
+   "hasSyncToken",
    "isSyncOpen",
+   "openSyncLogin",
    "sendToSync",
    "setIsSyncOpen",
    "setSendToSync",
-   "showConnWidget",
    "syncSocketGeneration"
   ],
   "terrain-grid.js": [

@@ -4,7 +4,7 @@
 
 import { WIRE_PROTOCOL } from './wire-protocol.js';
 import { escapeHtml } from './html-escape.js';
-import { showConnWidget } from './sync.js';
+import { showConnWidget } from './sync-connection.js';
 
 export const UPDATE_REQUIRED_CLOSE = 4426;
 

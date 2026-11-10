@@ -7,6 +7,7 @@ const { createAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
 const { WALL_CLOCK } = require('./mission-clock');
 const { WIRE_PROTOCOL } = require('./wire-protocol');
+const { isRadioOnlyRequest, mayReceive } = require('./radio/radio-session');
 const { conflictSuppressAck } = require('./efsp/wire/frames');
 const log = require('./log').logger('ws-hub');
 
@@ -189,7 +190,7 @@ class WsHub {
    * changed (see _refreshCoverage).
    */
   refreshAllCoverage() {
-    for (const [ws, session] of this._sessions) this._refreshCoverage(ws, session);
+    for (const [ws, session] of this._controllerSessions()) this._refreshCoverage(ws, session);
   }
   setGrpcStatus(s)    { this._grpcStatus = s; this._broadcastStatus(); }
   setSrsStatus(s)     { this._srsStatus = s; this._broadcastStatus(); }
@@ -209,7 +210,7 @@ class WsHub {
    */
   broadcastEfspAlerts(alerts) {
     this._efspAlerts = alerts;
-    for (const [ws, session] of this._sessions) {
+    for (const [ws, session] of this._controllerSessions()) {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(this._efspAlertsMsg(session)));
     }
   }
@@ -259,7 +260,7 @@ class WsHub {
     if (!this._wss) return;
     const encoded = new Map(); // message object -> its JSON
     for (const client of this._wss.clients) {
-      if (client.readyState !== WebSocket.OPEN) continue;
+      if (client.readyState !== WebSocket.OPEN || !mayReceive(this._sessions.get(client), msg)) continue;
       const out = this._efspFilter(this._sessions.get(client), msg);
       if (!out) continue;
       let payload = encoded.get(out);
@@ -313,7 +314,7 @@ class WsHub {
     const list = samples || [];
     const finals = approaches || [];
     const facilities = [...new Set([...list, ...finals].map(s => s.facilityId))];
-    for (const [ws, session] of this._sessions) {
+    for (const [ws, session] of this._controllerSessions()) {
       if (ws.readyState !== WebSocket.OPEN) continue;
       const held = new Set();
       for (const facilityId of facilities) {
@@ -527,7 +528,31 @@ class WsHub {
 
   // ── Per-client lifecycle ─────────────────────────────────────────────────
 
+  /** The open sessions that are controllers: every one but a radio-only session (radio/radio-session.js). */
+  _controllerSessions() { return [...this._sessions].filter(([, session]) => !session.radioOnly); }
+
+  /**
+   * A radio-only session (decisions S-RO-1 RO1): empty coverage, no picture, no Board. It leaves `_pendingSignOff` alone, so
+   * a switch from CRC to the radio inside the grace still signs the controller off.
+   */
+  _onRadioOnlyConnect(ws, req) {
+    const user = req.crcUser;
+    const who = user.name || user.preferred_username || user.sub || 'unknown';
+    const session = { user, who, controllerId: who, radioOnly: true, lastSent: new Map(), labelRevs: new Map() };
+    this._setCoverage(session, NO_PICTURE.coverageFor());
+    this._sessions.set(ws, session);
+    ws.send(JSON.stringify(this._statusMsg()));
+    if (this._efsp) for (const frame of this._efsp.frequencyFrames()) ws.send(JSON.stringify(frame));
+    ws.on('message', (raw) => this._onMessage(ws, session, raw));
+    ws.on('error', () => {});
+    ws.on('close', () => {
+      this._sessions.delete(ws);
+      if (this._radioRelay) this.sendRadioRelay(this._radioRelay.close(session));
+    });
+  }
+
   _onConnect(ws, req) {
+    if (isRadioOnlyRequest(req)) { this._onRadioOnlyConnect(ws, req); return; }
     const user = req.crcUser;
     const session = {
       user,
@@ -591,7 +616,7 @@ class WsHub {
    */
   _onClosed(session) {
     if (!this._efsp) return;
-    for (const other of this._sessions.values()) if (other.controllerId === session.controllerId) return;
+    for (const [, other] of this._controllerSessions()) if (other.controllerId === session.controllerId) return;
     if (!(this._signOnGraceMs > 0)) { this._signOff(session); return; }
     this._pendingSignOff.set(session.controllerId, { session, dueAt: this._wall.now() + this._signOnGraceMs });
   }
@@ -619,7 +644,7 @@ class WsHub {
 
   _sendDirected(directed) {
     for (const d of directed || []) {
-      for (const [client, s] of this._sessions) {
+      for (const [client, s] of this._controllerSessions()) {
         const frame = this._efsp.directedFor ? this._efsp.directedFor(s, d) : null;
         if (frame && client.readyState === WebSocket.OPEN) client.send(JSON.stringify(frame));
       }
@@ -628,7 +653,7 @@ class WsHub {
 
   /** Another controller's sign-off or sign-on can promote this session's Observer to Primary: tell it. */
   _refreshOthersIfStaffingChanged(except = null) {
-    for (const [ws, session] of this._sessions) {
+    for (const [ws, session] of this._controllerSessions()) {
       if (session === except) continue;
       const next = this._picture.coverageFor(session.controllerId);
       if (JSON.stringify(next.signedOnPositions) !== JSON.stringify(session.coverage.signedOnPositions)) this._refreshCoverage(ws, session);
@@ -641,7 +666,7 @@ class WsHub {
     this._refreshLabels();
     const boards = this._efsp ? this._efsp.heartbeatBoardsAll() : null;
     const stores = this._efsp ? this._efsp.heartbeatStores() : null;
-    for (const [ws, session] of this._sessions) this._tick(ws, session, true, boards, stores);
+    for (const [ws, session] of this._controllerSessions()) this._tick(ws, session, true, boards, stores);
   }
 
   /**
@@ -722,6 +747,7 @@ class WsHub {
       this.sendRadioRelay(this._radioRelay.handle(session, msg));
       return;
     }
+    if (session.radioOnly) return; // the link groups are all a radio-only session may say (decisions S-RO-1 RO1)
 
     // EFSP messages (efsp-mutation/efsp-resync/efsp-set-positions) — ack
     // goes to the sender only, broadcast (when present) goes to everyone
@@ -839,7 +865,7 @@ class WsHub {
     if (!this._wss) return;
     const payload = JSON.stringify(msg);
     for (const client of this._wss.clients) {
-      if (client.readyState === WebSocket.OPEN) client.send(payload);
+      if (client.readyState === WebSocket.OPEN && mayReceive(this._sessions.get(client), msg)) client.send(payload);
     }
   }
 }

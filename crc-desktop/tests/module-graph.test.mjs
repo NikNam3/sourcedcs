@@ -3,7 +3,8 @@
  * The client is native ES modules (H87): index.html loads /js/config.js and the CDN scripts as classic scripts, then
  * one module, js/main.js, which imports the rest. These checks keep that true:
  *  1. index.html holds exactly one module script (js/main.js) and no other local script but /js/config.js;
- *  2. every .js under app/public/js is reachable from main.js, and every import names a file that exists;
+ *     radio-only.html (docs/adr/0161) likewise, with js/radio-only-main.js, the graph's second root;
+ *  2. every .js under app/public/js is reachable from a root, and every import names a file that exists;
  *  3. the whole graph evaluates in Node under a DOM stub with no throw. Node links named imports against the
  *     target's exports before evaluating anything, so this also proves every import resolves to an export;
  *  4. the set of exported names per file is frozen in tests/fixtures/module-graph-exports.json. It is a structure
@@ -30,6 +31,8 @@ import { freshGraph } from './helpers/fresh-graph.mjs';
 const PUBLIC = path.join(import.meta.dirname, '../app/public');
 const JS = path.join(PUBLIC, 'js');
 const MAIN = path.join(JS, 'main.js');
+const RADIO_ONLY_MAIN = path.join(JS, 'radio-only-main.js');
+const ROOTS = [MAIN, RADIO_ONLY_MAIN]; // each only boots its page (the e2e smoke covers main.js)
 const FIXTURE = path.join(import.meta.dirname, 'fixtures/module-graph-exports.json');
 const rel = (abs) => path.relative(JS, abs).split(path.sep).join('/');
 
@@ -53,7 +56,7 @@ function importsOf(abs) {
 function graph() {
   const seen = new Map(); // abs -> [abs]
   const visit = (abs) => { if (seen.has(abs)) return; const deps = fs.existsSync(abs) ? importsOf(abs) : []; seen.set(abs, deps); deps.forEach(visit); };
-  visit(MAIN);
+  ROOTS.forEach(visit);
   return seen;
 }
 
@@ -117,21 +120,23 @@ function localNames(code) {
   return local;
 }
 
-test('module graph: index.html loads config.js as a classic script and exactly one module, js/main.js', () => {
-  const html = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
-  const tags = [...html.matchAll(/<script\b([^>]*)>/g)].map(m => m[1]);
-  const modules = tags.filter(a => /type="module"/.test(a));
-  assert.deepEqual(modules.map(a => (a.match(/src="([^"]+)"/) || [])[1]), ['./js/main.js']);
-  const localClassic = tags.filter(a => !/type="module"/.test(a)).map(a => (a.match(/src="([^"]+)"/) || [])[1]).filter(s => s && !/^(https?:)?\/\//.test(s));
-  assert.deepEqual(localClassic, ['/js/config.js']);
-});
+for (const [page, entry] of [['index.html', './js/main.js'], ['radio-only.html', './js/radio-only-main.js']]) {
+  test(`module graph: ${page} loads config.js as a classic script and exactly one module, ${entry}`, () => {
+    const html = fs.readFileSync(path.join(PUBLIC, page), 'utf8');
+    const tags = [...html.matchAll(/<script\b([^>]*)>/g)].map(m => m[1]);
+    const modules = tags.filter(a => /type="module"/.test(a));
+    assert.deepEqual(modules.map(a => (a.match(/src="([^"]+)"/) || [])[1]), [entry]);
+    const localClassic = tags.filter(a => !/type="module"/.test(a)).map(a => (a.match(/src="([^"]+)"/) || [])[1]).filter(s => s && !/^(https?:)?\/\//.test(s));
+    assert.deepEqual(localClassic, ['/js/config.js']);
+  });
+}
 
-test('module graph: every client file is reachable from main.js and every import names an existing file', (t) => {
+test('module graph: every client file is reachable from a root and every import names an existing file', (t) => {
   const g = graph();
   const missing = [...g.values()].flat().filter(p => !fs.existsSync(p)).map(rel);
   assert.deepEqual([...new Set(missing)], [], 'an import names a file that does not exist');
   const unreachable = allJs(JS).filter(p => !g.has(p)).map(rel);
-  assert.deepEqual(unreachable, [], 'a client file is not reachable from main.js (index.html no longer loads it)');
+  assert.deepEqual(unreachable, [], 'a client file is not reachable from a root (neither page loads it)');
   for (const c of cycles(g)) t.diagnostic(`import cycle (${c.length} modules): ${c.join(', ')}`);
 });
 
@@ -145,7 +150,7 @@ test('module graph: the whole graph evaluates under the DOM stub, and the export
   installDomStub();
   // The modules start async work (config fetch, auth) the stub cannot serve; that is not what this test is about.
   process.on('unhandledRejection', () => {});
-  const files = [...graph().keys()].filter(p => p !== MAIN).sort(); // main.js only boots the app (the e2e smoke covers it)
+  const files = [...graph().keys()].filter(p => !ROOTS.includes(p)).sort();
   const exportsByFile = {};
   for (const abs of files) {
     const ns = await import(pathToFileURL(abs).href);
@@ -170,7 +175,7 @@ test('module graph: every module evaluates as its own entry, in a fresh graph', 
   installDomStub();
   process.on('unhandledRejection', () => {});
   const failed = [];
-  for (const abs of [...graph().keys()].filter(p => p !== MAIN).sort()) {
+  for (const abs of [...graph().keys()].filter(p => !ROOTS.includes(p)).sort()) {
     try { await freshGraph().import(abs); } catch (e) { failed.push(`${rel(abs)}: ${e && e.message}`); }
   }
   assert.deepEqual(failed, []);

@@ -1,0 +1,16 @@
+/* The radio-only window (radio-only.html, docs/adr/0161 §2): the radio panel filling a small window under one grey top
+   line. Dark cockpit: the panel's own radio-panel.css does the rest. */
+
+html, body { height: 100%; }
+body { display: flex; flex-direction: column; }
+
+#radio-only-bar {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  padding: 4px 8px;
+  font-family: 'Courier New', monospace;
+  background: var(--ui-bg-solid);
+  border-bottom: 1px solid var(--efsp-line, #2e3740);
+}
+.radio-only-line { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.05em; }
+
+#radio-panel { flex: 1; min-height: 0; }

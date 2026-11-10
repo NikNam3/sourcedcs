@@ -154,10 +154,6 @@ export function transmitRadioIds(set, radioId) {
 /** A radio PTT may key: in the set, not receive-only, not refused a slot. */
 export function mayTransmit(radio) { return !!radio && !radio.receiveOnly && radio.conflict !== NO_SLOT_CONFLICT; }
 
-/**
- * The radio PTT transmits on (RQ17): the controller's choice while it exists and may transmit, else the automatic
- * group's first radio, else the first radio that may transmit, else none. The fallback is not saved.
- */
 /** The radio a group's PTT keys (the engine transmits on that radio's whole group): its first that may transmit, or null. */
 export function groupPttRadio(set, group) {
   if (!group) return null;
@@ -166,11 +162,14 @@ export function groupPttRadio(set, group) {
   return r ? r.id : null;
 }
 
+/**
+ * The radio PTT transmits on (RQ17, amended by S-RO-1 RO4): the controller's choice while it exists and may transmit, else
+ * the automatic group's first radio, else none. Never a guard or any other radio nobody chose: a global key would
+ * transmit on 243.000 for the whole server. The fallback is not saved.
+ */
 export function resolvePttTarget(set, wantedId) {
   const wanted = wantedId && set.radios.find(r => r.id === wantedId);
   if (mayTransmit(wanted)) return wanted.id;
   const auto = set.groups.find(g => g.auto);
-  if (auto && auto.radioIds.length) return auto.radioIds[0];
-  const first = set.radios.find(mayTransmit);
-  return first ? first.id : null;
+  return auto && auto.radioIds.length ? auto.radioIds[0] : null;
 }
