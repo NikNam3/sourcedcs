@@ -16,3 +16,16 @@ contextBridge.exposeInMainWorld('crcLinks', {
     // The update-required frame's download page (CRCSYNC_DOWNLOAD_URL); only its origin may open.
     allowDownloadUrl: (url) => ipcRenderer.send('external-link-allow-download', url),
 });
+
+// Global push-to-talk (docs/adr/0161 §3). The renderer hears only press and release of the one bound input.
+contextBridge.exposeInMainWorld('crcGlobalPtt', {
+    status:        () => ipcRenderer.invoke('global-ptt-status'),
+    configure:     (cfg) => ipcRenderer.invoke('global-ptt-configure', cfg),
+    capture:       () => ipcRenderer.invoke('global-ptt-capture'),
+    cancelCapture: () => ipcRenderer.send('global-ptt-cancel-capture'),
+    onEdge: (cb) => {
+        const handler = (_event, down) => cb(down === true);
+        ipcRenderer.on('global-ptt-edge', handler);
+        return () => ipcRenderer.removeListener('global-ptt-edge', handler);
+    },
+});

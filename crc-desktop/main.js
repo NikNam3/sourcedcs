@@ -107,6 +107,7 @@ app.on('ready', async () => {
             preload: path.join(__dirname, 'app', 'preload.js'),
         },
     });
+    require('./global-ptt').attach(win);
 
     // Dev-only: auto-open DevTools so a renderer-side error (e.g. a
     // SyntaxError from a global-scope naming collision, or a rejected EFSP
@@ -260,4 +261,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
     pyProc?.kill();
+    require('./global-ptt').shutdown();
 });

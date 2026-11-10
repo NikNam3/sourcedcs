@@ -24,11 +24,17 @@
     "maplibre-gl": "3.6.2"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "@homebridge/dbus-native": "^0.7.9",
+    "electron-updater": "^6.3.9",
+    "uiohook-napi": "^1.5.5"
   },
   "build": {
     "appId": "page.sourcedcs.crc",
     "productName": "CRC",
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/uiohook-napi/**/*"
+    ],
     "directories": {
       "output": "dist",
       "app": ".",
@@ -40,6 +46,7 @@
       "lxsrs-setup.js",
       "patch-notes.js",
       "external-link.js",
+      "global-ptt/**/*",
       "config.json",
       "app/**/*",
       "!app/package.json",
