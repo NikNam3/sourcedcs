@@ -132,6 +132,7 @@ test('occupied follows the Strips through a recovery: the pattern appears with t
   const rowsOf = (strips) => board.buildBoard({ view, strips, flightDataOf: () => fd, now: 0 }).rows;
   const s = (state, type = 'CV_RECOVERY') => ({ stripId: 's1', flightDataId: 'f1', stripType: type, state, ownerPositionId: 'CV_APP1' });
   assert.equal(m.occupancy({ caseValue: 'I', rows: rowsOf([s('CV_PATTERN')]) }).landing, true);
+  assert.equal(m.occupancy({ caseValue: 'I', rows: rowsOf([s('SIGNAL_CHARLIE')]) }).landing, true, 'cleared to land (docs/adr/0157)');
   assert.equal(m.occupancy({ caseValue: 'I', rows: rowsOf([s('DROPPED')]) }).landing, false, 'dropped: gone');
   assert.equal(m.occupancy({ caseValue: 'I', rows: rowsOf([s('ON_FINAL', 'FINAL')]) }).landing, false, 'PAR\'s FINAL is not the carrier\'s');
 });

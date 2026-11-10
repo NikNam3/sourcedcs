@@ -218,9 +218,9 @@ test('04 a Case I flight holds overhead: port holding and the landing pattern wh
   await expect(pattern(page, 'landing')).toHaveCount(1);
   await expect(map(page).locator('[data-cm="approach-path"]')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('04-port-holding.png') });
-  // TO PATTERN in Case I hands the flight to PriFly
+  // SGNL C in Case I hands the flight to PriFly, cleared to land (crc-sync docs/adr/0157): drawn in the landing pattern
   await act(page, ca, { kind: 'InvokeNla' });
-  await waitStrip(page, ca, s => s.state === 'CV_PATTERN', 'in the pattern');
+  await waitStrip(page, ca, s => s.state === 'SIGNAL_CHARLIE', 'cleared to land');
   await expect(pattern(page, 'port-holding')).toHaveCount(0);
   await expect(pattern(page, 'landing')).toHaveCount(1);
   await expect(pattern(page, 'initial')).toHaveCount(1);

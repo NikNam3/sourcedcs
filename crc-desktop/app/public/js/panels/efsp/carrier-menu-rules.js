@@ -43,7 +43,8 @@ export function carrierMenuItems(strip, { acting = [], shipCase = null, flightCa
     }
   }
   // Abort a Case I flight to the Case II/III stack: only while the ship is in II or III.
-  if (marshal && flightCase === 'I' && ['STACK', 'CV_PATTERN'].includes(strip.state)) {
+  // From the stack, or once PriFly has it cleared to land (SIGNAL_CHARLIE, crc-sync docs/adr/0157).
+  if (marshal && flightCase === 'I' && ['STACK', 'SIGNAL_CHARLIE'].includes(strip.state)) {
     const open = shipCase === 'II' || shipCase === 'III';
     out.push({ key: 'carrier-abort', label: 'Abort to Case II/III stack', enabled: open, reason: open ? '' : 'Case I is active', as: 'CV_MARSHAL',
       op: { kind: 'CarrierHandoff', transfer: 'ABORT_TO_STACK' } });

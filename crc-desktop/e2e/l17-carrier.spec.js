@@ -2,7 +2,7 @@
 
 /* The carrier on screen (crc-sync docs/adr/0156, ADR 0113, 0114): PriFly and the Marshal set the Case in the carrier
  * management panel and every Position sees it change; Strips are made and named by side number; the MARSHAL panel holds
- * every arrival with its state's button (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, TO PATTERN, DROP), live for the Strip's
+ * every arrival with its state's button (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, then TRAPPED with BOLTER beside it, docs/adr/0157), live for the Strip's
  * owner only; a Case I flight sits in its own table beside the overhead circle; a launch goes PriFly, departure, Marshal.
  *
  * Two controllers, one browser context each: the Marshal seat (with both approach lanes) and
@@ -170,9 +170,10 @@ test('02 the MARSHAL panel lists the stack in landing order; a drag onto another
   await setCase(pri, 'III');
 });
 
-test('03 Case III on the MARSHAL panel: every arrival from STACK to DROP; each button is its state, live for the owner only', async ({ browser, baseURL }) => {
+test('03 Case III on the MARSHAL panel: every arrival from STACK to the trap; each button is its state, live for the owner only', async ({ browser, baseURL }) => {
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal3', ['CV_MARSHAL']);
   const lane = await controller(browser, baseURL, 'e2e-cv-lane3', ['CV_APP1', 'CV_APP2']);
+  const pri = await controller(browser, baseURL, 'e2e-cv-prifly3', ['CV_PRIFLY']); // the trap goes to PriFly (docs/adr/0157)
   const a = cs('DDD');
   await checkIn(marshal, a);
   const mp = await openMarshalPanel(marshal);
@@ -189,21 +190,28 @@ test('03 Case III on the MARSHAL panel: every arrival from STACK to DROP; each b
   await btn(mp).click();
   await waitStrip(lane, a, s => s.state === 'FINAL_APPROACH' && s.ownerPositionId === 'CV_APP1' && s.bayId === 'cv-app1-approach', 'TO APPR');
   await expect(btn(mp)).toBeDisabled();
-  for (const [label, next] of [['DIRTY UP', 'DIRTY'], ['FLY BULLS', 'BULLSEYE'], ['TO PATTERN', 'CV_PATTERN']]) {
+  for (const [label, next] of [['DIRTY UP', 'DIRTY'], ['FLY BULLS', 'BULLSEYE']]) {
     await expect(btn(lp)).toHaveText(label);
     await lapseNlaGuard(lane);
     await btn(lp).click();
     await waitStrip(lane, a, s => s.state === next, label);
   }
+  // crc-sync docs/adr/0157: TRAPPED and BOLTER, both buttons on the row; BOLTER keeps it in the pattern
+  const bolter = (panel) => rowOf(panel, a).locator('[data-marshal-action="also"][data-nla-also="BOLTER"]');
+  await expect(btn(lp)).toHaveText('TRAPPED');
+  await expect(bolter(lp)).toBeEnabled();
+  await bolter(lp).click();
+  await waitStrip(lane, a, s => s.state === 'CV_PATTERN' && s.ownerPositionId === 'CV_APP1', 'BOLTER');
   await lane.screenshot({ path: test.info().outputPath('03-lane-pattern.png') });
-  await expect(btn(lp)).toHaveText('DROP');
+  await expect(btn(lp)).toHaveText('TRAPPED');
   await lapseNlaGuard(lane);
   await btn(lp).click();
-  await expect.poll(() => stripOf(lane, a)).toBeNull();
-  await cleanUp(marshal, lane);
+  await waitStrip(lane, a, s => s.stripType === 'CV_LAUNCH' && s.state === 'ON_DECK' && s.ownerPositionId === 'CV_PRIFLY', 'TRAPPED');
+  await expect(rowOf(lp, a)).toHaveCount(0); // a launch is not on the MARSHAL panel
+  await cleanUp(marshal, lane, pri);
 });
 
-test('04 Case I: its own table and the overhead circle, angels by hand, TO PATTERN hands it to PriFly; Abort waits for Case II/III', async ({ browser, baseURL }) => {
+test('04 Case I: its own table and the overhead circle, angels by hand, SGNL C clears it to land with PriFly; Abort waits for Case II/III', async ({ browser, baseURL }) => {
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal4', ['CV_MARSHAL']);
   const pri = await controller(browser, baseURL, 'e2e-cv-prifly4', ['CV_PRIFLY']);
   await setCase(pri, 'I');
@@ -226,7 +234,11 @@ test('04 Case I: its own table and the overhead circle, angels by hand, TO PATTE
     return s ? crc.carrier.carrierFlightCase(s) : null;
   }, a)).toBe('I');
   await rowOf(panel, a).locator('[data-marshal-action="advance"]').click();
-  await waitStrip(pri, a, s => s.state === 'CV_PATTERN' && s.ownerPositionId === 'CV_PRIFLY' && s.bayId === 'cv-prifly-pattern', 'Case I to pattern');
+  await waitStrip(pri, a, s => s.state === 'SIGNAL_CHARLIE' && s.ownerPositionId === 'CV_PRIFLY' && s.bayId === 'cv-prifly-charlie', 'SGNL C');
+  // PriFly's row: TRAPPED, BOLTER beside it (crc-sync docs/adr/0157)
+  const pp = await openMarshalPanel(pri);
+  await expect(rowOf(pp, a).locator('[data-marshal-action="advance"]')).toHaveText('TRAPPED');
+  await expect(rowOf(pp, a).locator('[data-marshal-action="also"][data-nla-also="CASE_I_BOLTER"]')).toBeEnabled();
   // the ship goes to Case III; the flight keeps Case I and still shows in the Case I table
   await setCase(pri, 'III');
   await expect(panel.locator('[data-marshal="board-case-i"] tr.mb-row')).toHaveCount(1);

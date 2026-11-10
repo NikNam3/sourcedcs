@@ -83,7 +83,7 @@ function _buildLifeBlock(strip) {
     carrierDecorateNlaButton(btn, strip);
     life.appendChild(btn);
   }
-  // The carrier's second handoff, beside the NLA (crc-sync docs/adr/0156): TO MARSHAL beside a launch's DROP.
+  // The buttons beside the NLA (crc-sync docs/adr/0156, 0157): TO MARSHAL beside DROP, BOLTER beside TRAPPED, DROP beside LAUNCHED.
   for (const extra of carrierExtraNlaButtons(strip)) life.appendChild(extra);
   // The single frequency approach (crc-sync docs/adr/0117): "Hand off to PAR" beside the NLA on AP's arrival on a rotating frequency.
   for (const extra of finalHandoffButtons(strip)) life.appendChild(extra);

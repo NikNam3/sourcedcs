@@ -58,7 +58,7 @@ const click = (el) => (el._listeners.click || []).forEach(fn => fn({ stopPropaga
 test.beforeEach(() => { setGlobals(); setHeld({}); clearBoard(); });
 
 test('the descriptor flags reach a client exactly as the server sends them (the mount reads nothing else)', () => {
-  assert.equal(bay('cv-prifly-pattern').view, undefined, 'PriFly has no pattern leg board (live test U19, docs/adr/0137)');
+  assert.equal(bay('cv-prifly-charlie').view, undefined, 'PriFly has no leg board (live test U19, docs/adr/0137; Bay since docs/adr/0157)');
   assert.equal(bay('rsu-pattern'), undefined, 'no RSU (crc-sync docs/adr/0126)');
   assert.equal(bay('par-final').view, 'final');
   assert.equal(bay('ap-sfa').view, 'sfa-freqs');
@@ -86,7 +86,7 @@ test('an airfield PAR final is an ordinary Bay (H138 U10): no line list, the rac
   assert.equal(b.view, 'final', 'the descriptor still names the final: crc-sync samples its Strips for the PAR');
   assert.equal(V.bayHasComponentView(b), false);
   assert.equal(V.bayHasComponentView(bay('ap-sfa')), true);
-  assert.equal(V.bayHasComponentView(bay('cv-prifly-pattern')), false);
+  assert.equal(V.bayHasComponentView(bay('cv-prifly-charlie')), false);
   setHeld({ INCIRLIK: ['PAR'] });
   addStrip({ stripId: 'p1', flightDataId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 2, state: 'ON_FINAL', stripType: 'FINAL', facilityId: 'INCIRLIK', flags: {} }, { identity: { callsign: 'VIPER 11' } });
   const c = containerFor(b);

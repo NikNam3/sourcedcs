@@ -57,8 +57,9 @@ export const NLA_LABELS = {
     OFF_STATION: 'RTB',
     RTB:         'Drop',
   },
-  // The carrier's strip types (crc-sync docs/adr/0156): one plain button per state, the button being the status. A handoff
-  // is labelled by its own row (CARRIER_HANDOFFS, named by the server's `strip.nla.carrierHandoff`); a drop reads DROP.
+  // The carrier's strip types (crc-sync docs/adr/0156, 0157): one plain button per state, the button being the status, with
+  // the server's `strip.nla.also` beside it (nla-also.js). A handoff is labelled by its own row (CARRIER_HANDOFFS, named by
+  // the server's `strip.nla.carrierHandoff`); a drop reads DROP.
   CV_LAUNCH: {
     ON_DECK:     'LAUNCHED',
     CV_AIRBORNE: 'KILO',
@@ -69,8 +70,9 @@ export const NLA_LABELS = {
     COMMENCED:      'TO APPR',
     FINAL_APPROACH: 'DIRTY UP',
     DIRTY:          'FLY BULLS',
-    BULLSEYE:       'TO PATTERN',
-    CV_PATTERN:     'DROP',
+    BULLSEYE:       'TRAPPED',
+    CV_PATTERN:     'TRAPPED',
+    SIGNAL_CHARLIE: 'TRAPPED',
   },
   // ON_FINAL: PAR's NLA is Landed, the Strip going to GC (crc-sync docs/adr/0117). BOLTER_WAVEOFF: a missed approach goes
   // back to AP (decisions H137 LT-PQ1 a), a transfer the server's `strip.nla.transferTo` names (FINAL_TRANSFER_LABELS).
@@ -98,6 +100,11 @@ export const CARRIER_HANDOFFS = {
   CASE_I_TO_PRIFLY:     { label: 'SGNL C',               trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'], caseOf: 'FLIGHT' },
   RETURN_TO_STACK:      { label: 'BACK TO STACK',        trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL', 'CV_APP1', 'CV_APP2'], cases: ['II', 'III'], caseOf: 'FLIGHT' },
   ABORT_TO_STACK:       { label: 'ABORT TO CASE II/III', trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'], caseOf: 'SHIP' },
+  // crc-sync docs/adr/0157: the end of an approach.
+  TRAPPED:              { label: 'TRAPPED',              trigger: 'CONTROLLER_INITIATED', from: ['CV_APP1', 'CV_APP2'], cases: ['II', 'III'], caseOf: 'FLIGHT' },
+  BOLTER:               { label: 'BOLTER',               trigger: 'CONTROLLER_INITIATED', from: ['CV_APP1', 'CV_APP2'], cases: ['II', 'III'], caseOf: 'FLIGHT' },
+  CASE_I_TRAPPED:       { label: 'TRAPPED',              trigger: 'CONTROLLER_INITIATED', from: ['CV_PRIFLY'], cases: ['I'], caseOf: 'FLIGHT' },
+  CASE_I_BOLTER:        { label: 'BOLTER',               trigger: 'CONTROLLER_INITIATED', from: ['CV_PRIFLY'], cases: ['I'], caseOf: 'FLIGHT' },
 };
 
 // crc-sync docs/adr/0126: an ARRIVAL NLA that LC's pattern cells (9J-ENTRY, 9J-OPTION) turned towards the pattern, keyed
@@ -222,7 +229,7 @@ export const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND
 export const LAUNCH_STATE_OWNERS = { ON_DECK: ['CV_PRIFLY'], CV_AIRBORNE: ['CV_DEP'], KILO: ['CV_DEP'] };
 export const RECOVERY_STATE_OWNERS = {
   STACK: ['CV_MARSHAL'], COMMENCED: ['CV_MARSHAL'], FINAL_APPROACH: ['CV_APP1', 'CV_APP2'], DIRTY: ['CV_APP1', 'CV_APP2'],
-  BULLSEYE: ['CV_APP1', 'CV_APP2'], CV_PATTERN: ['CV_PRIFLY', 'CV_APP1', 'CV_APP2'],
+  BULLSEYE: ['CV_APP1', 'CV_APP2'], CV_PATTERN: ['CV_APP1', 'CV_APP2'], SIGNAL_CHARLIE: ['CV_PRIFLY'],
 };
 // FINAL is PAR's only (crc-sync docs/adr/0156 took the carrier off it).
 export const FINAL_STATE_OWNERS = { ON_FINAL: ['PAR'], BOLTER_WAVEOFF: ['PAR'] };
