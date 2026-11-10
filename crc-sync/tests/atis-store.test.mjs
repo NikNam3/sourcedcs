@@ -14,8 +14,8 @@ test('canStart allows the same owner to renew, rejects a different owner', () =>
   assert.equal(store.canStart(251000000, 'owner-b'), false);
 });
 
-test('canStart allows a different owner to take over once the entry is stale', () => {
-  const store = new AtisStore(10); // 10ms TTL for the test
+test('canStart allows a different owner to take over once the entry and the presence are stale', () => {
+  const store = new AtisStore(10, 10); // 10ms in-flight and presence TTLs for the test
   store.start(251000000, 'owner-a', {});
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -51,7 +51,10 @@ test('finish only clears the entry if it is still the same in-flight call', () =
   assert.equal(store.canStart(251000000, 'owner-b'), false, 'the current call\'s entry must survive a stale finish()');
 
   store.finish(251000000, currentCall);
-  assert.equal(store.canStart(251000000, 'owner-b'), true);
+  assert.equal(store.canStart(251000000, 'owner-a'), true, 'the owner\'s next tick may start');
+  assert.equal(store.canStart(251000000, 'owner-b'), false, 'another owner is refused through the loop\'s pause');
+  store.stop(251000000, 'owner-a');
+  assert.equal(store.canStart(251000000, 'owner-b'), true, 'free once the owner stops');
 });
 
 test('getActive reports a loop as in-use through finish() — not just while a call is in flight', () => {

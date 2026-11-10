@@ -77,7 +77,8 @@ test('two frequencies start two concurrent transmits and the answer waits for bo
   grpc.sent[1].resolve({ duration_ms: 6000 });
   await res.settled;
   assert.deepEqual(res.body, { ok: true, duration_ms: 6000 });
-  assert.equal(atisStore.firstRefused([UHF, VHF], 'b'), null, 'both in-flight entries cleared once they finished');
+  assert.equal(atisStore.firstRefused([UHF, VHF], 'a'), null, 'both in-flight entries cleared: the owner\'s next tick may start');
+  assert.equal(atisStore.firstRefused([UHF, VHF], 'b'), UHF, 'another client stays refused through the loop\'s pause');
 });
 
 test('a second client is refused on either frequency, and nothing of its start happens', () => {

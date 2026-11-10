@@ -39,7 +39,11 @@ class AtisStore {
   // A loop may (re)start on a frequency if nobody else holds it, the same
   // owner already holds it (its own next 5s tick), or the holder went stale
   // (e.g. the process died mid-transmit without calling stop/finish).
+  // Another owner's loop holds the frequency through its pause between
+  // transmissions too: its presence entry, until stop() or presenceTtlMs.
   canStart(freq, ownerId) {
+    const present = this._active.get(freq);
+    if (present && present.ownerId !== ownerId && Date.now() - present.lastSeenAt <= this._presenceTtlMs) return false;
     const entry = this._byFreq.get(freq);
     if (!entry) return true;
     if (entry.ownerId === ownerId) return true;
