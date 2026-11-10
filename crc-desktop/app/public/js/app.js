@@ -379,11 +379,13 @@ async function connect() {
         // client's cache, so every controller sees the same runway/freq/wx
         // for a given airport instead of only whoever last edited it.
         settings.aprtAtisFreq = {};
+        settings.aprtAtisVhfFreq = {};
         settings.aprtAtisRwy  = {};
         settings.aprtAtisInfo = {};
         settings.aprtManualWx = {};
         for (const [key, entry] of Object.entries(msg.airports || {})) {
           settings.aprtAtisFreq[key] = entry.freq || '';
+          settings.aprtAtisVhfFreq[key] = entry.vhfFreq || '';
           settings.aprtAtisRwy[key]  = entry.rwy  || '';
           settings.aprtAtisInfo[key] = entry.info || '';
           settings.aprtManualWx[key] = entry.manualWx || { vis: '', clouds: [] };

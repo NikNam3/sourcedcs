@@ -20,12 +20,12 @@ test('getAptConfig starts empty when no config file exists yet', () => {
 
 test('setAptConfig creates an entry from a partial patch, defaulting the rest', () => {
   assert.equal(setAptConfig('UGKO', { freq: '251.000' }), true);
-  assert.deepEqual(getAptConfig().UGKO, { freq: '251.000', rwy: '', info: '', manualWx: { vis: '', clouds: [] } });
+  assert.deepEqual(getAptConfig().UGKO, { freq: '251.000', vhfFreq: '', rwy: '', info: '', manualWx: { vis: '', clouds: [] } });
 });
 
 test('setAptConfig merges a later patch instead of replacing the whole entry', () => {
   setAptConfig('UGKO', { rwy: '13', info: 'B' });
-  assert.deepEqual(getAptConfig().UGKO, { freq: '251.000', rwy: '13', info: 'B', manualWx: { vis: '', clouds: [] } });
+  assert.deepEqual(getAptConfig().UGKO, { freq: '251.000', vhfFreq: '', rwy: '13', info: 'B', manualWx: { vis: '', clouds: [] } });
 });
 
 test('setAptConfig patches manualWx.vis without touching manualWx.clouds, and vice versa', () => {
@@ -57,4 +57,37 @@ test('getAptConfig returns a copy, not a live reference', () => {
   const cfg = getAptConfig();
   cfg.UGKO.freq = 'INJECTED';
   assert.notEqual(getAptConfig().UGKO.freq, 'INJECTED');
+});
+
+// docs/adr/0158 §5: the optional VHF ATIS frequency, checked against the VHF band (radio/bands.js).
+test('setAptConfig saves a VHF frequency in the VHF band and clears it with an empty string', () => {
+  assert.equal(setAptConfig('UGKO', { vhfFreq: ' 121.500 ' }), true);
+  assert.equal(getAptConfig().UGKO.vhfFreq, '121.500');
+  assert.equal(getAptConfig().UGKO.freq, '251.000', 'the UHF frequency is untouched');
+  assert.equal(setAptConfig('UGKO', { vhfFreq: '136.975' }), true, 'the band edge is in');
+  assert.equal(setAptConfig('UGKO', { vhfFreq: '' }), true);
+  assert.equal(getAptConfig().UGKO.vhfFreq, '');
+});
+
+test('setAptConfig refuses a VHF frequency outside the band, or not a number, and applies nothing of that patch', () => {
+  setAptConfig('UGKO', { vhfFreq: '118.000' });
+  for (const bad of ['251.000', '117.975', '137.000', 'abc', '121.5.0', '1e2', 121.5]) {
+    assert.equal(setAptConfig('UGKO', { vhfFreq: bad, rwy: '31' }), false, `refused: ${bad}`);
+  }
+  assert.equal(getAptConfig().UGKO.vhfFreq, '118.000');
+  assert.equal(getAptConfig().UGKO.rwy, '13');
+});
+
+test('the UHF frequency is not band-checked: a saved one outside UHF stays settable', () => {
+  assert.equal(setAptConfig('UGKO', { freq: '121.500' }), true);
+  assert.equal(getAptConfig().UGKO.freq, '121.500');
+});
+
+test('an entry saved before the VHF frequency existed loads as it is (no migration)', () => {
+  const legacy = withPaths('apt-config-legacy-', { CRCSYNC_APT_CONFIG_PATH: 'apt-config.json' });
+  fs.writeFileSync(legacy.file('apt-config.json'), JSON.stringify({ OLD: { freq: '251.000', rwy: '', info: '', manualWx: { vis: '', clouds: [] } } }));
+  const cfg = createAptConfig({ env: legacy.env });
+  assert.equal(cfg.getAptConfig().OLD.vhfFreq, undefined);
+  assert.equal(cfg.setAptConfig('OLD', { vhfFreq: '119.100' }), true);
+  assert.deepEqual(cfg.getAptConfig().OLD, { freq: '251.000', vhfFreq: '119.100', rwy: '', info: '', manualWx: { vis: '', clouds: [] } });
 });

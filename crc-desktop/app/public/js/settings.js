@@ -32,7 +32,8 @@ const DEFAULTS = {
   conflictAlertPaths: true, // T30: draw a conflict alert's predicted paths and closest-point line (geojson.js's buildConflictAlertOverlay); the CA in the data block and the CPA marker stay either way
   transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written. The theater's, from crc-sync's `theater` message (its docs/adr/0085); not a setting. [SOURCE-DEFINED] (docs/adr/0085): 18,000 ft is only the fallback until the first `theater` message (sent on connect); the other client files read it with no fallback of their own
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
-  aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
+  aprtAtisFreq:    {},    // per-airport saved ATIS frequency (the UHF one), keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
+  aprtAtisVhfFreq: {},    // per-airport saved optional VHF ATIS frequency (crc-sync docs/adr/0158 §5), keyed by ICAO — squadron-wide, as above
   aprtAtisRwy:     {},    // per-airport saved ATIS runway, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisInfo:    {},    // per-airport saved ATIS info letter, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   radio:           null,  // the new radio panel's preferences (radio/radio-prefs.js, S-RADIO-1 RQ17); null until first changed

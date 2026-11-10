@@ -11,6 +11,7 @@ const zlib = require('zlib');
 const rateLimit = require('express-rate-limit');
 
 const auth = require('../auth');
+const { createAtisTransmitHandler } = require('../atis-transmit');
 const { haversineM } = require('../geo');
 const { lookupFlightPlan, toFlightDataFiledSeed, listFiledFlightPlans } = require('../efsp/flight-plan-lookup');
 const authLog = require('../log').logger('auth');
@@ -133,34 +134,8 @@ function mountAuthRoutes(app, { env }) {
  */
 function mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theaterContext, airportWeather, efspInstrumentation, terrainStore, serverResources = null }) {
   // ── On-demand RPC proxy endpoints (per-action, not shared streams) ─────────
-  // ownerId is a client-generated id (one per crc-desktop app session), used to
-  // tell "my own next 5s loop tick" apart from "a different controller's
-  // client" — see src/atis-store.js for why this needs to live here at all.
-  app.post('/api/atis-transmit', auth.requireAuth, (req, res) => {
-    const body = req.body || {};
-    const freq = body.frequency || body.frequencyHz;
-    const { ownerId, stop } = body;
-    if (!ownerId || freq == null) {
-      return res.status(400).json({ error: 'ownerId and frequency are required' });
-    }
-
-    if (stop) {
-      atisStore.stop(freq, ownerId);
-      wsHub.setAtisActive(atisStore.getActive());
-      return res.json({ ok: true });
-    }
-
-    if (!atisStore.canStart(freq, ownerId)) {
-      return res.status(409).json({ error: 'Another client is already transmitting on this frequency' });
-    }
-
-    const { call, promise } = grpcClient.transmitAtis(body);
-    atisStore.start(freq, ownerId, call);
-    wsHub.setAtisActive(atisStore.getActive());
-    promise
-      .then(r => { atisStore.finish(freq, call); res.json({ ok: true, duration_ms: r && r.duration_ms }); })
-      .catch(err => { atisStore.finish(freq, call); res.status(503).json({ error: err.message }); });
-  });
+  // ATIS on one or two frequencies (docs/adr/0158 §5); ownership per frequency, see src/atis-store.js and src/atis-transmit.js.
+  app.post('/api/atis-transmit', auth.requireAuth, createAtisTransmitHandler({ atisStore, grpcClient, wsHub }));
 
   app.get('/api/srs-clients', auth.requireAuth, (_req, res) => {
     grpcClient.getSrsClients()

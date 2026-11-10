@@ -46,6 +46,15 @@ class AtisStore {
     return this._isStale(entry);
   }
 
+  // docs/adr/0158 §5: an ATIS loop on two frequencies starts on both or on neither. The first of `freqs` this owner may
+  // not start on (another owner's call is in flight there), or null when every one is free to it.
+  firstRefused(freqs, ownerId) {
+    for (const freq of freqs) {
+      if (!this.canStart(freq, ownerId)) return freq;
+    }
+    return null;
+  }
+
   start(freq, ownerId, call) {
     this._byFreq.set(freq, { ownerId, startedAt: Date.now(), call });
     this._active.set(freq, { ownerId, lastSeenAt: Date.now() });
