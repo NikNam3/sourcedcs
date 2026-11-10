@@ -34,3 +34,9 @@
    - Possible mitigation, not built: crc-sync sees every client's radios (the server's `RADIO_UPDATE`), so it can skip a
      target frequency when nobody tuned to it needs the copy, i.e. everyone on it already hears a source frequency.
      What is left: a pilot on both while another pilot is only on the second. Only a change in the SRS client removes that.
+
+## Playwright at the 2.2.0 check (2026-11-10, machine load average 20 to 30 from other projects)
+299/304 in the sharded run. `update-required`, `mtr-pilot-walk:55`, `u-ca-owner:133` and `l22-stars-scope:302` pass alone.
+`carrier-map.spec.js:208` (04, Case I) stays intermittent alone, at varying steps (port-holding still drawn after SGNL C,
+no spin for an injected contact), on 343a25d2 as well; re-sending the contact for 30 s did not cure it, so it is not a
+plain race on one contact. `buildBoard` gives no `hold` row for a SIGNAL_CHARLIE Strip. Cause not found.
