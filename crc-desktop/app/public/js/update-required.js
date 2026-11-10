@@ -4,6 +4,7 @@
 
 import { WIRE_PROTOCOL } from './wire-protocol.js';
 import { escapeHtml } from './html-escape.js';
+import { showConnWidget } from './sync.js';
 
 export const UPDATE_REQUIRED_CLOSE = 4426;
 
@@ -59,12 +60,15 @@ function render() {
   });
   const link = v.showLink && /^https?:\/\//.test(f.downloadUrl || '') ? `<a id="crc-update-link" href="${escapeHtml(f.downloadUrl)}" target="_blank" rel="noopener" style="color:#39ff7a;font-size:11px;">${escapeHtml(f.downloadUrl)}</a>` : '';
   el.dataset.kind = v.kind;
+  // CONNECTION SETTINGS: the server named there may be the wrong one (a newer CRC against an old server, a test server);
+  // the settings open over this overlay, and saving them reloads.
   el.innerHTML =
     '<div style="font-size:14px;letter-spacing:3px;color:#39ff7a;">CRC SYNC</div>' +
     '<div style="font-size:11px;letter-spacing:1.5px;" id="crc-update-text">' + escapeHtml(v.text) + '</div>' + link +
     (v.button === 'check' ? `<button id="crc-update-check" style="${BTN}">CHECK FOR UPDATE</button>` : '') +
     (v.button === 'restart' ? `<button id="crc-update-restart" style="${BTN}">RESTART TO UPDATE</button>` : '') +
-    (v.retry ? `<button id="crc-update-retry" style="${BTN2}">RETRY</button>` : '');
+    (v.retry ? `<button id="crc-update-retry" style="${BTN2}">RETRY</button>` : '') +
+    `<button id="crc-update-conn" style="${BTN2}">CONNECTION SETTINGS</button>`;
   const on = (id, fn) => { const b = document.getElementById(id); if (b) b.addEventListener('click', fn); };
   on('crc-update-check', () => {
     state.phase = 'checking';
@@ -75,6 +79,7 @@ function render() {
     }, () => { if (state) { state.phase = 'none'; render(); } });
   });
   on('crc-update-restart', () => window.crcUpdate.restartNow());
+  on('crc-update-conn', () => showConnWidget());
   on('crc-update-retry', () => { const cb = state.onRetry; hideUpdateRequired(); if (cb) cb(); });
 }
 
