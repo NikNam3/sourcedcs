@@ -1,0 +1,106 @@
+/* The new radio panel, RADIO 2 (js/radio/radio-panel.js, docs/adr/0158). Dark cockpit: grey throughout. RX and TX
+   light while they happen (the old panel's blue RX, green TX); a refused frequency or an engine problem is amber
+   (--efsp-attn); a receive-only radio and a radio with no SRS slot are only noted, in grey. Colours are
+   efsp-panel.css's tokens. */
+
+#radio-panel {
+  background: var(--ui-bg-solid);
+  color: var(--efsp-text, #d8e0e6);
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  overflow-y: auto;
+  padding: 4px 8px;
+  user-select: none;
+}
+
+.radio-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.radio-engine-line { flex: 1; color: var(--efsp-muted, #8c9aa6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.radio-engine-line.radio-problem { color: var(--efsp-attn, #e0a83c); }
+
+.radio-ptt {
+  min-width: 90px;
+  font-family: inherit; font-size: 11px; letter-spacing: 0.08em;
+  background: transparent; color: var(--efsp-text, #d8e0e6);
+  border: 1px solid var(--efsp-line-2, #4a5560);
+  padding: 3px 8px; cursor: pointer;
+}
+.radio-ptt:disabled { color: var(--efsp-faint, #56616c); border-color: var(--efsp-line, #2e3740); cursor: default; }
+.radio-ptt.radio-ptt-held, .radio-ptt.radio-ptt-tx { background: rgba(100,160,80,0.18); border-color: rgba(100,160,80,0.7); }
+
+.radio-small-btn {
+  font-family: inherit; font-size: 10px; letter-spacing: 0.05em;
+  background: transparent; color: var(--efsp-muted, #8c9aa6);
+  border: 1px solid var(--efsp-line, #2e3740);
+  padding: 0 4px; cursor: pointer;
+}
+.radio-small-btn:hover { border-color: var(--efsp-line-2, #4a5560); color: var(--efsp-text, #d8e0e6); }
+.radio-small-btn-on, .radio-listening { color: var(--efsp-text, #d8e0e6); border-color: var(--efsp-line-2, #4a5560); }
+
+.radio-note { color: var(--efsp-muted, #8c9aa6); font-size: 10px; }
+.radio-note.radio-conflict { color: var(--efsp-attn, #e0a83c); }
+.radio-panel-note { margin: 1px 0; }
+.radio-empty { padding: 2px 0 2px 20px; }
+
+.radio-section {
+  border: 1px solid var(--efsp-line, #2e3740);
+  background: var(--efsp-strip, #1c2228);
+  padding: 2px 6px;
+  margin-top: 4px;
+}
+.radio-group-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
+.radio-group-name { color: var(--efsp-muted, #8c9aa6); font-size: 10px; letter-spacing: 0.08em; }
+.radio-group-input, .radio-manual-label, .radio-freq-input, .radio-number {
+  font-family: inherit; font-size: 11px;
+  background: var(--efsp-strip-2, #232a32); color: var(--efsp-text, #d8e0e6);
+  border: 1px solid var(--efsp-line, #2e3740);
+  padding: 0 4px; width: 80px;
+}
+.radio-number { width: 50px; }
+
+/* one column set for every row, so the values line up */
+.radio-row {
+  display: grid;
+  grid-template-columns: 16px 11em 6em 3em 2.5em 2em 2em minmax(50px, 110px) 3em minmax(40px, 70px) 4.5em 8em 16px;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 0;
+}
+.radio-target { background: transparent; border: none; color: var(--efsp-muted, #8c9aa6); cursor: pointer; padding: 0; font-size: 11px; }
+.radio-target-on { color: var(--efsp-text, #d8e0e6); }
+.radio-target:disabled { color: var(--efsp-faint, #56616c); cursor: default; }
+.radio-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.radio-freq { font-variant-numeric: tabular-nums; color: var(--efsp-text, #d8e0e6); }
+button.radio-freq-edit { font-family: inherit; font-size: 11px; background: transparent; border: 1px solid transparent; padding: 0 2px; cursor: text; text-align: left; }
+button.radio-freq-edit:hover { border-color: var(--efsp-line, #2e3740); }
+.radio-band, .radio-mod { color: var(--efsp-muted, #8c9aa6); font-size: 10px; }
+button.radio-mod { font-family: inherit; background: transparent; border: 1px solid var(--efsp-line, #2e3740); cursor: pointer; padding: 0 2px; }
+.radio-rx, .radio-tx { color: var(--efsp-faint, #56616c); font-size: 10px; }
+.radio-row-rx .radio-rx { color: #3cb4ee; }
+.radio-row-rx { background: rgba(60,160,220,0.12); }
+.radio-row-tx .radio-tx { color: #8fd17a; }
+.radio-row-tx { background: rgba(100,160,80,0.10); }
+.radio-row-rxonly .radio-tx { visibility: hidden; }
+.radio-vol, .radio-pan, .radio-gain { height: 4px; cursor: pointer; min-width: 0; }
+.radio-vol-lbl { color: var(--efsp-muted, #8c9aa6); font-size: 10px; font-variant-numeric: tabular-nums; }
+.radio-mute { font-family: inherit; font-size: 10px; background: transparent; color: var(--efsp-muted, #8c9aa6); border: 1px solid var(--efsp-line, #2e3740); padding: 0 3px; cursor: pointer; }
+.radio-mute-on { color: var(--efsp-text, #d8e0e6); border-color: var(--efsp-line-2, #4a5560); }
+.radio-link, .radio-select {
+  font-family: inherit; font-size: 10px;
+  background: var(--efsp-strip-2, #232a32); color: var(--efsp-muted, #8c9aa6);
+  border: 1px solid var(--efsp-line, #2e3740);
+  min-width: 0;
+}
+.radio-remove { background: transparent; border: none; color: var(--efsp-muted, #8c9aa6); cursor: pointer; font-size: 10px; padding: 0; opacity: 0.6; }
+.radio-remove:hover { opacity: 1; color: var(--efsp-text, #d8e0e6); }
+.radio-row-notes { grid-column: 2 / -1; display: flex; gap: 10px; }
+
+.radio-foot { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.radio-manual-form, .radio-group-create { display: inline-flex; align-items: baseline; gap: 4px; }
+
+.radio-setup { border: 1px solid var(--efsp-line, #2e3740); padding: 4px 6px; margin-bottom: 4px; }
+.radio-setup[hidden] { display: none; }
+.radio-setup-row { display: grid; grid-template-columns: 11em 1fr; align-items: center; gap: 8px; padding: 1px 0; }
+.radio-setup-label { color: var(--efsp-muted, #8c9aa6); }
+.radio-setup-controls { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.radio-setup-notes { padding-left: 11em; }
