@@ -90,7 +90,7 @@ test('an empty board reports null, never 1.0 — otherwise the 95% gate passes v
 const ELIGIBLE = new Set([
   'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW', 'DEPARTED', 'HANDED_OFF', 'INBOUND', 'HANDED_TO_TOWER', 'TRAFFIC_PATTERN', 'FINAL', 'LANDED',
   'TAXI_IN', 'IN_SECTOR', 'AIRBORNE', 'ON_STATION', 'OFF_STATION', 'RTB',
-  'ON_DECK', 'CV_AIRBORNE', 'KILO', 'STACK', 'COMMENCED', 'FINAL_APPROACH', 'DIRTY', 'BULLSEYE', 'CV_PATTERN', 'ON_FINAL', 'BOLTER_WAVEOFF',
+  'ON_DECK', 'CV_AIRBORNE', 'KILO', 'STACK', 'COMMENCED', 'FINAL_APPROACH', 'DIRTY', 'BULLSEYE', 'CV_PATTERN', 'SIGNAL_CHARLIE', 'ON_FINAL', 'BOLTER_WAVEOFF',
   'TRACKED', // docs/adr/0146: a tagged VFR has a track by definition
 ]);
 

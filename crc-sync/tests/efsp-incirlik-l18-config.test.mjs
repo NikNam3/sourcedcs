@@ -70,7 +70,7 @@ test('Bay descriptor flags: the PAR and SFA Bays carry `view`; only PAR\'s final
   assert.equal(fc.getBay('par-final').replacesRacks, true);
   assert.equal(fc.getBay('ap-sfa').replacesRacks, undefined, 'the SFA racks ARE the frequencies');
   assert.equal(fc.getBay('rsu-pattern'), null, 'no RSU (docs/adr/0126)');
-  assert.equal(fc.getBay('cv-prifly-pattern', 'CARRIER').view, undefined, 'no pattern leg board (live test U19, docs/adr/0137)');
+  assert.equal(fc.getBay('cv-prifly-charlie', 'CARRIER').view, undefined, 'no leg board on PriFly (live test U19, docs/adr/0137, 0157)');
   assert.equal(fc.getAllBays('CARRIER').some(b => b.view), false, 'docs/adr/0156: no carrier Bay has a view of its own');
   const flagged = fc.getFacilityIds().flatMap(f => fc.getAllBays(f)).filter(b => b.capacity !== undefined).map(b => b.bayId);
   assert.deepEqual(flagged, ['par-final']);
@@ -153,7 +153,7 @@ test('permission rows: one capability table; PAR gets ordinary Strip ops and no 
 
 test('state authority: PAR works FINAL on final and after a missed approach; no other row moved', () => {
   assert.equal(permission.canActOnState('RSU', 'PATTERN', 'IN_PATTERN'), false, 'no RSU (docs/adr/0126)');
-  assert.equal(permission.canActOnState('CV_PRIFLY', 'CV_RECOVERY', 'CV_PATTERN'), true, 'the carrier row survives');
+  assert.equal(permission.canActOnState('CV_PRIFLY', 'CV_RECOVERY', 'SIGNAL_CHARLIE'), true, 'the carrier row survives');
   assert.deepEqual(permission.STATE_OWNERS_BY_STRIP_TYPE.ARRIVAL.INBOUND, ['AP', 'CTR']);
   for (const s of ['ON_FINAL', 'BOLTER_WAVEOFF']) assert.equal(permission.canActOnState('PAR', 'FINAL', s), true, s);
   assert.equal(permission.canActOnState('PAR', 'FINAL', 'BALL'), false);

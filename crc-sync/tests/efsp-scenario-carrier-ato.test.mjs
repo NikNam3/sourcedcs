@@ -240,6 +240,12 @@ test('classifyLocality: the ship is the field', () => {
   assert.deepEqual(classifyLocality({ stripType: 'CV_RECOVERY' }, flight({ filed: { departureAirport: 'LTAG' } }), HOME.CARRIER, { preDropState: 'CV_PATTERN' }), { locality: 'TRANSIENT', localityBasis: 'AIRPORTS' });
   // docs/adr/0156: a launch handed to the Marshal is the recovery in place: departed and landed here, LOCAL
   assert.deepEqual(classifyLocality({ stripType: 'CV_RECOVERY', previousLeg: { stripType: 'CV_LAUNCH' } }, flight(), HOME.CARRIER, { preDropState: 'CV_PATTERN' }), { locality: 'LOCAL', localityBasis: 'CONVERTED_ARRIVAL' });
+  // docs/adr/0157: a recovery that trapped is a launch on deck: it landed here; launched again, it departed here too
+  const trapped = { stripType: 'CV_LAUNCH', previousLeg: { stripType: 'CV_RECOVERY' } };
+  assert.deepEqual(classifyLocality(trapped, flight({ filed: { departureAirport: 'LTAG' } }), HOME.CARRIER, opts), { locality: 'TRANSIENT', localityBasis: 'AIRPORTS' });
+  assert.deepEqual(classifyLocality(trapped, flight({ ato: CARRIER_BOTH }), HOME.CARRIER, opts), { locality: 'LOCAL', localityBasis: 'AIRPORTS' });
+  assert.deepEqual(classifyLocality(trapped, flight(), HOME.CARRIER, opts), { locality: 'UNKNOWN', localityBasis: 'NO_AIRPORT_DATA' });
+  assert.deepEqual(classifyLocality(trapped, flight({ filed: { departureAirport: 'LTAG' } }), HOME.CARRIER, { preDropState: 'KILO' }), { locality: 'LOCAL', localityBasis: 'AIRPORTS' });
   // no hull configured for the Facility
   assert.deepEqual(classifyLocality(launchOf, flight({ ato: CARRIER_BOTH }), [], opts), { locality: 'UNKNOWN', localityBasis: 'NO_HOME_AIRPORT_CONFIGURED' });
   // a land Strip is untouched by all of this

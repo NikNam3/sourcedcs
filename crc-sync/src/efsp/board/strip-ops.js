@@ -5,6 +5,7 @@
 // collaborator because they call each other: InvokeNla runs TransferStrip, SetState and DropStrip, and the
 // rejected-replica rules gate every op.
 
+const { alsoStatus } = require('./nla-also');
 const { MAX_FREE_TEXT } = require('../flight-data-store');
 const { deepClone } = require('./strip-util');
 const { undoDeclarationProblem } = require('../undo/undo-history');
@@ -582,7 +583,10 @@ class StripOps {
 
     const blocked = this.nlaPrecheck(strip);
     if (blocked) return { inhibited: blocked.detail, reason: blocked.reason };
-    if (result.inhibited) return { inhibited: result.inhibited, reason: 'NLA_INHIBITED' };
+    // docs/adr/0157: the buttons beside the NLA stand even when the NLA itself is inhibited (BOLTER beside a TRAPPED with
+    // no PriFly present, DROP beside a LAUNCHED with no departure control).
+    const also = alsoStatus(result, strip);
+    if (result.inhibited) return { inhibited: result.inhibited, reason: 'NLA_INHIBITED', ...(also ? { also } : {}) };
 
     const inert = this.rejectedReplicaRefusal(strip, result.toState);
     if (inert) return { inhibited: inert.detail, reason: inert.reason };
@@ -598,9 +602,9 @@ class StripOps {
     }
     const status = result.transferTo ? { toState: result.toState, transferTo: result.transferTo } : { toState: result.toState };
     // docs/adr/0074, 0156: which carrier handoff this NLA button records, so the panel labels it from the model's own
-    // table, and the second handoff offered beside it (TO MARSHAL beside a launch's DROP).
+    // table; docs/adr/0157: the next actions offered beside it (board/nla-also.js).
     if (result.carrierHandoff) status.carrierHandoff = result.carrierHandoff;
-    if (result.alsoHandoff) status.alsoHandoff = result.alsoHandoff;
+    if (also) status.also = also;
     return status;
   }
 

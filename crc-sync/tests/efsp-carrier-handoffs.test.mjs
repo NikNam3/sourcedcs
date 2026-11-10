@@ -9,13 +9,14 @@ import nla from '../src/efsp/nla.js';
 
 // docs/adr/0156: the carrier handoffs, one row each, every one a controller gesture.
 
-test('the ADR 0156 handoffs: the table, the buttons\' labels, nothing else', () => {
-  assert.deepEqual(Object.keys(CARRIER_HANDOFFS).sort(), ['ABORT_TO_STACK', 'CASE_I_TO_PRIFLY', 'COMMENCE', 'DEPARTURE_TO_MARSHAL',
-    'LAUNCH_TO_DEPARTURE', 'LAUNCH_TO_MARSHAL', 'RETURN_TO_STACK', 'TO_APPROACH']);
+test('the ADR 0156/0157 handoffs: the table, the buttons\' labels, nothing else', () => {
+  assert.deepEqual(Object.keys(CARRIER_HANDOFFS).sort(), ['ABORT_TO_STACK', 'BOLTER', 'CASE_I_BOLTER', 'CASE_I_TO_PRIFLY', 'CASE_I_TRAPPED', 'COMMENCE',
+    'DEPARTURE_TO_MARSHAL', 'LAUNCH_TO_DEPARTURE', 'LAUNCH_TO_MARSHAL', 'RETURN_TO_STACK', 'TO_APPROACH', 'TRAPPED']);
   const labels = Object.fromEntries(Object.entries(CARRIER_HANDOFFS).map(([k, r]) => [k, r.label]));
   assert.deepEqual(labels, {
     LAUNCH_TO_DEPARTURE: 'LAUNCHED', LAUNCH_TO_MARSHAL: 'TO MARSHAL', DEPARTURE_TO_MARSHAL: 'TO MARSHAL', COMMENCE: 'COMMENCE',
     TO_APPROACH: 'TO APPR', CASE_I_TO_PRIFLY: 'SGNL C', RETURN_TO_STACK: 'BACK TO STACK', ABORT_TO_STACK: 'ABORT TO CASE II/III',
+    TRAPPED: 'TRAPPED', BOLTER: 'BOLTER', CASE_I_TRAPPED: 'TRAPPED', CASE_I_BOLTER: 'BOLTER',
   });
   for (const r of Object.values(CARRIER_HANDOFFS)) {
     assert.ok(TRIGGER_TYPES.includes(r.trigger));
@@ -30,6 +31,18 @@ test('the ADR 0156 handoffs: the table, the buttons\' labels, nothing else', () 
     assert.deepEqual([CARRIER_HANDOFFS[k].stripType, CARRIER_HANDOFFS[k].toStripType, CARRIER_HANDOFFS[k].toState, CARRIER_HANDOFFS[k].stackEffect],
       ['CV_LAUNCH', 'CV_RECOVERY', 'STACK', 'APPEND'], k);
   }
+  // A trap is the inverse of the handoff to the Marshal: the recovery becomes the launch on deck, out of the stack (ADR 0157).
+  for (const k of ['TRAPPED', 'CASE_I_TRAPPED']) {
+    assert.deepEqual([CARRIER_HANDOFFS[k].stripType, CARRIER_HANDOFFS[k].toStripType, CARRIER_HANDOFFS[k].toState, CARRIER_HANDOFFS[k].stackEffect],
+      ['CV_RECOVERY', 'CV_LAUNCH', 'ON_DECK', 'REMOVE_NO_CLOSE_UP'], k);
+  }
+  assert.deepEqual([...CARRIER_HANDOFFS.TRAPPED.to], ['CV_PRIFLY']);
+  assert.equal(CARRIER_HANDOFFS.CASE_I_TRAPPED.to, 'SAME', 'Case I: PriFly already has it');
+  // A bolter keeps the Strip where it is: the lane's pattern, or PriFly's Signal Charlie.
+  assert.deepEqual([CARRIER_HANDOFFS.BOLTER.to, CARRIER_HANDOFFS.BOLTER.toState, [...CARRIER_HANDOFFS.BOLTER.states]], ['SAME', 'CV_PATTERN', ['BULLSEYE', 'CV_PATTERN']]);
+  assert.deepEqual([CARRIER_HANDOFFS.CASE_I_BOLTER.to, CARRIER_HANDOFFS.CASE_I_BOLTER.toState], ['SAME', 'SIGNAL_CHARLIE']);
+  assert.equal(CARRIER_HANDOFFS.CASE_I_TO_PRIFLY.toState, 'SIGNAL_CHARLIE', 'Case I has no pattern');
+  assert.deepEqual([...CARRIER_HANDOFFS.ABORT_TO_STACK.states], ['STACK', 'SIGNAL_CHARLIE']);
   // Back to stack is not offered once the flight is at BULLSEYE or in the pattern.
   assert.deepEqual([...CARRIER_HANDOFFS.RETURN_TO_STACK.states], ['COMMENCED', 'FINAL_APPROACH', 'DIRTY']);
 });
@@ -61,6 +74,15 @@ test('validateCarrierHandoff: whose Case each row reads, and who sends it to who
   ok('ABORT_TO_STACK', { shipCase: 'II', flightCase: 'I', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_MARSHAL' });
   refuse('ABORT_TO_STACK', { shipCase: 'I', flightCase: 'I', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_MARSHAL' }, /ship is in Case I/);
   refuse('ABORT_TO_STACK', { shipCase: 'III', flightCase: 'III', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_MARSHAL' }, /Case I flight/);
+  // TRAPPED / BOLTER (ADR 0157): the lane in Case II/III, PriFly in Case I
+  ok('TRAPPED', { flightCase: 'III', fromPositionId: 'CV_APP1', toPositionId: 'CV_PRIFLY' });
+  refuse('TRAPPED', { flightCase: 'III', fromPositionId: 'CV_APP1', toPositionId: 'CV_MARSHAL' }, /goes to CV_PRIFLY/);
+  refuse('TRAPPED', { flightCase: 'I', fromPositionId: 'CV_APP1', toPositionId: 'CV_PRIFLY' }, /flight is flying Case I/);
+  ok('BOLTER', { flightCase: 'II', fromPositionId: 'CV_APP2' });
+  refuse('BOLTER', { flightCase: 'II', fromPositionId: 'CV_APP2', toPositionId: 'CV_PRIFLY' }, /stays with CV_APP2/);
+  ok('CASE_I_TRAPPED', { shipCase: 'III', flightCase: 'I', fromPositionId: 'CV_PRIFLY' });
+  ok('CASE_I_BOLTER', { shipCase: 'III', flightCase: 'I', fromPositionId: 'CV_PRIFLY' });
+  refuse('CASE_I_TRAPPED', { flightCase: 'I', fromPositionId: 'CV_MARSHAL' }, /sent by CV_PRIFLY/);
   refuse('HANDOFF', { shipCase: 'III', fromPositionId: 'CV_MARSHAL' }, /unknown/);
   refuse('toString', { shipCase: 'III', fromPositionId: 'CV_MARSHAL' }, /unknown/);
   assert.equal(validateCarrierHandoff(undefined).ok, false, 'never throws');

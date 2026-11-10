@@ -56,7 +56,7 @@ test('Case III launch: ON_DECK, LAUNCHED to departure, KILO, TO MARSHAL: the sam
   assert.deepEqual([airborne.state, airborne.ownerPositionId, airborne.bayId, airborne.carrierHandoff.kind], ['CV_AIRBORNE', 'CV_DEP', 'cv-dep-departures', 'LAUNCH_TO_DEPARTURE']);
   const kilo = await press(efsp, c, 'CV_DEP', launch);
   assert.equal(kilo.state, 'KILO');
-  assert.equal(efsp.boardStoreFor('CARRIER').nlaStatusFor(strip(efsp, launch.stripId)).alsoHandoff, 'DEPARTURE_TO_MARSHAL', 'TO MARSHAL beside DROP');
+  assert.deepEqual(efsp.boardStoreFor('CARRIER').nlaStatusFor(strip(efsp, launch.stripId)).also, [{ carrierHandoff: 'DEPARTURE_TO_MARSHAL', toState: 'STACK' }], 'TO MARSHAL beside DROP');
   const ack = handoff(efsp, c, 'CV_DEP', launch, 'DEPARTURE_TO_MARSHAL');
   assert.equal(ack.ok, true, JSON.stringify(ack));
   const rec = strip(efsp, launch.stripId);
@@ -73,7 +73,7 @@ test('Case I launch: no squawk, DROP or TO MARSHAL from the deck; a Case I recov
   const launch = launchOnDeck(efsp, c, '302');
   assert.equal(code(efsp, launch), null, 'Case I: no radar service, no squawk');
   const nla = efsp.boardStoreFor('CARRIER').nlaStatusFor(strip(efsp, launch.stripId));
-  assert.deepEqual([nla.toState, nla.alsoHandoff], ['DROPPED', 'LAUNCH_TO_MARSHAL']);
+  assert.deepEqual([nla.toState, nla.also], ['DROPPED', [{ carrierHandoff: 'LAUNCH_TO_MARSHAL', toState: 'STACK' }]]);
   assert.equal(handoff(efsp, c, 'CV_PRIFLY', launch, 'LAUNCH_TO_MARSHAL').ok, true);
   assert.deepEqual(stack(efsp, 'CASE_I').map(e => e.flightDataId), [launch.flightDataId]);
   assert.equal(efsp.carrierStore.caseOf(launch.flightDataId), 'I');
@@ -82,7 +82,7 @@ test('Case I launch: no squawk, DROP or TO MARSHAL from the deck; a Case I recov
   refused(handoff(efsp, c, 'CV_PRIFLY', launchOnDeck(efsp, c, '304'), 'LAUNCH_TO_DEPARTURE'), 'VALIDATION_ERROR', /Case I/);
 });
 
-test('Case III recovery: COMMENCE, TO APPR (lanes alternate), DIRTY UP, FLY BULLS, TO PATTERN, DROP', async () => {
+test('Case III recovery: COMMENCE, TO APPR (lanes alternate), DIRTY UP, FLY BULLS, BOLTER, TRAPPED to PriFly on deck, DROP', async () => {
   const { efsp, c } = fresh();
   const a = recoveryCheckIn(efsp, c, '301', { lowStateLb: 6200 });
   const b = recoveryCheckIn(efsp, c, '302');
@@ -96,10 +96,14 @@ test('Case III recovery: COMMENCE, TO APPR (lanes alternate), DIRTY UP, FLY BULL
   assert.equal((await press(efsp, c, 'CV_MARSHAL', b)).ownerPositionId, 'CV_APP2', 'the next one to the other lane');
   assert.equal((await press(efsp, c, 'CV_APP1', a)).state, 'DIRTY');
   assert.equal((await press(efsp, c, 'CV_APP1', a)).state, 'BULLSEYE');
-  const pattern = await press(efsp, c, 'CV_APP1', a);
-  assert.deepEqual([pattern.state, pattern.bayId], ['CV_PATTERN', 'cv-app1-pattern']);
-  assert.equal((await press(efsp, c, 'CV_APP1', a)).state, 'DROPPED');
+  assert.equal(handoff(efsp, c, 'CV_APP1', a, 'BOLTER').ok, true);
+  const pattern = strip(efsp, a.stripId);
+  assert.deepEqual([pattern.state, pattern.bayId, pattern.ownerPositionId], ['CV_PATTERN', 'cv-app1-pattern', 'CV_APP1']);
+  const deck = await press(efsp, c, 'CV_APP1', a); // TRAPPED
+  assert.deepEqual([deck.stripType, deck.state, deck.ownerPositionId, deck.bayId], ['CV_LAUNCH', 'ON_DECK', 'CV_PRIFLY', 'cv-prifly-launch']);
   assert.deepEqual(stack(efsp).map(e => e.flightDataId), [b.flightDataId], 'it left the stack with a vacancy');
+  mustAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', strip(efsp, a.stripId), { kind: 'DropStrip' });
+  assert.equal(strip(efsp, a.stripId).state, 'DROPPED');
 });
 
 test('the Marshal may send another lane: TO APPR names it', async () => {
@@ -110,16 +114,18 @@ test('the Marshal may send another lane: TO APPR names it', async () => {
   assert.equal(strip(efsp, a.stripId).ownerPositionId, 'CV_APP2');
 });
 
-test('Case I recovery: TO PATTERN hands it to PriFly, who drops it; it stays in the overhead stack until then', async () => {
+test('Case I recovery: SGNL C clears it to land with PriFly, whose TRAPPED puts it on deck; it stays in the overhead stack until then', async () => {
   const { efsp, c } = fresh();
   setCase(efsp, c, 'I');
   const a = recoveryCheckIn(efsp, c, '301');
   assert.equal(code(efsp, a), null);
   const p = await press(efsp, c, 'CV_MARSHAL', a);
-  assert.deepEqual([p.state, p.ownerPositionId, p.bayId, p.carrierHandoff.kind], ['CV_PATTERN', 'CV_PRIFLY', 'cv-prifly-pattern', 'CASE_I_TO_PRIFLY']);
+  assert.deepEqual([p.state, p.ownerPositionId, p.bayId, p.carrierHandoff.kind], ['SIGNAL_CHARLIE', 'CV_PRIFLY', 'cv-prifly-charlie', 'CASE_I_TO_PRIFLY']);
   assert.equal(stack(efsp, 'CASE_I').length, 1);
-  assert.equal((await press(efsp, c, 'CV_PRIFLY', a)).state, 'DROPPED');
+  const deck = await press(efsp, c, 'CV_PRIFLY', a); // TRAPPED
+  assert.deepEqual([deck.stripType, deck.state, deck.ownerPositionId, deck.bayId], ['CV_LAUNCH', 'ON_DECK', 'CV_PRIFLY', 'cv-prifly-launch']);
   assert.equal(stack(efsp, 'CASE_I').length, 0);
+  assert.equal((await press(efsp, c, 'CV_PRIFLY', a)).state, 'DROPPED', 'Case I on deck: DROP is the NLA');
 });
 
 test('a flight keeps its Case: a ship Case change moves nobody; Abort sends a Case I flight to the Case II/III stack, only while the ship is in II or III', async () => {
@@ -132,7 +138,7 @@ test('a flight keeps its Case: a ship Case change moves nobody; Abort sends a Ca
   const lateIII = recoveryCheckIn(efsp, c, '303');
   assert.deepEqual([efsp.carrierStore.caseOf(a.flightDataId), efsp.carrierStore.caseOf(lateIII.flightDataId)], ['I', 'III']);
   assert.equal(efsp.boardStoreFor('CARRIER').nlaStatusFor(strip(efsp, a.stripId)).carrierHandoff, 'CASE_I_TO_PRIFLY', 'still Case I');
-  await press(efsp, c, 'CV_MARSHAL', b); // in PriFly's pattern
+  await press(efsp, c, 'CV_MARSHAL', b); // SGNL C: PriFly's, cleared to land
   for (const s of [a, b]) assert.equal(handoff(efsp, c, 'CV_MARSHAL', s, 'ABORT_TO_STACK').ok, true, s.stripId);
   assert.deepEqual(stack(efsp).map(e => e.flightDataId), [lateIII.flightDataId, a.flightDataId, b.flightDataId]);
   assert.equal(stack(efsp, 'CASE_I').length, 0);

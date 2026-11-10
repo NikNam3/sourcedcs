@@ -45,12 +45,13 @@
 // by ws-hub.js's setOnEfspChange hook, so the two still move together.
 
 const { WALL_CLOCK } = require('../mission-clock');
+const { alsoKey } = require('./board/nla-also');
 
 /** Stable identity for a status, for change detection only — never sent anywhere. */
 function statusKey(status) {
   if (!status) return 'none';
-  if (status.inhibited) return `no:${status.reason}:${status.inhibited}`;
-  return `go:${status.toState}:${status.transferTo || ''}:${status.carrierHandoff || ''}`;
+  if (status.inhibited) return `no:${status.reason}:${status.inhibited}:${alsoKey(status.also)}`;
+  return `go:${status.toState}:${status.transferTo || ''}:${status.carrierHandoff || ''}:${alsoKey(status.also)}`;
 }
 
 class NlaStatusMonitor {

@@ -10,7 +10,8 @@
 // (board/ops/carrier-handoff.js) holds no carrier doctrine; it reads this.
 //
 // Every one is a controller gesture (guide §10.3, D5): nothing here reads a radar contact. No row carries a frequency
-// (docs/adr/0117). [SOURCE-DEFINED]: the human's rulings of 2026-11-08 (ADR 0156).
+// (docs/adr/0117). [SOURCE-DEFINED]: the human's rulings of 2026-11-08 (ADR 0156) and 2026-11-10 (ADR 0157: TRAPPED and
+// BOLTER, Case I's SIGNAL_CHARLIE).
 
 const TRIGGER_TYPES = Object.freeze(['CONTROLLER_INITIATED']);
 
@@ -28,9 +29,10 @@ const _row = (r) => Object.freeze({
 
 const CARRIER_HANDOFFS = Object.freeze({
   // PriFly launches: departure control works Case II and III (ADR 0155, 0156).
+  // assignsCode: a Case I jet that trapped and is launched again in Case II/III has no squawk yet (ADR 0157).
   LAUNCH_TO_DEPARTURE: _row({
     label: 'LAUNCHED', from: ['CV_PRIFLY'], to: ['CV_DEP'], cases: SEQUENCED, caseOf: 'SHIP',
-    stripType: 'CV_LAUNCH', states: ['ON_DECK'], toStripType: 'CV_LAUNCH', toState: 'CV_AIRBORNE',
+    stripType: 'CV_LAUNCH', states: ['ON_DECK'], toStripType: 'CV_LAUNCH', toState: 'CV_AIRBORNE', assignsCode: true,
   }),
   // A launch handed to the Marshal is the flight's recovery from then on, in place: same Strip, flight, squawk.
   LAUNCH_TO_MARSHAL: _row({
@@ -50,9 +52,32 @@ const CARRIER_HANDOFFS = Object.freeze({
     label: 'TO APPR', from: ['CV_MARSHAL'], to: APP_LANES, cases: SEQUENCED, caseOf: 'FLIGHT',
     stripType: 'CV_RECOVERY', states: ['COMMENCED'], toStripType: 'CV_RECOVERY', toState: 'FINAL_APPROACH',
   }),
+  // Case I has no pattern, only the overhead stack: Signal Charlie clears the flight to land, and PriFly has it (ADR 0157).
   CASE_I_TO_PRIFLY: _row({
     label: 'SGNL C', from: ['CV_MARSHAL'], to: ['CV_PRIFLY'], cases: ['I'], caseOf: 'FLIGHT',
-    stripType: 'CV_RECOVERY', states: ['STACK'], toStripType: 'CV_RECOVERY', toState: 'CV_PATTERN',
+    stripType: 'CV_RECOVERY', states: ['STACK'], toStripType: 'CV_RECOVERY', toState: 'SIGNAL_CHARLIE',
+  }),
+  // The end of an approach (ADR 0157). TRAPPED is the landing: the jet is on deck, PriFly's, and the Strip becomes a launch
+  // in place (same Strip, flight and squawk), the inverse of LAUNCH_TO_MARSHAL; the flight leaves its stack (a vacancy, no
+  // close-up, H28). BOLTER keeps it where it is: the lane's, in the pattern (Case II/III), or PriFly's, still cleared to
+  // land (Case I).
+  TRAPPED: _row({
+    label: 'TRAPPED', from: APP_LANES, to: ['CV_PRIFLY'], cases: SEQUENCED, caseOf: 'FLIGHT',
+    stripType: 'CV_RECOVERY', states: ['BULLSEYE', 'CV_PATTERN'], toStripType: 'CV_LAUNCH', toState: 'ON_DECK',
+    stackEffect: 'REMOVE_NO_CLOSE_UP', clearsAssignments: true,
+  }),
+  BOLTER: _row({
+    label: 'BOLTER', from: APP_LANES, to: 'SAME', cases: SEQUENCED, caseOf: 'FLIGHT',
+    stripType: 'CV_RECOVERY', states: ['BULLSEYE', 'CV_PATTERN'], toStripType: 'CV_RECOVERY', toState: 'CV_PATTERN',
+  }),
+  CASE_I_TRAPPED: _row({
+    label: 'TRAPPED', from: ['CV_PRIFLY'], to: 'SAME', cases: ['I'], caseOf: 'FLIGHT',
+    stripType: 'CV_RECOVERY', states: ['SIGNAL_CHARLIE'], toStripType: 'CV_LAUNCH', toState: 'ON_DECK',
+    stackEffect: 'REMOVE_NO_CLOSE_UP',
+  }),
+  CASE_I_BOLTER: _row({
+    label: 'BOLTER', from: ['CV_PRIFLY'], to: 'SAME', cases: ['I'], caseOf: 'FLIGHT',
+    stripType: 'CV_RECOVERY', states: ['SIGNAL_CHARLIE'], toStripType: 'CV_RECOVERY', toState: 'SIGNAL_CHARLIE',
   }),
   // Back to stack: the Marshal from COMMENCED on, the lane from its own approach. The flight starts afresh (next free slot,
   // new EAT, nothing the Marshal assigned by hand, no heading, speed or altitude). Not from BULLSEYE or the pattern.
@@ -61,11 +86,12 @@ const CARRIER_HANDOFFS = Object.freeze({
     stripType: 'CV_RECOVERY', states: ['COMMENCED', 'FINAL_APPROACH', 'DIRTY'], toStripType: 'CV_RECOVERY', toState: 'STACK',
     stackEffect: 'RETURN_TO_STACK', clearsAssignments: true,
   }),
-  // A Case I flight that cannot finish Case I (the weather went): the Marshal sends it to the Case II/III stack.
+  // A Case I flight that cannot finish Case I (the weather went): the Marshal sends it to the Case II/III stack, from the
+  // stack or once cleared to land (ADR 0157: SIGNAL_CHARLIE, PriFly's, which permission.js mayActBesideOwner lets him).
   ABORT_TO_STACK: _row({
     label: 'ABORT TO CASE II/III', from: ['CV_MARSHAL'], to: ['CV_MARSHAL'], cases: SEQUENCED, caseOf: 'SHIP',
     flightCases: ['I'],
-    stripType: 'CV_RECOVERY', states: ['STACK', 'CV_PATTERN'], toStripType: 'CV_RECOVERY', toState: 'STACK',
+    stripType: 'CV_RECOVERY', states: ['STACK', 'SIGNAL_CHARLIE'], toStripType: 'CV_RECOVERY', toState: 'STACK',
     stackEffect: 'RECASE_TO_STACK', clearsAssignments: true, assignsCode: true,
   }),
 });

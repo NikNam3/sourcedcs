@@ -123,11 +123,11 @@
         "impliesState": "ON_DECK"
       },
       {
-        "bayId": "cv-prifly-pattern",
+        "bayId": "cv-prifly-charlie",
         "rackIds": [
           "main"
         ],
-        "impliesState": "CV_PATTERN"
+        "impliesState": "SIGNAL_CHARLIE"
       },
       {
         "bayId": "cv-prifly-deck",
