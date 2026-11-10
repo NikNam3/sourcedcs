@@ -168,6 +168,8 @@
     .aprt-atis-status { font-size: 10px; color: var(--ui-text-dim); letter-spacing: 0.06em; }
     .aprt-atis-status.ok  { color: var(--ui-active); }
     .aprt-atis-status.err { color: #cc4444; }
+    /* An ATIS frequency wrong for its band (aprt-atis-freqs.js); grey otherwise. Inline border, hence !important. */
+    .aprt-atis-freq-bad { border-color: #cc4444 !important; }
     #aprt-panel input[type="number"] {
       background: var(--ui-bg-input);
       border: 1px solid var(--ui-border-2);

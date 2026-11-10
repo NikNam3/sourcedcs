@@ -277,6 +277,13 @@
    "resolveApproachCourse",
    "showAptWeatherPanel"
   ],
+  "panels/aprt-atis-freqs.js": [
+   "atisFreqProblem",
+   "atisFrequenciesHz",
+   "atisInUseElsewhere",
+   "atisInUseText",
+   "atisMhzText"
+  ],
   "panels/aprt-panel.js": [
    "_setAprtRunwayForTest",
    "_updateAprtRefCard",

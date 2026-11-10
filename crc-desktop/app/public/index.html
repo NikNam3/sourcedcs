@@ -385,8 +385,14 @@
       <div style="font-size:9px;letter-spacing:0.1em;color:var(--ui-text-dim);text-transform:uppercase;margin-bottom:6px">ATIS</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-bottom:6px">
         <div>
-          <div style="font-size:9px;color:var(--ui-text-dim);letter-spacing:0.08em;margin-bottom:3px">FREQ (MHz)</div>
-          <input type="text" id="aprt-atis-freq" placeholder="121.500" maxlength="10"
+          <div style="font-size:9px;color:var(--ui-text-dim);letter-spacing:0.08em;margin-bottom:3px">UHF (MHz)</div>
+          <input type="text" id="aprt-atis-freq" placeholder="251.000" maxlength="10"
+                 style="width:100%;background:var(--ui-bg-input);border:1px solid var(--ui-border-2);color:var(--ui-text-input);font-family:inherit;font-size:11px;padding:3px 5px;outline:none" autocomplete="off" />
+        </div>
+        <!-- Optional: the ATIS transmits on both (crc-sync docs/adr/0158 §5). -->
+        <div>
+          <div style="font-size:9px;color:var(--ui-text-dim);letter-spacing:0.08em;margin-bottom:3px">VHF (MHz)</div>
+          <input type="text" id="aprt-atis-vhf-freq" placeholder="optional" maxlength="10"
                  style="width:100%;background:var(--ui-bg-input);border:1px solid var(--ui-border-2);color:var(--ui-text-input);font-family:inherit;font-size:11px;padding:3px 5px;outline:none" autocomplete="off" />
         </div>
         <div>

@@ -6,6 +6,7 @@ import { escapeHtml } from '../html-escape.js';
 import { currentTheaterFacts, magneticVariationAt, requestTrueFromMagnetic } from '../magnetic.js';
 import { getUserCoalition } from '../iff.js';
 import { facilityRunwayTrueDeg } from './aprt-runway.js';
+import { atisFreqProblem, atisFrequenciesHz, atisInUseElsewhere, atisInUseText } from './aprt-atis-freqs.js';
 import { getAllEfspRunwayStatuses } from './efsp/runway-status-state.js';
 
 import { atisActive, missionData } from '../picture.js';
@@ -64,6 +65,24 @@ const _atisOwnerId = crypto.randomUUID();
 // is then just a no-op, which is fine since there's no ATIS status row
 // visible to update yet either.
 let _atisLiveRefresh = null;
+
+// Dark cockpit: an ATIS frequency input stays grey unless its value is wrong for its band (aprt-atis-freqs.js).
+function _markAtisFreqProblem($el, band) {
+  if (!$el) return;
+  const problem = atisFreqProblem($el.value, band);
+  $el.classList.toggle('aprt-atis-freq-bad', problem != null);
+  $el.title = problem || '';
+}
+
+// Best-effort release of this client's ATIS on `frequencies` (crc-sync cancels each in-flight call).
+function _postAtisStop(frequencies) {
+  if (!frequencies.length) return;
+  fetch('/api/atis-transmit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._syncAuthHeaders() },
+    body: JSON.stringify({ stop: true, frequencies, ownerId: _atisOwnerId }),
+  }).catch(() => {});
+}
 
 export function _updateAprtRefCard() {
   const $card = document.getElementById('aprt-ref-card');
@@ -138,6 +157,8 @@ export function _updateAprtRefCard() {
   const rwyRaw  = ((document.getElementById('aprt-atis-rwy')  || {}).value || '').toUpperCase().trim();
   const info    = ((document.getElementById('aprt-atis-info') || {}).value || '').toUpperCase().charAt(0);
   const freq    = (document.getElementById('aprt-atis-freq')  || {}).value || '';
+  const vhfFreq = ((document.getElementById('aprt-atis-vhf-freq') || {}).value || '').trim();
+  const freqs   = [freq, vhfFreq].filter(Boolean).join(' / ');
   const taFt    = settings.transitionAltFt;
 
   const $rwy  = document.getElementById('aprt-ref-rwy');
@@ -147,7 +168,7 @@ export function _updateAprtRefCard() {
 
   if ($rwy)  { $rwy.textContent  = rwyRaw || '—';  $rwy.className  = rwyRaw  ? 'aprt-ref-v' : 'aprt-ref-v dim'; }
   if ($info) { $info.textContent = info || '—'; $info.className = info ? 'aprt-ref-v' : 'aprt-ref-v dim'; }
-  if ($freq) { $freq.textContent = freq   ? `${freq} MHz` : '—'; $freq.className = freq ? 'aprt-ref-v' : 'aprt-ref-v dim'; }
+  if ($freq) { $freq.textContent = freqs ? `${freqs} MHz` : '—'; $freq.className = freqs ? 'aprt-ref-v' : 'aprt-ref-v dim'; }
   if ($ta)   { $ta.textContent   = taFt ? `${taFt.toLocaleString()} ft` : '—'; $ta.className = 'aprt-ref-v'; }
 
   if (_atisLiveRefresh) _atisLiveRefresh();
@@ -219,6 +240,7 @@ export function initAprtPanel() {
   const $freqEl = document.getElementById('aprt-atis-freq');
   if ($freqEl) {
     $freqEl.addEventListener('input', () => {
+      _markAtisFreqProblem($freqEl, 'UHF');
       _updateAprtRefCard();
       if (_aprtSelectedApt) {
         const k = _aprtSelectedApt.icao || _aprtSelectedApt.name;
@@ -231,6 +253,23 @@ export function initAprtPanel() {
       if (!_aprtSelectedApt) return;
       const k = _aprtSelectedApt.icao || _aprtSelectedApt.name;
       sendToSync({ type: 'aptConfigSet', key: k, freq: $freqEl.value });
+    });
+  }
+  // The optional VHF one (crc-sync docs/adr/0158 §5): crc-sync refuses a value outside the VHF band, so only an empty
+  // or in-band value is sent; a wrong one stays red here until it is corrected.
+  const $vhfEl = document.getElementById('aprt-atis-vhf-freq');
+  if ($vhfEl) {
+    $vhfEl.addEventListener('input', () => {
+      _markAtisFreqProblem($vhfEl, 'VHF');
+      _updateAprtRefCard();
+    });
+    $vhfEl.addEventListener('change', () => {
+      if (!_aprtSelectedApt || atisFreqProblem($vhfEl.value, 'VHF')) return;
+      const k = _aprtSelectedApt.icao || _aprtSelectedApt.name;
+      if (!settings.aprtAtisVhfFreq) settings.aprtAtisVhfFreq = {};
+      settings.aprtAtisVhfFreq[k] = $vhfEl.value.trim();
+      saveSettings();
+      sendToSync({ type: 'aptConfigSet', key: k, vhfFreq: $vhfEl.value.trim() });
     });
   }
   const $infoField = document.getElementById('aprt-atis-info');
@@ -287,7 +326,11 @@ export function initAprtPanel() {
   // frequency shouldn't care whether anyone has the panel open) keeps
   // running regardless of the panel's open/closed state.
   const $freq   = document.getElementById('aprt-atis-freq');
+  const $vhf    = document.getElementById('aprt-atis-vhf-freq');
   const $text   = document.getElementById('aprt-atis-text');
+  const _atisFreqsHz = () => atisFrequenciesHz(($freq || {}).value, ($vhf || {}).value);
+  // The frequencies the loop last started on: STOP releases these, even if an input was edited since.
+  let _atisLoopFreqs = [];
 
   // Live cross-client indicator: `atisActive` (app.js) is the "who's
   // transmitting on which frequency" list crc-sync broadcasts on every
@@ -299,14 +342,12 @@ export function initAprtPanel() {
   // actual enforcement; this is a status hint, not a lock.
   function _refreshAtisLiveStatus() {
     if (_atisLooping || !$status) return; // our own loop's status already reflects reality
-    const freqMhz = parseFloat(($freq || {}).value);
-    const freqHz  = freqMhz ? Math.round(freqMhz * 1e6) : null;
-    const inUseElsewhere = freqHz != null &&
-      atisActive.some(a => a.frequency === freqHz && a.ownerId !== _atisOwnerId);
-    if (inUseElsewhere) {
-      $status.textContent = 'IN USE (another client)';
+    // Either frequency (UHF or VHF) held by another controller's ATIS.
+    const inUseHz = atisInUseElsewhere(atisActive, _atisFreqsHz(), _atisOwnerId);
+    if (inUseHz != null) {
+      $status.textContent = atisInUseText(inUseHz);
       $status.className   = 'aprt-atis-status err';
-    } else if ($status.textContent === 'IN USE (another client)') {
+    } else if ($status.textContent.startsWith('IN USE')) {
       $status.textContent = 'STOPPED';
       $status.className   = 'aprt-atis-status';
     }
@@ -323,14 +364,10 @@ export function initAprtPanel() {
     // Best-effort: tell crc-sync to cancel/release this frequency so a
     // still-in-flight transmit doesn't keep playing and the frequency frees
     // up for another client immediately, instead of waiting out the TTL.
-    const freqMhz = parseFloat(($freq || {}).value);
-    if (freqMhz) {
-      fetch('/api/atis-transmit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ..._syncAuthHeaders() },
-        body: JSON.stringify({ stop: true, frequency: Math.round(freqMhz * 1e6), ownerId: _atisOwnerId }),
-      }).catch(() => {});
-    }
+    // Both frequencies: crc-sync cancels each in-flight call.
+    const frequencies = _atisLoopFreqs.length ? _atisLoopFreqs : _atisFreqsHz();
+    _atisLoopFreqs = [];
+    _postAtisStop(frequencies);
   }
 
   function _doAtisTransmit() {
@@ -339,6 +376,11 @@ export function initAprtPanel() {
     const freqMhz = parseFloat(($freq || {}).value);
     const text    = (($text || {}).value || '').trim();
     if (!freqMhz || !text) { _stopAtisLoop(); return; }
+    // The UHF and, when set, the VHF frequency; crc-sync transmits on both at once and answers when both have played.
+    const frequencies = _atisFreqsHz();
+    // An edit mid-loop: the frequency no longer used is released (stop only touches this owner's own entries).
+    _postAtisStop(_atisLoopFreqs.filter(f => !frequencies.includes(f)));
+    _atisLoopFreqs = frequencies;
 
     const pos  = _aprtSelectedApt
       ? { lat: _aprtSelectedApt.lat, lon: _aprtSelectedApt.lon, alt: _aprtSelectedApt.elev || 0 }
@@ -351,7 +393,7 @@ export function initAprtPanel() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ..._syncAuthHeaders() },
       body: JSON.stringify({
-        ssml: text, frequency: Math.round(freqMhz * 1e6), coalition: coal, position: pos,
+        ssml: text, frequencies, coalition: coal, position: pos,
         ownerId: _atisOwnerId,
       }),
     })
@@ -359,10 +401,12 @@ export function initAprtPanel() {
       .then(({ status, d }) => {
         if (!_atisLooping) return;
         if (status === 409) {
+          // Refused whole: crc-sync started neither frequency and says which one another client holds.
           _atisLooping = false;
+          _atisLoopFreqs = [];
           clearTimeout(_atisPauseTimer);
           if ($tx) { $tx.textContent = 'TRANSMIT'; $tx.classList.remove('aprt-btn-active'); $tx.disabled = false; }
-          if ($status) { $status.textContent = 'IN USE (another client)'; $status.className = 'aprt-atis-status err'; }
+          if ($status) { $status.textContent = d.frequency ? atisInUseText(d.frequency) : 'IN USE (another client)'; $status.className = 'aprt-atis-status err'; }
           return;
         }
         if (!d.ok) { _stopAtisLoop(); if ($status) { $status.textContent = d.error || 'Error'; $status.className = 'aprt-atis-status err'; } return; }
@@ -435,6 +479,10 @@ function _renderAprtAptList(filter) {
       const key = a.icao || a.name;
       const $f = document.getElementById('aprt-atis-freq');
       if ($f) $f.value = (settings.aprtAtisFreq || {})[key] || '';
+      const $vf = document.getElementById('aprt-atis-vhf-freq');
+      if ($vf) $vf.value = (settings.aprtAtisVhfFreq || {})[key] || '';
+      _markAtisFreqProblem($f, 'UHF');
+      _markAtisFreqProblem($vf, 'VHF');
       const $rwy = document.getElementById('aprt-atis-rwy');
       if ($rwy) $rwy.value = (settings.aprtAtisRwy || {})[key] || '';
       const $info = document.getElementById('aprt-atis-info');
@@ -624,6 +672,10 @@ export function refreshAprtSelectedApt() {
   const $rwy  = document.getElementById('aprt-atis-rwy');
   const $info = document.getElementById('aprt-atis-info');
   if ($f    && active !== $f)    $f.value    = (settings.aprtAtisFreq || {})[key] || '';
+  const $vf = document.getElementById('aprt-atis-vhf-freq');
+  if ($vf   && active !== $vf)   $vf.value   = (settings.aprtAtisVhfFreq || {})[key] || '';
+  _markAtisFreqProblem($f, 'UHF');
+  _markAtisFreqProblem($vf, 'VHF');
   if ($rwy  && active !== $rwy)  $rwy.value  = (settings.aprtAtisRwy  || {})[key] || '';
   if ($info && active !== $info) $info.value = (settings.aprtAtisInfo || {})[key] || '';
 
