@@ -49,7 +49,7 @@ in the asar (`app/**/*`; `tests/packaging-config.test.js` checks it), while `app
   calls `markEfspChanged(topic, ...)`; a view subscribes once at load with `onEfspChanged(topics, fn, {order})` (order RESOLVE,
   PANEL, BAYS, VIEW). `dispatchEfspMessage` batches, so the flush is once per frame. An unknown topic throws.
 - **No `window` globals.** Production code puts nothing on `window` and reads nothing custom from it
-  (`tests/no-window-globals.test.mjs` allows browser APIs and the preload's `crcLinks` and `crcUpdate`). The one exception is
+  (`tests/no-window-globals.test.mjs` allows browser APIs and the preload's `crcLaunch`, `crcLinks`, `crcUpdate` and `crcGlobalPtt`). The one exception is
   the test-only `window.crc.<module>` that `e2e/helpers/modules.js` builds with dynamic imports; **a spec that calls a moved
   function must be updated to the module that now holds it** (e.g. `crc.dispatch._invokeNla`).
 - No `innerHTML` with an unescaped dynamic part: `html-escape.js`'s `escapeHtml`, enforced by `tests/html-sinks.test.mjs`.
