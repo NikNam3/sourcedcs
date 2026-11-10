@@ -198,6 +198,7 @@ export const ARRIVAL_BLOCK_MAP = {
   '9E':       { required: true,  label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } },
   '9J-ENTRY':  { required: false, label: 'P/S',      target: { kind: 'flightData', path: 'assigned.patternEntry' } },   // crc-sync docs/adr/0126
   '9J-OPTION': { required: false, label: 'OPT',      target: { kind: 'flightData', path: 'assigned.patternOption' } },
+  '10':       { required: true,  label: 'ATIS',     target: { kind: 'flightData', path: 'assigned.atisCode' } }, // lane U-STRIP-ATIS: see crc-sync's ARRIVAL_BLOCK_MAP '10'
   '20':       { required: false, label: 'SCRATCH1',  target: { kind: 'annotation' } },
   '21':       { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24':       { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },

@@ -83,7 +83,7 @@ test('resolveBlockTarget returns null for a Block ID MISSION does not define (it
 // ── ARRIVAL_BLOCK_MAP (Phase 2, docs/adr/0008 — [SOURCE-DEFINED]) ────────
 
 const REQUIRED_ARRIVAL_BLOCKS = [
-  '1', '2', '3', '4', '4B', '5', '6', '7', '8', '8B', '9', '9A-FUEL', '9E', '24', '25', '26',
+  '1', '2', '3', '4', '4B', '5', '6', '7', '8', '8B', '9', '9A-FUEL', '9E', '10', '24', '25', '26',
 ];
 
 test('requiredBlocksFor(ARRIVAL) matches ARRIVAL_BLOCK_MAP\'s required set', () => {
