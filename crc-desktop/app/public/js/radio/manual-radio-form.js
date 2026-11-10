@@ -4,13 +4,14 @@
 // frequency check is the FREQUENCIES panel's (frequency-state.js parseFrequencyInput: 30 to 400 MHz, on a channel).
 
 import { el } from './radio-dom.js';
-import { parseFrequencyInput } from '../panels/efsp/frequency-state.js';
+import { frequencyText, parseFrequencyInput } from '../panels/efsp/frequency-state.js';
+import { buildFrequencyPickSelect } from './frequency-picks.js';
 
 /** `{ mhz }` or `{ error }` for what the controller typed. */
 export function parseManualFrequency(text) { return parseFrequencyInput(text, null); }
 
 /**
- * @param {object} ctx  open, error, onOpen(on), onAdd({ label, text })
+ * @param {object} ctx  open, error, onOpen(on), onAdd({ label, text }), picks (frequency-picks.js: fill the form; may be absent)
  */
 export function buildManualRadioForm(ctx) {
   const wrap = el('span', 'radio-manual-form');
@@ -34,6 +35,13 @@ export function buildManualRadioForm(ctx) {
     });
   }
   queueMicrotask(() => freq.focus());
+  if (ctx.picks && ctx.picks.length) {
+    wrap.appendChild(buildFrequencyPickSelect(ctx.picks, (pick) => {
+      label.value = pick.label;
+      freq.value = frequencyText(pick.mhz);
+      freq.focus();
+    }));
+  }
   wrap.append(label, freq, add, cancel);
   if (ctx.error) wrap.appendChild(el('span', 'radio-note radio-conflict', ctx.error));
   return wrap;

@@ -2,7 +2,7 @@
  *
  * The client is native ES modules: a module imports what it uses. A custom `window.<name>` is a channel the module-graph
  * test cannot see (`window.getLatestTrack` was one, read by five modules; it is now `picture.js`'s `getLatestTrack`).
- * The only custom names that may be read are the two the Electron preload bridges in (`crcLaunch`, `crcLinks`, `crcUpdate`,
+ * The only custom names that may be read are the ones the Electron preload bridges in (`crcLaunch`, `crcLinks`, `crcUpdate`,
  * `crc-desktop/app/preload.js`); everything else must be a standard browser API. The test-only `window.crc`
  * (`e2e/helpers/modules.js`) is written by the specs, never by production code.
  */

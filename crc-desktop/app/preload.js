@@ -16,3 +16,8 @@ contextBridge.exposeInMainWorld('crcLinks', {
     // The update-required frame's download page (CRCSYNC_DOWNLOAD_URL); only its origin may open.
     allowDownloadUrl: (url) => ipcRenderer.send('external-link-allow-download', url),
 });
+
+contextBridge.exposeInMainWorld('crcLaunch', {
+    // Store the launch mode ('full' | 'radio') and relaunch in it (docs/adr/0161 §1, main.js).
+    switchTo: (mode) => ipcRenderer.send('launch-mode-switch', mode),
+});

@@ -21,6 +21,14 @@ export function panelSections(set) {
   return out;
 }
 
+/** The name in the SRS client list in radio-only mode (docs/adr/0161 §2). */
+export const RADIO_ONLY_SRS_NAME = 'CRC RADIO';
+
+/** Radio-only signs on at no Position, so the automatic group is left out while it is empty: not drawn, not in the link menu. */
+export function withoutEmptyAutoGroup(set) {
+  return { ...set, groups: set.groups.filter(g => !g.auto || g.radioIds.length) };
+}
+
 /** The link menu of a radio: every group, with the one it is in (or asked to be in) marked, then "unlink". */
 export function linkMenuOptions(set, radio, intendedGroupId = radio.groupId) {
   const opts = set.groups.map(g => ({ groupId: g.id, label: g.name, current: g.id === intendedGroupId }));

@@ -11,6 +11,7 @@ const config = require('./config.json');
 const { computePythonPkgDir, computeRuntimeCwd, ensureLxsrsVenv, lxsrsArgs } = require('./lxsrs-setup');
 const { createExternalLinkGate, isCasdoorLoginUrl, isLocalAppUrl, CASDOOR_POPUP_WEB_PREFERENCES } = require('./external-link');
 const { writePendingPatchNotes, readAndClearPendingPatchNotes, readLastPatchNotes } = require('./patch-notes');
+const { RADIO, launchModePath, resolveLaunchMode, writeLaunchMode, radioClientFor, windowFor, relaunchOptions } = require('./launch-mode');
 
 const IS_LINUX = process.platform === 'linux';
 const IS_WIN   = process.platform === 'win32';
@@ -70,7 +71,12 @@ app.on('ready', async () => {
     // patch-notes.js's readLastPatchNotes.
     const lastPatchNotesPath = path.join(app.getPath('userData'), 'last-patch-notes.json');
 
-    if (IS_LINUX && RADIO_CLIENT === 'lxsrs') {
+    // Full CRC or the radio alone (docs/adr/0161 §1); radio-only is always the built-in radio.
+    const launchMode  = resolveLaunchMode(launchModePath(app.getPath('userData')), process.argv);
+    const radioClient = radioClientFor(launchMode, RADIO_CLIENT);
+    const launchWin   = windowFor(launchMode);
+
+    if (IS_LINUX && radioClient === 'lxsrs') {
         // Not awaited: first-run venv setup (network pip install) can take
         // a while and must not block the window from appearing. SRS radio
         // simply becomes available a little later than the rest of the app.
@@ -89,16 +95,17 @@ app.on('ready', async () => {
     process.env.SRS_RADIO_API_PORT = String(config.srsApiPort);
     process.env.WS_PORT            = String(config.wsPort);
     // The built-in SRS client (app/srs/) reads the same srsHost/srsPort keys lxsrs is launched with.
-    process.env.CRC_RADIO_CLIENT   = RADIO_CLIENT;
+    process.env.CRC_RADIO_CLIENT   = radioClient;
+    process.env.CRC_RADIO_ONLY     = launchMode === RADIO ? '1' : '';
     process.env.CRC_SRS_HOST       = config.srsHost || '';
     process.env.CRC_SRS_PORT       = String(config.srsPort || '');
 
     const localServer = require('./app/server.js');
 
     win = new BrowserWindow({
-        width:  1400,
-        height: 900,
-        title:  `CRC v${app.getVersion()}`,
+        width:  launchWin.width,
+        height: launchWin.height,
+        title:  `${launchWin.titlePrefix} v${app.getVersion()}`,
         autoHideMenuBar: true,
         webPreferences: {
             contextIsolation: true,
@@ -114,7 +121,7 @@ app.on('ready', async () => {
     // trace. Gated on !app.isPackaged so this never fires in a released
     // build — a real user should never see a DevTools window pop up.
     if (!app.isPackaged) {
-        win.webContents.once('did-finish-load', () => win.webContents.openDevTools({ mode: 'right' }));
+        win.webContents.once('did-finish-load', () => win.webContents.openDevTools({ mode: launchMode === RADIO ? 'detach' : 'right' }));
     }
 
     // Allow the renderer to pop up a Casdoor login window (app/public/js/sync.js
@@ -154,7 +161,7 @@ app.on('ready', async () => {
         sendUpdateStatus(lastUpdateStatus);
     });
 
-    win.loadURL(`http://localhost:${config.wsPort}`);
+    win.loadURL(`http://localhost:${config.wsPort}${launchWin.page}`);
     win.on('closed', () => { win = null; });
 
     // ── "What's new" — shown once, on the first launch after an autoupdate
@@ -245,6 +252,13 @@ const externalLinks = createExternalLinkGate();
 ipcMain.on('external-link-allow', (_event, bookingUrl) => { externalLinks.allow(bookingUrl); });
 ipcMain.on('external-link-allow-download', (_event, downloadUrl) => { externalLinks.allowDownload(downloadUrl); });
 ipcMain.handle('get-app-version', () => app.getVersion());
+
+// The RADIO ONLY and FULL CRC buttons (docs/adr/0161 §1): store the mode and start again in it.
+ipcMain.on('launch-mode-switch', (_event, mode) => {
+    if (!writeLaunchMode(launchModePath(app.getPath('userData')), mode)) return;
+    app.relaunch(relaunchOptions(process.argv, process.env));
+    app.quit();
+});
 
 // Backs the "what's new" button in the topbar — returns { version, notes }
 // for the most recent update, or null if none has ever landed on this

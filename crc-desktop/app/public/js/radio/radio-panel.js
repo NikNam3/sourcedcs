@@ -22,11 +22,13 @@ import {
 } from './radio-prefs.js';
 import { bindRadioPrefsToSettings } from './radio-prefs-storage.js';
 import {
-  engineLine, linkMenuOptions, noRowNotes, outOfBandNote, panelSections, radioActivity, structureKey,
+  engineLine, linkMenuOptions, noRowNotes, outOfBandNote, panelSections, radioActivity, RADIO_ONLY_SRS_NAME, structureKey,
+  withoutEmptyAutoGroup,
 } from './radio-panel-model.js';
 import { buildRadioRow, paintRadioActivity } from './radio-row.js';
 import { buildGroupCreate, buildGroupHeader } from './link-group-editor.js';
 import { buildManualRadioForm, parseManualFrequency } from './manual-radio-form.js';
+import { frequencyPicks } from './frequency-picks.js';
 import { buildRadioSetup } from './radio-setup.js';
 import { createRadioPtt, setRadioPanelIsClient } from './radio-ptt.js';
 import { createEngineSync } from './radio-engine-sync.js';
@@ -46,6 +48,7 @@ let _lastKey = null;
 let engine = radioEngine;
 let _sync = null;
 let _relay = null;
+let _radioOnly = false; // docs/adr/0161 §2: the radio-only page, signed on at no Position
 // What the controller is in the middle of: one inline edit at a time, and the last refusal it got.
 const _ui = { editing: null, editError: null, renaming: null, renameError: null, groupError: null, manualOpen: false, manualError: null };
 
@@ -127,7 +130,7 @@ function onAddManual({ label, text }) {
   update(p => addManualRadio(p, { label, mhz: r.mhz }).prefs);
 }
 
-function buildBody(prefs, notes) {
+function buildBody(prefs, notes, picks) {
   const frag = document.createDocumentFragment();
   const down = relayDown(); // docs/adr/0160: crc-sync's relay is down for one of this session's networks
   if (down) frag.appendChild(el('div', 'radio-note radio-panel-note radio-problem', down));
@@ -144,7 +147,7 @@ function buildBody(prefs, notes) {
   const foot = el('div', 'radio-foot');
   foot.append(
     buildGroupCreate(onCreateGroup, _ui.groupError),
-    buildManualRadioForm({ open: _ui.manualOpen, error: _ui.manualError, onOpen: (on) => setUi({ manualOpen: on, manualError: null }), onAdd: onAddManual }),
+    buildManualRadioForm({ open: _ui.manualOpen, error: _ui.manualError, picks, onOpen: (on) => setUi({ manualOpen: on, manualError: null }), onAdd: onAddManual }),
   );
   if (!prefs.intercom) { // one intercom at most (H183)
     const ic = el('button', 'radio-small-btn', '+ INTERCOM', { type: 'button', title: 'An intercom (one at most), never linked' });
@@ -160,14 +163,17 @@ export function render() {
   const prefs = getRadioPrefs();
   const { staffed, rows } = readRadioInputs();
   _set = buildRadioSet({ staffed, rows, manual: prefs.manual, intercom: prefs.intercom, groups: prefs.groups, membership: prefs.membership });
+  if (_radioOnly) _set = withoutEmptyAutoGroup(_set);
   if (_sync) _sync.push(_set, prefs);
   if (_relay) _relay.push(_set);
   if (engine.setIdentity) engine.setIdentity({ name: srsNameFor(staffed) });
   _target = resolvePttTarget(_set, prefs.pttTarget);
   if (!_bodyEl) return;
   const notes = [...noRowNotes(positionsWithoutRow(staffed, rows)), outOfBandNote(rowsWithoutRadio(staffed, rows))].filter(Boolean);
-  const key = structureKey(_set, { pttTarget: _target, editing: [_ui, notes, prefs.intercom, srsClientsOf(_engineState), relayingIds(), relayDown()] });
-  if (key !== _lastKey) { _lastKey = key; buildBody(prefs, notes); }
+  // The frequency table's picks are for a session with no Positions of its own (docs/adr/0161 §2), while + RADIO is open.
+  const picks = _radioOnly && _ui.manualOpen ? frequencyPicks(rows, _set.radios) : [];
+  const key = structureKey(_set, { pttTarget: _target, editing: [_ui, notes, prefs.intercom, srsClientsOf(_engineState), relayingIds(), relayDown(), picks] });
+  if (key !== _lastKey) { _lastKey = key; buildBody(prefs, notes, picks); }
   paint();
 }
 
@@ -204,6 +210,7 @@ function buildHeader(ptt) {
 /** The dock's init (dock.js mountExistingPanel), once. */
 // The name in the SRS client list: the Positions this session works, e.g. "CRC LC+GC" (S-RADIO-1 RQ3).
 function srsNameFor(staffed) {
+  if (_radioOnly) return RADIO_ONLY_SRS_NAME;
   const ids = staffed.filter(s => !s.observer).map(s => s.positionId);
   return ids.length ? `CRC ${ids.join('+')}`.slice(0, 32) : 'CRC';
 }
@@ -211,10 +218,12 @@ function srsNameFor(staffed) {
 // The radio client this crc-desktop runs (S-RADIO-1 RQ11): /js/config.js's RADIO_CLIENT, set by main.js.
 const radioClientIsNode = () => (typeof RADIO_CLIENT !== 'undefined' && RADIO_CLIENT === 'node');
 
-export function initRadioPanel({ engine: injected } = {}) {
+export function initRadioPanel({ engine: injected, radioOnly = false } = {}) {
   _root = document.getElementById('radio-panel');
   if (!_root) return null;
   if (injected) engine = injected;
+  _radioOnly = radioOnly;
+  if (_radioOnly && engine.setIdentity) engine.setIdentity({ name: RADIO_ONLY_SRS_NAME }); // before the socket opens: no reconnect
   _sync = createEngineSync(engine);
   _relay = createRelaySync({ onStatusChanged: () => render() });
   setRadioPanelIsClient(radioClientIsNode());

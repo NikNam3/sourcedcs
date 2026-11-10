@@ -84,7 +84,8 @@ const httpServer = http.createServer((req, res) => {
       'var CRCSYNC_URL      = ' + JSON.stringify(syncConfig.crcSyncUrl)      + ';\n' +
       'var CASDOOR_CLIENT_ID = ' + JSON.stringify(syncConfig.casdoorClientId) + ';\n' +
       'var CASDOOR_ENDPOINT  = ' + JSON.stringify(syncConfig.casdoorEndpoint) + ';\n' +
-      'var RADIO_CLIENT      = ' + JSON.stringify(RADIO_CLIENT) + ';\n'
+      'var RADIO_CLIENT      = ' + JSON.stringify(RADIO_CLIENT) + ';\n' +
+      'var RADIO_ONLY        = ' + JSON.stringify(process.env.CRC_RADIO_ONLY === '1') + ';\n'
     );
   }
 
