@@ -47,6 +47,11 @@ export function outOfBandNote(rows = []) {
   return `no radio: ${what} (outside VHF and UHF)`;
 }
 
+/** One grey line per staffed Position with no frequency row (S-RADIO-2 RQ15): `AP: no frequency (FREQUENCIES panel)`. */
+export function noRowNotes(positions = []) {
+  return positions.map(p => `${p.positionId}: no frequency (FREQUENCIES panel)`);
+}
+
 /** The engine line: empty while all is well (dark cockpit), else what is wrong. `{ text, problem }`. */
 export function engineLine(engineState) {
   const s = engineState || {};
@@ -60,11 +65,11 @@ export function engineLine(engineState) {
  * The signature of what the rows show apart from the lit state and the sliders: when it is unchanged, the panel only
  * repaints RX/TX in place, so a slider being dragged is not rebuilt under the pointer.
  */
-export function structureKey(set, { pttTargetId, editing } = {}) {
+export function structureKey(set, { pttTarget, editing } = {}) {
   return JSON.stringify([
-    set.radios.map(r => [r.id, r.mhz, r.band, r.label, r.groupId, r.conflict]),
+    set.radios.map(r => [r.id, r.mhz, r.modulation, r.band, r.label, r.groupId, r.conflict, r.receiveOnly]),
     set.groups.map(g => [g.id, g.name]),
-    pttTargetId || null,
+    pttTarget || null,
     editing || null,
   ]);
 }

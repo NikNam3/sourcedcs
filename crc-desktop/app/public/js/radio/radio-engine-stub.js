@@ -10,6 +10,8 @@ let _txIds = [];
 let _rxIds = [];
 const _audio = new Map();
 let _devices = { inputId: null, outputId: null };
+let _options = null;
+let _micTests = 0;
 const _listeners = new Set();
 
 function state() {
@@ -31,7 +33,7 @@ export function setPtt(down, radioId) {
   let next = [];
   if (down) {
     const r = _radios.find(x => x.id === radioId);
-    if (r) next = r.groupId ? _radios.filter(x => x.groupId === r.groupId).map(x => x.id) : [r.id];
+    if (r && !r.receiveOnly) next = r.groupId ? _radios.filter(x => x.groupId === r.groupId && !x.receiveOnly).map(x => x.id) : [r.id];
   }
   if (next.join('|') === _txIds.join('|')) return; // the PTT controller repeats a held key; only a change is news
   _txIds = next;
@@ -42,9 +44,15 @@ export function setRadioAudio(radioId, { volume, pan, muted }) { _audio.set(radi
 
 export function setDevices({ inputId, outputId }) { _devices = { inputId: inputId || null, outputId: outputId || null }; }
 
+/** S-RADIO-2 RQ18: `{ inputGain, outputGain, soundSet, noise }`. A no-op here. */
+export function setAudioOptions(options) { _options = { ...options }; }
+
+/** S-RADIO-2 RQ18: record a moment and play it back. A no-op here. */
+export function testMic() { _micTests++; }
+
 /** `fn(state)` now and on every change. Returns the unsubscribe. */
 export function onState(fn) { _listeners.add(fn); fn(state()); return () => _listeners.delete(fn); }
 
 /** Tests and hand checks only: what the stub was told, and a received transmission on some radios. */
-export function _stubInspect() { return { radios: _radios, txRadioIds: [..._txIds], audio: Object.fromEntries(_audio), devices: { ..._devices } }; }
+export function _stubInspect() { return { radios: _radios, txRadioIds: [..._txIds], audio: Object.fromEntries(_audio), devices: { ..._devices }, options: _options, micTests: _micTests }; }
 export function _stubReceive(radioIds) { _rxIds = [...radioIds]; emit(); }
