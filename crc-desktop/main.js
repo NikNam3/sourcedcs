@@ -14,6 +14,12 @@ const { writePendingPatchNotes, readAndClearPendingPatchNotes, readLastPatchNote
 
 const IS_LINUX = process.platform === 'linux';
 const IS_WIN   = process.platform === 'win32';
+// Which SRS client runs (ADR 0158 step 2, S-RADIO-1 RQ11): config.json `radioClient`, "lxsrs" (the Python bridge) or
+// "node" (the built-in client, app/srs/). Only one may run, or the controller is two SRS clients and hears every call
+// twice. Unset: lxsrs on Linux, where it has always run, node elsewhere (Windows never had a radio).
+const RADIO_CLIENT = config.radioClient === 'node' || config.radioClient === 'lxsrs'
+    ? config.radioClient
+    : (IS_LINUX ? 'lxsrs' : 'node');
 
 let nodeProc = null;
 let pyProc   = null;
@@ -64,7 +70,7 @@ app.on('ready', async () => {
     // patch-notes.js's readLastPatchNotes.
     const lastPatchNotesPath = path.join(app.getPath('userData'), 'last-patch-notes.json');
 
-    if (IS_LINUX) {
+    if (IS_LINUX && RADIO_CLIENT === 'lxsrs') {
         // Not awaited: first-run venv setup (network pip install) can take
         // a while and must not block the window from appearing. SRS radio
         // simply becomes available a little later than the rest of the app.
@@ -82,6 +88,10 @@ app.on('ready', async () => {
     process.env.CASDOOR_ENDPOINT   = config.casdoorEndpoint || '';
     process.env.SRS_RADIO_API_PORT = String(config.srsApiPort);
     process.env.WS_PORT            = String(config.wsPort);
+    // The built-in SRS client (app/srs/) reads the same srsHost/srsPort keys lxsrs is launched with.
+    process.env.CRC_RADIO_CLIENT   = RADIO_CLIENT;
+    process.env.CRC_SRS_HOST       = config.srsHost || '';
+    process.env.CRC_SRS_PORT       = String(config.srsPort || '');
 
     const localServer = require('./app/server.js');
 

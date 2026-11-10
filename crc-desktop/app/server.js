@@ -6,11 +6,14 @@ const fs    = require('fs');
 const path  = require('path');
 const { resolveProxyPath } = require('./proxy-routes');
 const { resolveGlyphs } = require('./glyph-route');
+const { attachSrsRoute } = require('./srs/srs-route');
 
 const PUBLIC_DIR       = path.join(__dirname, 'public');
 const DATA_DIR         = path.join(__dirname, 'data');
 const FONTS_DIR        = path.join(PUBLIC_DIR, 'fonts');
 const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
+// Which SRS client runs (ADR 0158 step 2, S-RADIO-1 RQ11): 'lxsrs' (the Python bridge, /srs-api/) or 'node' (/srs).
+const RADIO_CLIENT     = process.env.CRC_RADIO_CLIENT === 'node' ? 'node' : 'lxsrs';
 
 // This is the renderer's local server, built on Node's own `http`/`https`
 // modules (no Express): it serves app/public, generates /js/config.js and
@@ -80,7 +83,8 @@ const httpServer = http.createServer((req, res) => {
     return res.end(
       'var CRCSYNC_URL      = ' + JSON.stringify(syncConfig.crcSyncUrl)      + ';\n' +
       'var CASDOOR_CLIENT_ID = ' + JSON.stringify(syncConfig.casdoorClientId) + ';\n' +
-      'var CASDOOR_ENDPOINT  = ' + JSON.stringify(syncConfig.casdoorEndpoint) + ';\n'
+      'var CASDOOR_ENDPOINT  = ' + JSON.stringify(syncConfig.casdoorEndpoint) + ';\n' +
+      'var RADIO_CLIENT      = ' + JSON.stringify(RADIO_CLIENT) + ';\n'
     );
   }
 
@@ -188,6 +192,15 @@ const httpServer = http.createServer((req, res) => {
 });
 
 const port = parseInt(process.env.WS_PORT) || 3100;
+
+// ── /srs: the built-in SRS client (ADR 0158), only when config.json radioClient is "node" (main.js sets the env) ──
+attachSrsRoute(httpServer, {
+  port,
+  enabled: RADIO_CLIENT === 'node',
+  srsHost: process.env.CRC_SRS_HOST || '',
+  srsPort: parseInt(process.env.CRC_SRS_PORT) || 0,
+});
+
 httpServer.listen(port, () => {
   console.log(`[crc] http://localhost:${port}`);
 });
