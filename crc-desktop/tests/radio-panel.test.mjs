@@ -10,7 +10,8 @@ import { replaceFrequencyRows } from '../app/public/js/panels/efsp/frequency-sta
 import { markEfspChanged } from '../app/public/js/panels/efsp/efsp-change-bus.js';
 import { initRadioPanel } from '../app/public/js/radio/radio-panel.js';
 import { getRadioPrefs } from '../app/public/js/radio/radio-prefs.js';
-import { _stubInspect, _stubReceive, _stubSrsClients } from '../app/public/js/radio/radio-engine-stub.js';
+import * as fakeEngine from './helpers/fake-radio-engine.mjs';
+const { _stubInspect, _stubReceive, _stubSrsClients } = fakeEngine;
 import { settings } from '../app/public/js/settings.js';
 
 const require = createRequire(import.meta.url);
@@ -41,7 +42,7 @@ function setup() {
     { facilityId: 'FAC1', kind: 'POSITION', positionId: 'P1', label: 'TWR', mhz: 275.8, defaultMhz: 275.8, added: false },
     { facilityId: 'FAC1', kind: 'POSITION', positionId: 'P1', label: 'TWR VHF', mhz: 122.1, defaultMhz: 122.1, added: false },
   ]);
-  initRadioPanel();
+  initRadioPanel({ engine: fakeEngine });
 }
 
 test('the panel: guards only, then a sign-on brings the Position radios into the automatic group', () => {

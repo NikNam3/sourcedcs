@@ -7,9 +7,9 @@
 // link-group-editor.js (group headers, + GROUP), manual-radio-form.js (+ RADIO), radio-setup.js (devices, PTT key...),
 // radio-ptt.js (push-to-talk).
 //
-// It talks to radio-engine-stub.js until the supervisor points the import below at RADIO-CORE's radio-engine.js.
+// The engine is radio-engine.js (docs/adr/0158 §1); a test injects a fake through initRadioPanel({ engine }).
 
-import * as engine from './radio-engine-stub.js';
+import * as radioEngine from './radio-engine.js';
 import { el } from './radio-dom.js';
 import { readRadioInputs } from './radio-inputs.js';
 import { buildRadioSet, positionsWithoutRow, rowsWithoutRadio } from './radio-set.js';
@@ -28,7 +28,7 @@ import { buildRadioRow, paintRadioActivity } from './radio-row.js';
 import { buildGroupCreate, buildGroupHeader } from './link-group-editor.js';
 import { buildManualRadioForm, parseManualFrequency } from './manual-radio-form.js';
 import { buildRadioSetup } from './radio-setup.js';
-import { createRadioPtt } from './radio-ptt.js';
+import { createRadioPtt, setRadioPanelIsClient } from './radio-ptt.js';
 import { createEngineSync } from './radio-engine-sync.js';
 import { onEfspChanged } from '../panels/efsp/efsp-change-bus.js';
 
@@ -42,7 +42,8 @@ let _set = { radios: [], groups: [] };
 let _target = null;
 let _engineState = null;
 let _lastKey = null;
-const _sync = createEngineSync(engine);
+let engine = radioEngine;
+let _sync = null;
 // What the controller is in the middle of: one inline edit at a time, and the last refusal it got.
 const _ui = { editing: null, editError: null, renaming: null, renameError: null, groupError: null, manualOpen: false, manualError: null };
 
@@ -140,7 +141,8 @@ export function render() {
   const prefs = getRadioPrefs();
   const { staffed, rows } = readRadioInputs();
   _set = buildRadioSet({ staffed, rows, manual: prefs.manual, intercom: prefs.intercom, groups: prefs.groups, membership: prefs.membership });
-  _sync.push(_set, prefs);
+  if (_sync) _sync.push(_set, prefs);
+  if (engine.setIdentity) engine.setIdentity({ name: srsNameFor(staffed) });
   _target = resolvePttTarget(_set, prefs.pttTarget);
   if (!_bodyEl) return;
   const notes = [...noRowNotes(positionsWithoutRow(staffed, rows)), outOfBandNote(rowsWithoutRadio(staffed, rows))].filter(Boolean);
@@ -178,9 +180,21 @@ function buildHeader(ptt) {
 }
 
 /** The dock's init (dock.js mountExistingPanel), once. */
-export function initRadioPanel() {
+// The name in the SRS client list: the Positions this session works, e.g. "CRC LC+GC" (S-RADIO-1 RQ3).
+function srsNameFor(staffed) {
+  const ids = staffed.filter(s => !s.observer).map(s => s.positionId);
+  return ids.length ? `CRC ${ids.join('+')}`.slice(0, 32) : 'CRC';
+}
+
+// The radio client this crc-desktop runs (S-RADIO-1 RQ11): /js/config.js's RADIO_CLIENT, set by main.js.
+const radioClientIsNode = () => (typeof RADIO_CLIENT !== 'undefined' && RADIO_CLIENT === 'node');
+
+export function initRadioPanel({ engine: injected } = {}) {
   _root = document.getElementById('radio-panel');
   if (!_root) return null;
+  if (injected) engine = injected;
+  _sync = createEngineSync(engine);
+  setRadioPanelIsClient(radioClientIsNode());
   bindRadioPrefsToSettings();
   const ptt = createRadioPtt({ engine, getTarget: () => _target, setActive: (on) => _pttBtn && _pttBtn.classList.toggle('radio-ptt-held', on) });
   const { head, setupBtn } = buildHeader(ptt);

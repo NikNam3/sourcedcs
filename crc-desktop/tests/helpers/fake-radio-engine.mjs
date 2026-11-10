@@ -1,9 +1,8 @@
 'use strict';
 
-// A stand-in for RADIO-CORE's radio-engine.js (docs/parallel/radio/README.md, the contract), with the same exports, so
-// the new radio panel can be built and driven before the two lanes are joined. It makes no sound and opens no socket:
-// it keeps what it is told and reports a state as the real engine would. The supervisor deletes this file at
-// integration and points radio-panel.js at radio-engine.js. A leaf.
+// A fake of app/public/js/radio/radio-engine.js (docs/parallel/radio/README.md, the contract), with the same exports,
+// injected into the RADIO 2 panel by tests/radio-panel.test.mjs (initRadioPanel({ engine })). It makes no sound and
+// opens no socket: it keeps what it is told and reports a state as the real engine would.
 
 let _radios = [];
 let _txIds = [];

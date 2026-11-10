@@ -138,7 +138,7 @@ export function setRadioAudio(radioId, a) {
   if (a && a.volume !== undefined) v.volume = clampGain(a.volume, 1);
   if (a && a.pan !== undefined) v.pan = Number(a.pan) || 0;
   if (a && a.muted !== undefined) v.muted = !!a.muted;
-  engine().mixer.setRadioAudio(radioId, v);
+  engine().mixer.setChannelAudio(radioId, v);
 }
 
 export function setDevices(d) {

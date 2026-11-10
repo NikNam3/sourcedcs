@@ -1765,6 +1765,9 @@
    "devicesByKind",
    "resolveDevice"
   ],
+  "radio/device-pick.js": [
+   "pickDevice"
+  ],
   "radio/intercom-unit-select.js": [
    "buildIntercomUnitSelect",
    "intercomUnitOptions"
@@ -1797,24 +1800,74 @@
    "buildManualRadioForm",
    "parseManualFrequency"
   ],
+  "radio/mic-capture.js": [
+   "MIC_WORKLET_URL",
+   "createMicCapture",
+   "micConstraints"
+  ],
+  "radio/mic-test.js": [
+   "MIC_TEST_MS",
+   "peakOf",
+   "runMicTest"
+  ],
+  "radio/mic-worklet.js": [
+   "MIC_PROCESSOR_NAME",
+   "createFrameCutter"
+  ],
+  "radio/opus-codec.js": [
+   "DECODER_CONFIG",
+   "ENCODER_CONFIG",
+   "createOpusDecoder",
+   "createOpusEncoder",
+   "opusSupported"
+  ],
+  "radio/playout-schedule.js": [
+   "createPlayoutSchedule"
+  ],
+  "radio/radio-audio-constants.js": [
+   "BLOCK_MS",
+   "BLOCK_SAMPLES",
+   "DEFAULT_INPUT_GAIN",
+   "DEFAULT_OUTPUT_GAIN",
+   "GAIN_MAX",
+   "MAX_DRIFT_MS",
+   "OPUS_BITRATE",
+   "OPUS_COMPLEXITY",
+   "OPUS_FRAME_US",
+   "PLAYOUT_DELAY_MS",
+   "RX_TIMEOUT_MS",
+   "SAMPLE_RATE"
+  ],
   "radio/radio-dom.js": [
    "el"
   ],
-  "radio/radio-engine-stub.js": [
-   "_stubInspect",
-   "_stubReceive",
-   "_stubSrsClients",
+  "radio/radio-effects.js": [
+   "BAND_PASS",
+   "DEFAULT_SOUND_SET",
+   "NOISE_FILES",
+   "NOISE_VOLUME",
+   "SOUND_SETS",
+   "TX_SOUNDS",
+   "createRadioEffects"
+  ],
+  "radio/radio-engine-state.js": [
+   "getEngineState",
+   "setEngineState",
+   "subscribeEngineState"
+  ],
+  "radio/radio-engine-sync.js": [
+   "createEngineSync"
+  ],
+  "radio/radio-engine.js": [
    "onState",
    "setAudioOptions",
    "setDevices",
+   "setIdentity",
    "setIntercomUnit",
    "setPtt",
    "setRadioAudio",
    "setRadios",
    "testMic"
-  ],
-  "radio/radio-engine-sync.js": [
-   "createEngineSync"
   ],
   "radio/radio-inputs.js": [
    "readRadioInputs"
@@ -1903,6 +1956,36 @@
   ],
   "radio/radio-setup.js": [
    "buildRadioSetup"
+  ],
+  "radio/rx-activity.js": [
+   "createRxActivity"
+  ],
+  "radio/rx-mixer.js": [
+   "createRxMixer",
+   "pickPlaybackRadio"
+  ],
+  "radio/rx-path.js": [
+   "createRxPath"
+  ],
+  "radio/srs-frame.js": [
+   "decodeFrame",
+   "encodeFrame"
+  ],
+  "radio/srs-socket.js": [
+   "RECONNECT_MS",
+   "createSrsSocket"
+  ],
+  "radio/tx-group.js": [
+   "txRadioIdsFor"
+  ],
+  "radio/tx-path.js": [
+   "createTxPath"
+  ],
+  "radio/voice-processor.js": [
+   "KNEE",
+   "LIMIT",
+   "RELEASE_DB_PER_S",
+   "createVoiceProcessor"
   ],
   "scope-constants.js": [
    "COALITION_COLOR",

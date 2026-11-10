@@ -53,7 +53,7 @@ export function createRxMixer(ctx, effects) {
   return {
     audioOf,
     pick: (radioIds) => pickPlaybackRadio(radioIds, audioOf),
-    setRadioAudio(id, a) { audio.set(id, { ...audioOf(id), ...a }); apply(id); },
+    setChannelAudio(id, a) { audio.set(id, { ...audioOf(id), ...a }); apply(id); },
     setOutputGain(g) { master.gain.value = g; },
     /** Where a radio's own sounds (its tones and noise) go in: before its filter, gain and pan. */
     input: (id) => chain(id).filter.input,
