@@ -128,6 +128,7 @@ app.on('ready', async () => {
     });
     // Radio-only works from behind other programs: its transmit fuse and RX end are renderer timers (S-RO-1 RO8).
     if (launchMode === RADIO) win.webContents.setBackgroundThrottling(false);
+    require('./global-ptt/index.js').attach(win);
 
     // Dev-only: auto-open DevTools so a renderer-side error (e.g. a
     // SyntaxError from a global-scope naming collision, or a rejected EFSP
@@ -291,4 +292,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
     pyProc?.kill();
+    require('./global-ptt/index.js').shutdown();
 });

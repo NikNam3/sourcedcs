@@ -10,6 +10,7 @@ import { devicesByKind, deviceSelection, resolveDevice } from './device-choice.j
 import {
   GAIN_MAX, GAIN_MIN, SOUND_SETS, getRadioPrefs, updateRadioPrefs, withAudioOptions, withDevices, withMaxTx, withPttKey,
 } from './radio-prefs.js';
+import { buildGlobalPttSetup } from './global-ptt-setup.js';
 import { PTT_MAX_TX_DEFAULT_S, PTT_MAX_TX_MAX_S, PTT_MAX_TX_MIN_S, clampMaxTxSeconds } from '../ptt-controller.js';
 
 function keyLabel(code) { return code === 'Space' ? 'Space' : String(code).replace(/^Key/, '').replace(/^Digit/, ''); }
@@ -100,6 +101,8 @@ export function buildRadioSetup(engine) {
     updateRadioPrefs(p => withMaxTx(p, v));
   });
 
+  const globalPtt = buildGlobalPttSetup(settingRow);
+
   const sound = el('select', 'radio-select', null, { 'aria-label': 'TX sound set' });
   sound.append(...SOUND_SETS.map(s => el('option', null, s, { value: s })));
   sound.value = prefs.soundSet;
@@ -115,6 +118,7 @@ export function buildRadioSetup(engine) {
     settingRow('Output gain', outGain, outLbl),
     notes,
     settingRow('PTT key', pttKey),
+    globalPtt.element,
     settingRow('Max transmit (s)', maxTx),
     settingRow('TX sound', sound),
     settingRow('Background noise', noise),
@@ -125,6 +129,7 @@ export function buildRadioSetup(engine) {
     element: root,
     dispose() {
       document.removeEventListener('keydown', onKey, true);
+      globalPtt.dispose();
       if (media && media.removeEventListener) media.removeEventListener('devicechange', refresh);
     },
   };

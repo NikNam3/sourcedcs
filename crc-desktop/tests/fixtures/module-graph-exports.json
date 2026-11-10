@@ -1787,6 +1787,12 @@
    "buildFrequencyPickSelect",
    "frequencyPicks"
   ],
+  "radio/global-ptt-bridge.js": [
+   "globalPttBridge"
+  ],
+  "radio/global-ptt-setup.js": [
+   "buildGlobalPttSetup"
+  ],
   "radio/intercom-unit-select.js": [
    "buildIntercomUnitSelect",
    "intercomUnitOptions"
@@ -1940,6 +1946,7 @@
    "audioOptionsOf",
    "bindRadioPrefsStorage",
    "getRadioPrefs",
+   "globalPttEnabled",
    "normalizeRadioPrefs",
    "onRadioPrefsChanged",
    "radioAudioOf",
@@ -1950,6 +1957,7 @@
    "updateRadioPrefs",
    "withAudioOptions",
    "withDevices",
+   "withGlobalPtt",
    "withGroups",
    "withIntercomUnit",
    "withMaxTx",
@@ -1961,7 +1969,8 @@
   "radio/radio-ptt.js": [
    "createRadioPtt",
    "isRadioPanelClient",
-   "setRadioPanelIsClient"
+   "setRadioPanelIsClient",
+   "wireGlobalPtt"
   ],
   "radio/radio-relay-sync.js": [
    "createRelaySync"

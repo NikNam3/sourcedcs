@@ -21,3 +21,17 @@ contextBridge.exposeInMainWorld('crcLaunch', {
     // Store the launch mode ('full' | 'radio') and relaunch in it (docs/adr/0161 §1, main.js).
     switchTo: (mode) => ipcRenderer.send('launch-mode-switch', mode),
 });
+
+// Global push-to-talk (docs/adr/0161 §3). The renderer hears only press and release of the one bound input.
+contextBridge.exposeInMainWorld('crcGlobalPtt', {
+    status:        () => ipcRenderer.invoke('global-ptt-status'),
+    configure:     (cfg) => ipcRenderer.invoke('global-ptt-configure', cfg),
+    capture:       () => ipcRenderer.invoke('global-ptt-capture'),
+    cancelCapture: () => ipcRenderer.send('global-ptt-cancel-capture'),
+    fuseFired:     () => ipcRenderer.send('global-ptt-fuse'),
+    onEdge: (cb) => {
+        const handler = (_event, down) => cb(down === true);
+        ipcRenderer.on('global-ptt-edge', handler);
+        return () => ipcRenderer.removeListener('global-ptt-edge', handler);
+    },
+});

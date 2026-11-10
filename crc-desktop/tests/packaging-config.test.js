@@ -141,3 +141,32 @@ test('build.files packs app/public/js/package.json (the client is ES modules)', 
   }
   assert.ok(included, `build.files does not pack ${rel}`);
 });
+
+test('uiohook-napi is a production dependency, kept outside the asar, with its win32 and linux prebuilds', () => {
+  // ADR 0161 s.3: a .node file cannot be dlopen()ed from inside an asar. electron-builder packs `dependencies` whatever
+  // build.files says, and the prebuilds for every platform ship in the one npm package.
+  assert.ok(pkg.dependencies['uiohook-napi'], 'uiohook-napi must be in dependencies, or it is not packed');
+  assert.ok((pkg.build.asarUnpack || []).includes('node_modules/uiohook-napi/**'), 'uiohook-napi must be unpacked from the asar');
+  for (const dir of ['win32-x64', 'linux-x64']) {
+    const f = path.join(__dirname, '..', 'node_modules', 'uiohook-napi', 'prebuilds', dir, 'uiohook-napi.node');
+    assert.ok(fs.existsSync(f), `the ${dir} prebuild is missing: ${f}`);
+  }
+});
+
+test('build.npmRebuild is off', () => {
+  // uiohook-napi's prebuilds are named uiohook-napi.node, not the node.napi.node @electron/rebuild looks for. With the
+  // default it would compile the module from source at package time, which needs X11 headers on the CI runner and
+  // leaves a build/Release binary that node-gyp-build prefers to the prebuild. Nothing else in the tree is native.
+  assert.equal(pkg.build.npmRebuild, false);
+});
+
+test('the global PTT listeners require their native and D-Bus modules only inside a function', () => {
+  // ADR 0161 s.3: a missing or failing module must degrade to "not available", never crash the app at launch.
+  const dir = path.join(__dirname, '..', 'global-ptt');
+  assert.ok((pkg.build.files || []).includes('global-ptt/**/*'), 'global-ptt must be in build.files');
+  assert.ok(pkg.dependencies['@particle/dbus-next'], '@particle/dbus-next must be in dependencies');
+  for (const f of fs.readdirSync(dir)) {
+    const topLevel = fs.readFileSync(path.join(dir, f), 'utf8').split('\n').filter(l => /^\S/.test(l)).join('\n');
+    assert.doesNotMatch(topLevel, /require\(['"](uiohook-napi|@particle\/dbus-next|electron)['"]\)/, `${f} loads a native or Electron module at require time`);
+  }
+});
