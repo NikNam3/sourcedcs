@@ -6,15 +6,20 @@
 
 import { el } from './radio-dom.js';
 
+// The one grey mark on a group this client relays for (ADR 0159): it holds a relay lease on one of its frequencies, so
+// a pilot on one of them is re-sent on the others by this client. Dark cockpit: nothing more, and nothing when not.
+const relayMark = () => el('span', 'radio-note radio-relaying', 'RELAYING', { title: 'Pilots on one frequency of this group are relayed by you onto the others' });
+
 /**
  * @param {{ id, name, auto } | null} group   null: the unlinked section
- * @param {object} ctx  renaming (this group's id is being renamed), renameError, onRename(on), onRenameCommit(text), onDelete()
+ * @param {object} ctx  relaying (this client holds a relay lease in the group), renaming (this group's id is being renamed), renameError, onRename(on), onRenameCommit(text), onDelete()
  */
 export function buildGroupHeader(group, ctx = {}) {
   const head = el('div', 'radio-group-head');
   if (!group) { head.appendChild(el('span', 'radio-group-name', 'UNLINKED')); return head; }
   if (group.auto) {
     head.appendChild(el('span', 'radio-group-name', group.name, { title: 'Every Position radio, linked: PTT transmits on all of them' }));
+    if (ctx.relaying) head.appendChild(relayMark());
     return head;
   }
   if (ctx.renaming) {
@@ -29,6 +34,7 @@ export function buildGroupHeader(group, ctx = {}) {
     return head;
   }
   head.appendChild(el('span', 'radio-group-name', group.name));
+  if (ctx.relaying) head.appendChild(relayMark());
   const rename = el('button', 'radio-small-btn', 'RENAME', { type: 'button' });
   rename.addEventListener('click', () => ctx.onRename(true));
   const del = el('button', 'radio-small-btn', 'DELETE', { type: 'button', title: 'Delete the group: its radios become unlinked' });
