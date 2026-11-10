@@ -4,8 +4,9 @@
 // SRS knows a client's radios as eleven numbered slots; the renderer knows them by radio identity
 // (`POSITION:<positionId>:UHF`, `GUARD:VHF`, `MANUAL:<id>`, docs/parallel/radio/README.md). Radios on the same
 // frequency and modulation share one slot (two radios on 243.000 AM are one SRS radio), and a received packet maps
-// back to every radio of its slot. More than eleven distinct channels is refused as a whole and reported: radio-set.js
-// already marks the overflow radios as conflicting, so reaching this is a bug upstream, not a normal case.
+// back to every radio of its slot. Past eleven distinct channels the first eleven are tuned and the rest reported as an
+// error (the backstop of S-RADIO-1 RQ13: radio-set.js already marks those radios as conflicting, so reaching this is a
+// bug upstream, and losing the first eleven over it would be worse).
 
 const { MAX_RADIOS, Modulation } = require('./sync-message');
 
@@ -26,11 +27,11 @@ const sameChannel = (s, hz, modulation) => Math.abs(s.hz - hz) < MATCH_TOLERANCE
 
 /**
  * @param {Array<{id:string, mhz:number, modulation?:string, label?:string}>} radios
- * @returns {{slots:Array<{radioIds:string[], hz:number, modulation:number, name:string}>, invalid:string[], error:string|null}}
- *   `slots` is empty and `error` set when the radios need more than MAX_RADIOS slots.
+ * @returns {{slots:Array<{radioIds:string[], hz:number, modulation:number, name:string}>, overflow:string[],
+ *   invalid:string[], error:string|null}}
  */
 function buildSlots(radios) {
-  const slots = [], invalid = [];
+  const slots = [], invalid = [], overflow = [];
   const seen = new Set();
   for (const r of radios || []) {
     if (!r || typeof r.id !== 'string' || seen.has(r.id)) continue;
@@ -40,12 +41,11 @@ function buildSlots(radios) {
     if (!(hz > 0) || modulation === undefined) { invalid.push(r.id); continue; }
     const shared = slots.find(s => sameChannel(s, hz, modulation));
     if (shared) { shared.radioIds.push(r.id); continue; }
+    if (slots.length >= MAX_RADIOS) { overflow.push(r.id); continue; }
     slots.push({ radioIds: [r.id], hz, modulation, name: r.label || r.id });
   }
-  if (slots.length > MAX_RADIOS) {
-    return { slots: [], invalid, error: `${slots.length} channels; SRS has ${MAX_RADIOS} radio slots` };
-  }
-  return { slots, invalid, error: null };
+  const error = overflow.length ? `SRS has ${MAX_RADIOS} radio slots; not tuned: ${overflow.join(', ')}` : null;
+  return { slots, overflow, invalid, error };
 }
 
 /**

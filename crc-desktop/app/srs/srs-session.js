@@ -29,7 +29,7 @@ const UNIT_ID = 1;
 function createSrsSession(o) {
   const deps = o.deps || {};
   const log = o.log || (() => {});
-  let slots = [], slotError = null, invalid = [];
+  let slots = [], slotError = null, invalid = [], overflow = [];
   let pttDown = false, tx = { frequencies: [], modulations: [], encryptions: [], radioIds: [] };
   let packetNumber = 0, unmatched = 0, pttError = null;
 
@@ -67,6 +67,7 @@ function createSrsSession(o) {
       versionMismatch: s.versionMismatch,
       error: slotError || pttError || s.error || null,
       invalidRadioIds: invalid,
+      overflowRadioIds: overflow,
       txRadioIds: pttDown ? tx.radioIds : [],
       unmatchedPackets: unmatched,
       droppedPackets: voice.droppedPackets(),
@@ -80,7 +81,7 @@ function createSrsSession(o) {
     /** @param {Array<{id:string, mhz:number, modulation?:string, label?:string}>} radios */
     setRadios(radios) {
       const b = buildSlots(radios);
-      slots = b.slots; slotError = b.error; invalid = b.invalid;
+      slots = b.slots; slotError = b.error; invalid = b.invalid; overflow = b.overflow;
       if (pttDown) tx = txChannels(slots, tx.radioIds);
       sync.radiosChanged();
       emit();

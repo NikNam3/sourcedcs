@@ -18,14 +18,15 @@ test('a bad frequency or a modulation other than AM/FM is invalid (no intercom)'
   assert.deepEqual(invalid, ['Z', 'I', 'X']);
 });
 
-test('more than eleven distinct channels is refused whole, with an error', () => {
+test('past eleven distinct channels the first eleven are tuned and the rest reported', () => {
   // Twelve radios, two of them on 243: eleven channels, which fit.
   const eleven = buildSlots(Array.from({ length: 12 }, (_, i) => R(`M${i}`, i < 2 ? 243 : 250 + i)));
   assert.equal(eleven.slots.length, 11);
   assert.equal(eleven.error, null);
-  const twelve = buildSlots(Array.from({ length: 12 }, (_, i) => R(`M${i}`, 250 + i)));
-  assert.deepEqual(twelve.slots, []);
-  assert.match(twelve.error, /12 channels.*11/);
+  const twelve = buildSlots(Array.from({ length: 13 }, (_, i) => R(`M${i}`, 250 + i)));
+  assert.equal(twelve.slots.length, 11);
+  assert.deepEqual(twelve.overflow, ['M11', 'M12']);
+  assert.match(twelve.error, /11 radio slots; not tuned: M11, M12/);
 });
 
 test('MHz to Hz rounds away float noise and tunes a channel name literally', () => {

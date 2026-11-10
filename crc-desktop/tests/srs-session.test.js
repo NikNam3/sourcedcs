@@ -89,7 +89,7 @@ test('a received packet goes to the renderer with every matching radio; an unmat
   assert.equal(states.at(-1).unmatchedPackets, 1);
 });
 
-test('more than eleven channels is an error in the state', () => {
+test('more than eleven channels: the rest is an error in the state', () => {
   const { s, states } = rig();
   s.setRadios(Array.from({ length: 12 }, (_, i) => ({ id: `M${i}`, mhz: 250 + i })));
   assert.match(states.at(-1).error, /11/);
