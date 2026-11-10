@@ -168,20 +168,20 @@ function conflictSuppressAck(msg, result) {
   };
 }
 
-/**
- * The answer to a relay lease claim (docs/adr/0159). The leases themselves go out in `radio-relay-leases`, to the
- * claimant and to every session whose leases the claim moved.
- */
-function relayClaimAck(msg, result) {
+/** The answer to a session's link groups (docs/adr/0160). The relay's state goes out in `radio-relay-status`. */
+function linkGroupsAck(msg, result) {
   return {
-    version: VERSION, type: 'radio-relay-ack', clientMutationId: msg.clientMutationId, ok: result.ok,
+    version: VERSION, type: 'radio-link-groups-ack', clientMutationId: msg.clientMutationId, ok: result.ok,
     ...(result.ok ? {} : { reason: result.reason, detail: result.detail }),
   };
 }
 
-/** The channels one session holds the relay lease for now, whole (docs/adr/0159): no seq, every frame states it all. */
-function relayLeasesFrame(held) {
-  return { version: VERSION, type: 'radio-relay-leases', held };
+/**
+ * What the relay does for one session (docs/adr/0160), whole each time: the networks that include one of its channels,
+ * whether crc-sync's relay is connected to SRS, and why not.
+ */
+function relayStatusFrame({ networks, connected, error }) {
+  return { version: VERSION, type: 'radio-relay-status', networks, connected, ...(error ? { error } : {}) };
 }
 
 /** Every live Strip on every Board, stamped with its Facility (what the visibility sets are computed from). */
@@ -195,4 +195,4 @@ function liveStamped(ctx) {
   return out;
 }
 
-module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, airspaceDelta, frequencyDelta, conflictSuppressAck, relayClaimAck, relayLeasesFrame, liveStamped };
+module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, airspaceDelta, frequencyDelta, conflictSuppressAck, linkGroupsAck, relayStatusFrame, liveStamped };

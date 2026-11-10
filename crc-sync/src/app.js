@@ -49,6 +49,7 @@ const { createArchiveSweep } = require('./app/archive');
 const { createAirportWeather } = require('./app/airport-weather');
 const { createActiveRunwayFromWind } = require('./app/active-runway');
 const { createRadioRelayWire } = require('./radio/relay-wire');
+const { createRelayService } = require('./radio/relay-service');
 
 /**
  * The NLA double-tap guard's length in ms. Only the e2e harness (CRCSYNC_TEST_RESET=1) may change it, with
@@ -68,6 +69,7 @@ function nlaGuardFromEnv(env) {
  * @param {{read:string, write:string}} [deps.paths] the Board snapshot's paths (default: state/ per `env`)
  * @param {object} [deps.grpcClient] the DCS-gRPC client (default: a new, unconnected GrpcClient). server.js connects it
  * @param {object} [deps.srsClient] the SRS client (default: a new, unconnected SrsClient)
+ * @param {Function} [deps.relayConnection] the relay's SRS connection factory (default radio/relay-srs-client.js; docs/adr/0160)
  * @param {{now:()=>number, source:string}} [deps.clock] the mission clock; default a MissionClock fed by the gRPC game-time poll
  *
  * Test/soak seams (the soak host has no sensors and no DCS, so it names what the production wiring would add):
@@ -182,6 +184,13 @@ function createApp(deps = {}) {
     archive(efsp.archiver.onMissionSessionChange(session));
   });
 
+  // ── The linked-frequency relay (docs/adr/0160): crc-sync's own SRS client(s), connected only while a network exists ──
+  const relayService = createRelayService({
+    endpoint: SrsClient.endpointOf(env), ownCoalition,
+    deliver: (out) => hubLink.get().sendRadioRelay(out),
+    createConnection: deps.relayConnection,
+  });
+
   // ── The hub ────────────────────────────────────────────────────────────────
   const sessionConfig = loadSessionConfig();
   const wsHub = new WsHub({
@@ -191,7 +200,7 @@ function createApp(deps = {}) {
     onEfspChange: monitors.recheckObligations,
     timeTick: serverResources.time,
     conflictAlert: monitors.conflictAlertMonitor, // docs/adr/0145: a controller's suppress of one alert
-    radioRelay: createRadioRelayWire(), // docs/adr/0159: the linked-frequency relay leases, in memory
+    radioRelay: createRadioRelayWire({ service: relayService }), // docs/adr/0160: the link groups the relay works from
   });
   hubLink.bind(wsHub);
 
@@ -260,10 +269,11 @@ function createApp(deps = {}) {
     serverResources.stop();
     feed.detach();
     wsHub.stop();
+    relayService.stop();
   }
 
   return {
-    http: app, server, wsHub, efsp, tickers, serverResources, start, stop,
+    http: app, server, wsHub, efsp, tickers, serverResources, relayService, start, stop,
     monitors: {
       obligation: monitors.obligationMonitor,
       correlation: monitors.correlationReconciler,
