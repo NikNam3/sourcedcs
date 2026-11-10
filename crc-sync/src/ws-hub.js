@@ -63,8 +63,9 @@ class WsHub {
    * @param {{setSuppressed: Function}} [deps.conflictAlert] the CA/MCI monitor (conflict-alert.js), for a controller's suppress
    *   (docs/adr/0145). Absent: every suppress is refused.
    */
-  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0, aptConfig = createAptConfig(), pendingSignOffs = new Map(), onEfspChange = null, timeTick = (name, fn) => fn(), conflictAlert = null }) {
+  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0, aptConfig = createAptConfig(), pendingSignOffs = new Map(), onEfspChange = null, timeTick = (name, fn) => fn(), conflictAlert = null, radioRelay = null }) {
     this._conflictAlert = conflictAlert;
+    this._radioRelay = radioRelay; // docs/adr/0159: the relay lease family (radio/relay-wire.js)
     this._aptConfig = aptConfig; // per-airport ATIS config, built by the composition root
     this._wall = wallClock;
     this._signOnGraceMs = signOnGraceMs;
@@ -579,6 +580,7 @@ class WsHub {
     ws.on('error', () => {});
     ws.on('close', () => {
       this._sessions.delete(ws);
+      if (this._radioRelay) this._sendRadioRelay(this._radioRelay.close(session)); // its leases pass on at once, no grace
       this._onClosed(session);
     });
   }
@@ -715,6 +717,12 @@ class WsHub {
     try { msg = JSON.parse(raw); } catch { return; }
     if (!msg) return;
 
+    // docs/adr/0159: a relay lease claim. Answered to the claimant, and to whoever the claim moved a lease to or from.
+    if (this._radioRelay && this._radioRelay.handles(msg.type)) {
+      this._sendRadioRelay(this._radioRelay.handle(session, msg));
+      return;
+    }
+
     // EFSP messages (efsp-mutation/efsp-resync/efsp-set-positions) — ack
     // goes to the sender only, broadcast (when present) goes to everyone
     // immediately, not on the 500ms track-delta tick (see efsp-ws.js's
@@ -818,6 +826,13 @@ class WsHub {
     const result = this._conflictAlert.setSuppressed(msg.conflictId, { facilityId: position.facilityId, positionId: position.positionId }, msg.suppress, session.who || session.controllerId || null, { alsoAt });
     if (result.ok) this.broadcastEfspAlerts(this._efspAlerts);
     return conflictSuppressAck(msg, result);
+  }
+
+  /** Frames directed at single sessions (radio/relay-wire.js): [{session, frame}]. A closed session is skipped. */
+  _sendRadioRelay(out) {
+    for (const { session, frame } of out || []) {
+      for (const [ws, s] of this._sessions) if (s === session && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(frame));
+    }
   }
 
   _broadcast(msg) {

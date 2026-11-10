@@ -48,6 +48,7 @@ const { createFeedHandlers } = require('./app/feed-handlers');
 const { createArchiveSweep } = require('./app/archive');
 const { createAirportWeather } = require('./app/airport-weather');
 const { createActiveRunwayFromWind } = require('./app/active-runway');
+const { createRadioRelayWire } = require('./radio/relay-wire');
 
 /**
  * The NLA double-tap guard's length in ms. Only the e2e harness (CRCSYNC_TEST_RESET=1) may change it, with
@@ -190,6 +191,7 @@ function createApp(deps = {}) {
     onEfspChange: monitors.recheckObligations,
     timeTick: serverResources.time,
     conflictAlert: monitors.conflictAlertMonitor, // docs/adr/0145: a controller's suppress of one alert
+    radioRelay: createRadioRelayWire(), // docs/adr/0159: the linked-frequency relay leases, in memory
   });
   hubLink.bind(wsHub);
 
