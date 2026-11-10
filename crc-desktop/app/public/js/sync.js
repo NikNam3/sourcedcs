@@ -275,7 +275,10 @@ export async function getSyncFeedUrl() {
 // without app.js exposing its module-scoped `_ws`.
 
 let _syncSocket = null;
-export function _setSyncSocket(ws) { _syncSocket = ws; }
+let _syncSocketGen = 0; // bumped per socket, so a reconnect faster than any poll is still seen (radio/relay-feed.js)
+export function _setSyncSocket(ws) { _syncSocket = ws; _syncSocketGen++; }
+/** Which /feed socket this is: a new number for every socket app.js opens. */
+export function syncSocketGeneration() { return _syncSocketGen; }
 export function sendToSync(msg) {
   if (_syncSocket && _syncSocket.readyState === WebSocket.OPEN) {
     _syncSocket.send(JSON.stringify(msg));

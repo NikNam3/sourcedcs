@@ -1871,11 +1871,9 @@
    "setDevices",
    "setIdentity",
    "setIntercomUnit",
-   "setLinkGroups",
    "setPtt",
    "setRadioAudio",
    "setRadios",
-   "setRelayLeases",
    "testMic"
   ],
   "radio/radio-inputs.js": [
@@ -1969,20 +1967,20 @@
   "radio/radio-setup.js": [
    "buildRadioSetup"
   ],
+  "radio/relay-feed.js": [
+   "CHECK_MS",
+   "LINK_GROUPS_TYPE",
+   "_resetRelayFeedForTest",
+   "getRelayStatus",
+   "initRelayFeed",
+   "onRelayStatusChanged",
+   "sendLinkGroups"
+  ],
   "radio/relay-groups.js": [
    "channelKey",
-   "leaseKeysOf",
+   "relayDownNote",
    "relayGroupsOf",
    "relayingGroupIds"
-  ],
-  "radio/relay-lease.js": [
-   "CHECK_MS",
-   "CLAIM_TYPE",
-   "_resetRelayLeaseForTest",
-   "getHeldRelayLeases",
-   "initRelayLease",
-   "onRelayLeasesChanged",
-   "wantRelayLeases"
   ],
   "radio/rx-activity.js": [
    "createRxActivity"
@@ -2053,7 +2051,8 @@
    "sendToSync",
    "setIsSyncOpen",
    "setSendToSync",
-   "showConnWidget"
+   "showConnWidget",
+   "syncSocketGeneration"
   ],
   "terrain-grid.js": [
    "_resetTerrainGridForTest",

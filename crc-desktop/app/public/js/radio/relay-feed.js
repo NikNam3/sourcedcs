@@ -3,12 +3,12 @@
 // (`radio-relay-status`: the networks, connected, error).
 //
 // crc-sync keeps the groups in memory and drops a session's groups when its socket closes. So while /feed is down the
-// status is cleared, and when it is up again the groups are sent again (checked every CHECK_MS; sync.js has no open
-// hook).
+// status is cleared, and on every new socket the groups are sent again (checked every CHECK_MS against sync.js's
+// syncSocketGeneration, so a reconnect between two checks is seen too).
 //
 // Nothing runs at import: initRelayFeed() registers the handlers and starts the check, once.
 
-import { sendToSync, isSyncOpen } from '../sync.js';
+import { sendToSync, isSyncOpen, syncSocketGeneration } from '../sync.js';
 import { registerEfspMessage } from '../panels/efsp/efsp-message-registry.js';
 
 export const LINK_GROUPS_TYPE = 'radio-link-groups';
@@ -18,6 +18,7 @@ let _groups = [];
 let _sentKey = null; // what crc-sync has for this socket, or null when it has nothing
 let _status = null;
 let _wasOpen = false;
+let _sentGen = -1; // the /feed socket the groups were last sent on
 let _started = false;
 let _registered = false; // the message handlers, once per page (the registry refuses a second)
 const _listeners = new Set();
@@ -33,6 +34,7 @@ function send() {
   if (!isSyncOpen()) { _sentKey = null; return; }
   sendToSync({ version: 1, type: LINK_GROUPS_TYPE, clientMutationId: crypto.randomUUID(), groups: _groups });
   _sentKey = JSON.stringify(_groups);
+  _sentGen = syncSocketGeneration();
 }
 
 /** This session's link groups now ([{id, channels}], relay-groups.js relayGroupsOf), the whole list every time. */
@@ -62,11 +64,12 @@ export function initRelayFeed({ setInterval: every = setInterval } = {}) {
   const timer = every(() => {
     const open = isSyncOpen();
     if (!open && _wasOpen) { _sentKey = null; setStatus(null); }
-    if (open && !_wasOpen && _sentKey === null && _groups.length) send();
+    // A new socket (also one that came back faster than CHECK_MS): crc-sync dropped the old one's groups.
+    if (open && syncSocketGeneration() !== _sentGen) { _sentKey = null; if (_groups.length) send(); }
     _wasOpen = open;
   }, CHECK_MS);
   if (timer && typeof timer.unref === 'function') timer.unref(); // never what keeps a test process alive
 }
 
 /** Tests only. */
-export function _resetRelayFeedForTest() { _groups = []; _sentKey = null; _status = null; _wasOpen = false; _started = false; _listeners.clear(); }
+export function _resetRelayFeedForTest() { _groups = []; _sentKey = null; _status = null; _wasOpen = false; _sentGen = -1; _started = false; _listeners.clear(); }

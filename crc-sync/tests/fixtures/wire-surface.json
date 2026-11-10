@@ -18,7 +18,7 @@
       "efsp-resync",
       "efsp-runway-status-mutation",
       "efsp-set-positions",
-      "radio-relay-claim",
+      "radio-link-groups",
       "rename"
     ],
     "serverToClient": [
@@ -55,8 +55,8 @@
       "game-time",
       "init",
       "par-sample",
-      "radio-relay-ack",
-      "radio-relay-leases",
+      "radio-link-groups-ack",
+      "radio-relay-status",
       "snapshot",
       "status",
       "theater",

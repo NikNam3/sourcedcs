@@ -44,6 +44,11 @@ setDevices({ inputId, outputId })
 onState(fn)                       // fn({ connected, error, rxRadioIds:[...], txRadioIds:[...], opusSupported })
 ```
 
+**As built (2026-11-10):** the engine also exports `setAudioOptions`, `testMic`, `setIdentity` and `setIntercomUnit`
+(S-RADIO-1/2, H183). Radios carry `receiveOnly`, and `kind`/`modulation` include `INTERCOM`. Linking across frequencies
+for pilots is crc-sync's relay (ADR 0160, H186); the panel sends its link groups on `/feed` (`radio/relay-feed.js`), and
+the engine knows nothing of the relay. The stub described below is now the test fake `tests/helpers/fake-radio-engine.mjs`.
+
 Until integration, RADIO-SET's panel talks to a stub engine with the same exports (`radio-engine-stub.js`, which RADIO-SET
 owns and the supervisor deletes on integration). The existing `srs-radio.js` and `lxsrs_v2` stay untouched and stay the
 default. Neither lane removes or edits them.

@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { channelKey, relayGroupsOf, relayingGroupIds, relayDownNote } from '../app/public/js/radio/relay-groups.js';
 import { sendLinkGroups, getRelayStatus, initRelayFeed, _resetRelayFeedForTest, LINK_GROUPS_TYPE } from '../app/public/js/radio/relay-feed.js';
 import { createRelaySync } from '../app/public/js/radio/radio-relay-sync.js';
-import { setSendToSync, setIsSyncOpen } from '../app/public/js/sync.js';
+import { setSendToSync, setIsSyncOpen, _setSyncSocket } from '../app/public/js/sync.js';
 import { dispatchEfspMessage } from '../app/public/js/panels/efsp/efsp-message-registry.js';
 
 const require = createRequire(import.meta.url);
@@ -79,8 +79,10 @@ test('the groups go whole, only when they change, and again after a /feed reconn
   assert.deepEqual(getRelayStatus(), { networks: [{ channels: groups[0].channels }], connected: true, error: null });
   f.setOpen(false); f.tick();
   assert.equal(getRelayStatus(), null, 'crc-sync dropped the groups with the socket');
-  f.setOpen(true); f.tick();
+  _setSyncSocket({}); f.setOpen(true); f.tick(); // app.js opens a new socket
   assert.equal(f.sent.length, 2, 'sent again');
+  _setSyncSocket({}); f.tick(); // a reconnect between two checks: never seen closed
+  assert.equal(f.sent.length, 3, 'sent again on the new socket though it never looked closed');
   sendLinkGroups([]);
   assert.deepEqual(f.sent.at(-1).groups, [], 'an empty list withdraws them');
 });
