@@ -58,7 +58,7 @@ test('the panel: guards only, then a sign-on brings the Position radios into the
 
 test('PTT keys the selected radio\'s whole group on the stub engine; the button lights', () => {
   const ptt = byClass('radio-ptt')[0];
-  assert.equal(ptt.textContent, 'PTT P1 TWR');
+  assert.equal(ptt.textContent, 'PTT POSITIONS');
   fire(ptt, 'mousedown');
   assert.deepEqual(_stubInspect().txRadioIds, ['POSITION:P1:UHF', 'POSITION:P1:VHF']);
   fire(ptt, 'mouseup');
@@ -130,7 +130,7 @@ test('an Observer\'s Position radios are receive-only: unlinked, the link menu o
   assert.equal(within(rowOf('POSITION:P1:UHF'), 'radio-link').disabled, true);
   assert.ok(descendants(rowOf('POSITION:P1:UHF')).some(n => n.textContent === 'RX ONLY (Observer)'));
   const ptt = byClass('radio-ptt')[0];
-  assert.notEqual(ptt.textContent, 'PTT P1 TWR'); // the target fell back off the receive-only radio
+  assert.notEqual(ptt.textContent, 'PTT POSITIONS'); // the target fell back off the receive-only radio
   fire(ptt, 'mousedown');
   assert.ok(!_stubInspect().txRadioIds.includes('POSITION:P1:UHF'));
   fire(ptt, 'mouseup');
