@@ -30,6 +30,7 @@ import { buildManualRadioForm, parseManualFrequency } from './manual-radio-form.
 import { buildRadioSetup } from './radio-setup.js';
 import { createRadioPtt, setRadioPanelIsClient } from './radio-ptt.js';
 import { createEngineSync } from './radio-engine-sync.js';
+import { createRelaySync } from './radio-relay-sync.js';
 import { onEfspChanged } from '../panels/efsp/efsp-change-bus.js';
 
 const MANUAL_PREFIX = 'MANUAL:';
@@ -44,9 +45,11 @@ let _engineState = null;
 let _lastKey = null;
 let engine = radioEngine;
 let _sync = null;
+let _relay = null;
 // What the controller is in the middle of: one inline edit at a time, and the last refusal it got.
 const _ui = { editing: null, editError: null, renaming: null, renameError: null, groupError: null, manualOpen: false, manualError: null };
 
+const relayingIds = () => (_relay ? _relay.relayingGroupIds() : []);
 const srsClientsOf = (state) => (state && Array.isArray(state.srsClients) ? state.srsClients : []);
 
 function setUi(patch) { Object.assign(_ui, patch); render(); }
@@ -117,7 +120,8 @@ function buildBody(prefs, notes) {
   for (const n of notes) frag.appendChild(el('div', 'radio-note radio-panel-note', n));
   for (const section of panelSections(_set)) {
     const sec = el('div', 'radio-section' + (section.group && section.group.auto ? ' radio-section-auto' : ''));
-    sec.appendChild(buildGroupHeader(section.group, section.group && !section.group.auto ? groupCtx(section.group) : {}));
+    const relaying = !!section.group && relayingIds().includes(section.group.id);
+    sec.appendChild(buildGroupHeader(section.group, { ...(section.group && !section.group.auto ? groupCtx(section.group) : {}), relaying }));
     if (!section.radios.length) sec.appendChild(el('div', 'radio-note radio-empty', section.group && section.group.auto ? 'no Position radio' : 'no radio'));
     for (const r of section.radios) sec.appendChild(buildRadioRow(r, rowCtx(r, prefs)));
     frag.appendChild(sec);
@@ -142,11 +146,12 @@ export function render() {
   const { staffed, rows } = readRadioInputs();
   _set = buildRadioSet({ staffed, rows, manual: prefs.manual, intercom: prefs.intercom, groups: prefs.groups, membership: prefs.membership });
   if (_sync) _sync.push(_set, prefs);
+  if (_relay) _relay.push(_set);
   if (engine.setIdentity) engine.setIdentity({ name: srsNameFor(staffed) });
   _target = resolvePttTarget(_set, prefs.pttTarget);
   if (!_bodyEl) return;
   const notes = [...noRowNotes(positionsWithoutRow(staffed, rows)), outOfBandNote(rowsWithoutRadio(staffed, rows))].filter(Boolean);
-  const key = structureKey(_set, { pttTarget: _target, editing: [_ui, notes, prefs.intercom, srsClientsOf(_engineState)] });
+  const key = structureKey(_set, { pttTarget: _target, editing: [_ui, notes, prefs.intercom, srsClientsOf(_engineState), relayingIds()] });
   if (key !== _lastKey) { _lastKey = key; buildBody(prefs, notes); }
   paint();
 }
@@ -194,6 +199,7 @@ export function initRadioPanel({ engine: injected } = {}) {
   if (!_root) return null;
   if (injected) engine = injected;
   _sync = createEngineSync(engine);
+  _relay = createRelaySync(engine, { isNodeClient: radioClientIsNode, onHeldChanged: () => render() });
   setRadioPanelIsClient(radioClientIsNode());
   bindRadioPrefsToSettings();
   const ptt = createRadioPtt({ engine, getTarget: () => _target, setActive: (on) => _pttBtn && _pttBtn.classList.toggle('radio-ptt-held', on) });
@@ -207,6 +213,7 @@ export function initRadioPanel({ engine: injected } = {}) {
   engine.onState((s) => {
     const clientsBefore = JSON.stringify(srsClientsOf(_engineState));
     _engineState = s;
+    if (_relay) _relay.engineState(s);
     if (JSON.stringify(srsClientsOf(s)) !== clientsBefore) render(); // the intercom's unit picker lists them
     else paint();
   });

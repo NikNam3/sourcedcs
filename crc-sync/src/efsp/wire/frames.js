@@ -168,6 +168,22 @@ function conflictSuppressAck(msg, result) {
   };
 }
 
+/**
+ * The answer to a relay lease claim (docs/adr/0159). The leases themselves go out in `radio-relay-leases`, to the
+ * claimant and to every session whose leases the claim moved.
+ */
+function relayClaimAck(msg, result) {
+  return {
+    version: VERSION, type: 'radio-relay-ack', clientMutationId: msg.clientMutationId, ok: result.ok,
+    ...(result.ok ? {} : { reason: result.reason, detail: result.detail }),
+  };
+}
+
+/** The channels one session holds the relay lease for now, whole (docs/adr/0159): no seq, every frame states it all. */
+function relayLeasesFrame(held) {
+  return { version: VERSION, type: 'radio-relay-leases', held };
+}
+
 /** Every live Strip on every Board, stamped with its Facility (what the visibility sets are computed from). */
 function liveStamped(ctx) {
   const out = [];
@@ -179,4 +195,4 @@ function liveStamped(ctx) {
   return out;
 }
 
-module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, airspaceDelta, frequencyDelta, conflictSuppressAck, liveStamped };
+module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, airspaceDelta, frequencyDelta, conflictSuppressAck, relayClaimAck, relayLeasesFrame, liveStamped };

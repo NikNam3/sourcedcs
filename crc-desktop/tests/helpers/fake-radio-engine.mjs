@@ -54,6 +54,13 @@ export function testMic() { _micTests++; }
 /** H183: the intercom joins SRS unit `unitId`, or the shared (non-DCS) intercom with null. A no-op here. */
 export function setIntercomUnit(unitId) { _intercomUnit = unitId == null ? null : unitId; }
 
+/** ADR 0159: the relay's link groups and the relay leases granted. Kept for inspection, no relay here. */
+let _linkGroups = [];
+let _relayLeases = [];
+export function setLinkGroups(groups) { _linkGroups = Array.isArray(groups) ? groups : []; }
+export function setRelayLeases(keys) { _relayLeases = Array.isArray(keys) ? keys.slice() : []; }
+export function _relayInspect() { return { linkGroups: _linkGroups, relayLeases: _relayLeases }; }
+
 /** `fn(state)` now and on every change. Returns the unsubscribe. */
 export function onState(fn) { _listeners.add(fn); fn(state()); return () => _listeners.delete(fn); }
 
