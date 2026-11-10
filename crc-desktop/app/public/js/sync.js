@@ -150,13 +150,16 @@ export async function getSyncFeedUrl() {
   return url;
 }
 
-/** A ready-to-open /feed URL, or null with no ticket (not logged in, or crc-sync out of reach). Draws nothing: the radio-only page runs without a login. */
-export async function getSyncFeedUrlNoGate() {
+/**
+ * A ready-to-open /feed URL, or null with no ticket (not logged in, or crc-sync out of reach). Draws nothing: the
+ * radio-only page runs without a login. `role: 'radio'` tells crc-sync this session is no controller (decisions S-RO-1 RO1).
+ */
+export async function getSyncFeedUrlNoGate({ role } = {}) {
   await applyConnOverrides();
   const ticket = await fetchSyncTicket();
   if (!ticket) return null;
   const wsBase = CRCSYNC_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
-  return `${wsBase}/feed?ticket=${encodeURIComponent(ticket)}&protocol=${WIRE_PROTOCOL}&client=${encodeURIComponent(await appVersion())}`;
+  return `${wsBase}/feed?ticket=${encodeURIComponent(ticket)}&protocol=${WIRE_PROTOCOL}&client=${encodeURIComponent(await appVersion())}${role ? `&role=${encodeURIComponent(role)}` : ''}`;
 }
 
 // ── Outbound mutation channel ───────────────────────────────────────────

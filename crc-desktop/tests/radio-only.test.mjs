@@ -1,7 +1,7 @@
 // The radio-only page's parts (docs/adr/0161 §2), against the shared DOM stub and the stub engine: the /feed connection
 // that never gates the radio, the frequency table as picks in + RADIO, the top line, and the panel's differences.
 // Position and Facility ids are test fixtures.
-import './helpers/client-env.mjs';
+import { permissive } from './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -76,14 +76,14 @@ test('a ticket opens /feed, hands the socket to sync.js, and a close retries', a
   assert.equal(h.timers.length, 1);
 });
 
-test('frames go through the registry: the snapshot and the delta fill the frequency table', async () => {
+test('frames go through the registry: the frequency deltas fill the table', async () => {
   const h = await feedHarness({ urls: ['u'] });
   const ws = FakeSocket.made[0];
-  frame(ws, { type: 'efsp-snapshot', frequencies: [ROW] });
+  frame(ws, { type: 'efsp-frequency-delta', facilityId: 'FAC1', frequencies: [ROW] });
   assert.deepEqual(h.state.getFrequencyRows().map(r => r.mhz), [275.8]);
   frame(ws, { type: 'efsp-frequency-delta', facilityId: 'FAC1', frequencies: [{ ...ROW, mhz: 251 }] });
   assert.deepEqual(h.state.getFrequencyRows().map(r => r.mhz), [251]);
-  assert.ok(h.registry.registeredEfspTypes().includes('efsp-snapshot'));
+  assert.deepEqual(h.registry.registeredEfspTypes(), ['efsp-frequency-delta'], 'no Board frame has a handler here');
   frame(ws, { type: 'some-frame-nobody-registered' }); // ignored
   ws.onmessage({ data: 'not json' }); // ignored
 });
@@ -195,10 +195,11 @@ async function panelHarness(radioOnly) {
   const state = await g.import('panels/efsp/frequency-state.js');
   state.replaceFrequencyRows([ROW]);
   const names = [];
-  const engine = { ...fakeEngine, setIdentity: (id) => names.push(id.name) };
+  const ptts = [];
+  const engine = { ...fakeEngine, setIdentity: (id) => names.push(id.name), setPtt: (...a) => ptts.push(a) };
   const panel = await g.import('radio/radio-panel.js');
   panel.initRadioPanel({ engine, radioOnly });
-  return { all, names, root };
+  return { all, names, root, ptts };
 }
 const sectionNames = (all) => all().filter(n => hasClass(n, 'radio-group-name')).map(n => n.textContent);
 
@@ -267,4 +268,42 @@ test('the full app\'s login gate offers RADIO ONLY, which writes the mode throug
 test('outside Electron the login gate has no RADIO ONLY', async () => {
   const gate = await gateHarness();
   assert.equal(gate.children.find(n => n.id === 'crc-login-radio-only-btn'), undefined);
+});
+
+test('the feed URL says role=radio; the full app\'s does not', async () => {
+  const sync = await freshGraph().import('sync.js');
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ ticket: 'T' }) });
+  localStorage.setItem('crc-desktop-sync-token', 'tok');
+  try {
+    assert.match(await sync.getSyncFeedUrlNoGate({ role: 'radio' }), /[?&]role=radio(&|$)/);
+    assert.doesNotMatch(await sync.getSyncFeedUrlNoGate(), /role=/);
+  } finally {
+    localStorage.removeItem('crc-desktop-sync-token');
+    delete globalThis.fetch;
+  }
+});
+
+test('with no chosen radio PTT keys nothing, and the button says so', async () => {
+  const { all, ptts } = await panelHarness(true);
+  const ptt = all().find(n => hasClass(n, 'radio-ptt'));
+  assert.equal(ptt.textContent, 'NO PTT RADIO');
+  assert.equal(ptt.disabled, true);
+  for (const fn of ptt._listeners.mousedown) fn({ preventDefault() {} });
+  assert.deepEqual(ptts, [], 'a press keys nothing, least of all 243.000');
+});
+
+test('Settings offers RADIO ONLY in Electron, and hides it elsewhere', async () => {
+  const tools = await freshGraph().import('panels/tools-panel.js');
+  const btn = makeElement('button');
+  btn.hidden = true;
+  document.getElementById = (id) => (id === 'set-radio-only' ? btn : permissive());
+  tools.initToolsTab();
+  assert.equal(btn.hidden, true);
+  const asked = [];
+  window.crcLaunch = { switchTo: (m) => asked.push(m) };
+  tools.initToolsTab();
+  assert.equal(btn.hidden, false);
+  for (const fn of btn._listeners.click) fn();
+  assert.deepEqual(asked, ['radio']);
+  delete window.crcLaunch;
 });

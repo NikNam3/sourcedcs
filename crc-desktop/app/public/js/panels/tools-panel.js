@@ -18,6 +18,13 @@ export function initToolsTab() {
   const btnConn = document.getElementById('set-conn-settings');
   if (btnConn) btnConn.addEventListener('click', showConnWidget);
 
+  // The radio without the map (docs/adr/0161 §1): a logged-in controller never sees the login gate's button. Electron only.
+  const btnRadioOnly = document.getElementById('set-radio-only');
+  if (btnRadioOnly && window.crcLaunch) {
+    btnRadioOnly.hidden = false;
+    btnRadioOnly.addEventListener('click', () => window.crcLaunch.switchTo('radio'));
+  }
+
   const btnCalc = document.getElementById('tool-alt-calc');
   const result  = document.getElementById('tool-alt-result');
 

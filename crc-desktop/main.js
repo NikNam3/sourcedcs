@@ -11,7 +11,7 @@ const config = require('./config.json');
 const { computePythonPkgDir, computeRuntimeCwd, ensureLxsrsVenv, lxsrsArgs } = require('./lxsrs-setup');
 const { createExternalLinkGate, isCasdoorLoginUrl, isLocalAppUrl, CASDOOR_POPUP_WEB_PREFERENCES } = require('./external-link');
 const { writePendingPatchNotes, readAndClearPendingPatchNotes, readLastPatchNotes } = require('./patch-notes');
-const { RADIO, launchModePath, resolveLaunchMode, writeLaunchMode, radioClientFor, windowFor, relaunchOptions } = require('./launch-mode');
+const { RADIO, launchModePath, resolveLaunchMode, radioClientFor, windowFor, switchLaunchMode } = require('./launch-mode');
 
 const IS_LINUX = process.platform === 'linux';
 const IS_WIN   = process.platform === 'win32';
@@ -21,6 +21,17 @@ const IS_WIN   = process.platform === 'win32';
 const RADIO_CLIENT = config.radioClient === 'node' || config.radioClient === 'lxsrs'
     ? config.radioClient
     : 'node';
+
+// One copy at a time (decisions S-RO-1 RO5): a second one would lose port 3100 yet open a window that fights the first
+// over /srs. It only brings the running window forward; its mode flags are ignored, the mode is chosen by button.
+const isFirstInstance = app.requestSingleInstanceLock();
+if (!isFirstInstance) app.quit();
+app.on('second-instance', () => {
+    if (!win || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+});
 
 let nodeProc = null;
 let pyProc   = null;
@@ -62,6 +73,7 @@ async function spawnLxsrs() {
 // ── App lifecycle ─────────────────────────────────────────────────────────
 
 app.on('ready', async () => {
+    if (!isFirstInstance) return;
     console.log(`[crc] CRC v${app.getVersion()} starting (${process.platform})`);
 
     const patchNotesPath     = path.join(app.getPath('userData'), 'pending-patch-notes.json');
@@ -114,6 +126,8 @@ app.on('ready', async () => {
             preload: path.join(__dirname, 'app', 'preload.js'),
         },
     });
+    // Radio-only works from behind other programs: its transmit fuse and RX end are renderer timers (S-RO-1 RO8).
+    if (launchMode === RADIO) win.webContents.setBackgroundThrottling(false);
 
     // Dev-only: auto-open DevTools so a renderer-side error (e.g. a
     // SyntaxError from a global-scope naming collision, or a rejected EFSP
@@ -254,10 +268,13 @@ ipcMain.on('external-link-allow-download', (_event, downloadUrl) => { externalLi
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 // The RADIO ONLY and FULL CRC buttons (docs/adr/0161 §1): store the mode and start again in it.
+let switchingMode = false; // each app.relaunch starts one more copy
 ipcMain.on('launch-mode-switch', (_event, mode) => {
-    if (!writeLaunchMode(launchModePath(app.getPath('userData')), mode)) return;
-    app.relaunch(relaunchOptions(process.argv, process.env));
-    app.quit();
+    if (switchingMode) return;
+    switchingMode = switchLaunchMode(mode, {
+        filePath: launchModePath(app.getPath('userData')), argv: process.argv, env: process.env, app, autoUpdater, spawn,
+        runQuitHandlers: () => app.emit('before-quit'),
+    });
 });
 
 // Backs the "what's new" button in the topbar — returns { version, notes }

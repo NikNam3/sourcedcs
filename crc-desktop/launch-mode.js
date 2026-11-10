@@ -71,7 +71,36 @@ function relaunchOptions(argv, env) {
   return env.APPIMAGE ? { execPath: env.APPIMAGE, args } : { args };
 }
 
+/** An AppImage's relaunch: `sh` waits for this process to go (the single-instance lock, the port, the mount), then runs it. */
+function appImageRelaunch(appImage, args) {
+  return { command: 'sh', args: ['-c', 'sleep 1; exec "$0" "$@"', appImage, ...args] };
+}
+
+/**
+ * Stores `mode` and starts again in it (decisions S-RO-1 RO6). A downloaded update must not install on this quit: the
+ * installer and the relaunched app would run together on the files being replaced, and the next check finds it in the cache.
+ * @param {string} mode
+ * @param {object} o  filePath, argv, env, app and autoUpdater (Electron's), spawn, runQuitHandlers (`app.exit` skips before-quit)
+ * @returns {boolean} whether it is switching
+ */
+function switchLaunchMode(mode, { filePath, argv, env, app, autoUpdater, spawn, runQuitHandlers }) {
+  if (!writeLaunchMode(filePath, mode)) return false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  const options = relaunchOptions(argv, env);
+  if (options.execPath) {
+    const { command, args } = appImageRelaunch(options.execPath, options.args);
+    spawn(command, args, { detached: true, stdio: 'ignore' }).unref();
+    runQuitHandlers();
+    app.exit(0);
+  } else {
+    app.relaunch(options);
+    app.quit();
+  }
+  return true;
+}
+
 module.exports = {
+  appImageRelaunch, switchLaunchMode,
   FULL, RADIO, isLaunchMode, launchModePath, readLaunchMode, writeLaunchMode, modeFromArgs, resolveLaunchMode,
   radioClientFor, windowFor, relaunchOptions,
 };

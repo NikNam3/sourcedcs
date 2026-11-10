@@ -5,15 +5,15 @@
 // registry, and handles `update-required` the same way.
 //
 // Without a ticket it keeps retrying and only reports it: the radio runs as an SRS client either way, never behind a
-// login gate. A session signed on at no Position reads everything (crc-sync read-scope.js, H58), so the snapshot's
-// `frequencies` reach this page. Its frames are registered in start(), not at load: the full client's own handlers for
-// the same types live in panels/, and a type may be registered once.
+// login gate. The URL carries `role=radio`, so crc-sync never counts this session as the controller (decisions S-RO-1
+// RO1): no Board, no picture, and the frequency table as one `efsp-frequency-delta` per Facility. The handler is
+// registered in start(), not at load: the full client's own lives in panels/, and a type may be registered once.
 
 import { _setSyncSocket, getSyncFeedUrlNoGate, hasSyncToken } from '../sync.js';
 import { UPDATE_REQUIRED_CLOSE, hideUpdateRequired, isUpdateRequiredShown, showUpdateRequired } from '../update-required.js';
 import { dispatchEfspMessage, registerEfspMessage } from '../panels/efsp/efsp-message-registry.js';
 import { markEfspChanged } from '../panels/efsp/efsp-change-bus.js';
-import { applyFrequencyDelta, replaceFrequencyRows } from '../panels/efsp/frequency-state.js';
+import { applyFrequencyDelta } from '../panels/efsp/frequency-state.js';
 
 export const RETRY_MS = 2000;
 
@@ -21,7 +21,6 @@ export const RETRY_MS = 2000;
 export const LINK = Object.freeze({ OPEN: 'open', NO_LOGIN: 'no-login', NO_FEED: 'no-feed', UPDATE_REQUIRED: 'update-required' });
 
 function registerFrames() {
-  registerEfspMessage('efsp-snapshot', (msg) => { replaceFrequencyRows(msg.frequencies); markEfspChanged('snapshot'); });
   registerEfspMessage('efsp-frequency-delta', (msg) => { applyFrequencyDelta(msg); markEfspChanged('positions'); });
 }
 
@@ -30,7 +29,7 @@ function registerFrames() {
  * @param {object} o  onLink(link); getUrl, hasToken, setSocket and setTimer are for tests
  */
 export function startRadioOnlyFeed({
-  onLink = () => {}, getUrl = getSyncFeedUrlNoGate, hasToken = hasSyncToken, setSocket = _setSyncSocket, setTimer = setTimeout,
+  onLink = () => {}, getUrl = () => getSyncFeedUrlNoGate({ role: 'radio' }), hasToken = hasSyncToken, setSocket = _setSyncSocket, setTimer = setTimeout,
 } = {}) {
   let current = null;
   let updateRequired = false; // crc-sync refused this client's protocol (docs/adr/0103): no reconnect until the overlay's Retry

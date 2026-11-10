@@ -187,7 +187,8 @@ function paint() {
   const target = _set.radios.find(r => r.id === _target);
   // PTT is per group: the button names the group it keys, or the radio when that radio is unlinked.
   const group = target && target.groupId ? _set.groups.find(g => g.id === target.groupId) : null;
-  _pttBtn.textContent = group ? `PTT ${group.name}` : target ? `PTT ${target.label}` : 'PTT';
+  _pttBtn.textContent = group ? `PTT ${group.name}` : target ? `PTT ${target.label}` : 'NO PTT RADIO';
+  _pttBtn.title = target ? 'Hold to transmit on the selected group' : 'PTT keys nothing until a group or a radio is selected';
   _pttBtn.disabled = !target;
   _pttBtn.classList.toggle('radio-ptt-tx', !!(_engineState && (_engineState.txRadioIds || []).length));
 }

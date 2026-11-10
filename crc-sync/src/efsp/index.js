@@ -41,7 +41,7 @@ const { createFacilityConfig } = require('./facility-config');
 const { createStereoRoutes } = require('./stereo-routes');
 const { createRegimeLocator } = require('./regime-locator');
 const { buildFacilityRules } = require('./facility-rules');
-const { handleMessage, signOffController, snapshotMessage, filterForSession, supplementFor, readScopeKey, directedFor, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores } = require('./efsp-ws');
+const { handleMessage, signOffController, snapshotMessage, filterForSession, supplementFor, readScopeKey, directedFor, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores, frequencyFrames } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
@@ -361,6 +361,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
     heartbeatBoardsFor: (session, all) => heartbeatBoardsFor(ctx, session, all),
     /** The efsp-heartbeat's `stores` (docs/adr/0106), once per tick. */
     heartbeatStores: () => heartbeatStores(ctx),
+    frequencyFrames: () => frequencyFrames(ctx),
 
     archiver,
 

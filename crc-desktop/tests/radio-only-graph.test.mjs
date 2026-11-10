@@ -52,3 +52,9 @@ test('radio-only.html loads nothing from outside the app', () => {
   assert.deepEqual([...html.matchAll(/(?:src|href)="((?:https?:)?\/\/[^"]+)"/g)].map(m => m[1]), []);
   assert.doesNotMatch(html, /maplibre|dockview/i);
 });
+
+test('the page loads the settings before the panel binds them, or its first save wipes the full app\'s (RO3)', () => {
+  const main = fs.readFileSync(ROOT, 'utf8');
+  const load = main.indexOf('loadSettings();');
+  assert.ok(load > 0 && load < main.indexOf('initRadioPanel('));
+});

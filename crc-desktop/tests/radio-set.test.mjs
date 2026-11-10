@@ -253,13 +253,15 @@ test('PTT keys the selected radio\'s whole group, or the radio alone when unlink
   assert.deepEqual(transmitRadioIds(set, 'nope'), []);
 });
 
-test('the PTT target: the controller\'s choice while it may transmit, else the automatic group\'s first, else the first radio', () => {
+test('the PTT target: the controller\'s choice while it may transmit, else the automatic group\'s first, else none, never a guard', () => {
   const set = buildRadioSet({ staffed: staff('P2'), rows: ROWS });
   assert.equal(resolvePttTarget(set, 'GUARD:VHF'), 'GUARD:VHF');
   assert.equal(resolvePttTarget(set, 'POSITION:P1:UHF'), 'POSITION:P2:UHF'); // P1 left
-  assert.equal(resolvePttTarget(buildRadioSet({}), null), 'GUARD:UHF');
+  assert.equal(resolvePttTarget(buildRadioSet({}), null), null);
+  assert.equal(resolvePttTarget(buildRadioSet({ manual: [{ id: 'm1', mhz: 251 }] }), null), null, 'nor a manual radio nobody chose');
   const observing = buildRadioSet({ staffed: [{ facilityId: F, positionId: 'P2', observer: true }], rows: ROWS });
-  assert.equal(resolvePttTarget(observing, 'POSITION:P2:UHF'), 'GUARD:UHF'); // never a receive-only radio
+  assert.equal(resolvePttTarget(observing, 'POSITION:P2:UHF'), null); // never a receive-only radio
+  assert.equal(resolvePttTarget(buildRadioSet({}), 'GUARD:UHF'), 'GUARD:UHF', 'a guard the controller chose');
 });
 
 // ── Observers (S-RADIO-1 RQ14) ───────────────────────────────────────────────
