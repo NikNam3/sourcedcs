@@ -1752,6 +1752,142 @@
    "clampMaxTxSeconds",
    "createPttController"
   ],
+  "radio/bands.js": [
+   "BANDS",
+   "bandOf"
+  ],
+  "radio/device-choice.js": [
+   "deviceSelection",
+   "devicesByKind",
+   "resolveDevice"
+  ],
+  "radio/link-group-editor.js": [
+   "buildGroupCreate",
+   "buildGroupHeader"
+  ],
+  "radio/link-groups.js": [
+   "AUTO_GROUP_ID",
+   "AUTO_GROUP_NAME",
+   "GROUP_NAME_MAX",
+   "NO_SLOT_CONFLICT",
+   "SRS_SLOTS",
+   "assignLinkGroups",
+   "createGroup",
+   "deleteGroup",
+   "forgetRadio",
+   "groupNameProblem",
+   "intendedGroupOf",
+   "mayTransmit",
+   "moveRadio",
+   "nextGroupName",
+   "renameGroup",
+   "resolvePttTarget",
+   "transmitRadioIds"
+  ],
+  "radio/manual-radio-form.js": [
+   "buildManualRadioForm",
+   "parseManualFrequency"
+  ],
+  "radio/radio-dom.js": [
+   "el"
+  ],
+  "radio/radio-engine-stub.js": [
+   "_stubInspect",
+   "_stubReceive",
+   "onState",
+   "setAudioOptions",
+   "setDevices",
+   "setPtt",
+   "setRadioAudio",
+   "setRadios",
+   "testMic"
+  ],
+  "radio/radio-engine-sync.js": [
+   "createEngineSync"
+  ],
+  "radio/radio-inputs.js": [
+   "readRadioInputs"
+  ],
+  "radio/radio-panel-model.js": [
+   "engineLine",
+   "linkMenuOptions",
+   "noRowNotes",
+   "outOfBandNote",
+   "panelSections",
+   "radioActivity",
+   "radioBandText",
+   "radioFrequencyText",
+   "structureKey"
+  ],
+  "radio/radio-panel.js": [
+   "initRadioPanel",
+   "render"
+  ],
+  "radio/radio-prefs-storage.js": [
+   "bindRadioPrefsToSettings"
+  ],
+  "radio/radio-prefs.js": [
+   "DEFAULT_AUDIO",
+   "GAIN_MAX",
+   "GAIN_MIN",
+   "INPUT_GAIN_DEFAULT",
+   "OUTPUT_GAIN_DEFAULT",
+   "PAN_MAX",
+   "PAN_MIN",
+   "PTT_KEY_DEFAULT",
+   "SOUND_SETS",
+   "VOLUME_DEFAULT",
+   "VOLUME_MAX",
+   "VOLUME_MIN",
+   "_resetRadioPrefsForTest",
+   "addManualRadio",
+   "audioOptionsOf",
+   "bindRadioPrefsStorage",
+   "getRadioPrefs",
+   "normalizeRadioPrefs",
+   "onRadioPrefsChanged",
+   "radioAudioOf",
+   "removeManualRadio",
+   "retuneManualRadio",
+   "seedFromOldPanel",
+   "updateRadioPrefs",
+   "withAudioOptions",
+   "withDevices",
+   "withGroups",
+   "withMaxTx",
+   "withMembership",
+   "withPttKey",
+   "withPttTarget",
+   "withRadioAudio"
+  ],
+  "radio/radio-ptt.js": [
+   "createRadioPtt",
+   "isRadioPanelClient",
+   "setRadioPanelIsClient"
+  ],
+  "radio/radio-row.js": [
+   "buildRadioRow",
+   "paintRadioActivity"
+  ],
+  "radio/radio-set.js": [
+   "GUARDS",
+   "MODULATIONS",
+   "assignSlots",
+   "buildRadioSet",
+   "guardRadioId",
+   "guardRadios",
+   "manualRadioId",
+   "manualRadios",
+   "positionRadioId",
+   "positionRadios",
+   "positionRowsOf",
+   "positionsWithoutRow",
+   "rowsWithoutRadio",
+   "slotKeyOf"
+  ],
+  "radio/radio-setup.js": [
+   "buildRadioSetup"
+  ],
   "scope-constants.js": [
    "COALITION_COLOR",
    "CRC_RANGE_M",
