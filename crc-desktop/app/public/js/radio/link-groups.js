@@ -171,6 +171,7 @@ export function resolvePttTarget(set, wantedId) {
   if (mayTransmit(wanted)) return wanted.id;
   const auto = set.groups.find(g => g.auto);
   if (auto && auto.radioIds.length) return auto.radioIds[0];
-  const first = set.radios.find(mayTransmit);
+  // Never onto a guard (S-RO-1 RO4): a guard is keyed only when the controller chose it.
+  const first = set.radios.find(r => r.kind !== 'GUARD' && mayTransmit(r));
   return first ? first.id : null;
 }

@@ -4,29 +4,29 @@
 // never swallows, so DCS still gets the key. The native module loads on first use, inside the caller's try (index.js):
 // requiring this file loads nothing native. Every event is dropped here unless it is the bound input; nothing is logged.
 
-const LEFT_BUTTON = 1; // never bindable: it would key the radio on every click, and it is how the capture is cancelled
-const MOUSE_NAMES = { 2: 'Right Mouse', 3: 'Middle Mouse' };
-const SIDED = {
-  Ctrl: 'Left Ctrl', CtrlRight: 'Right Ctrl', Alt: 'Left Alt', AltRight: 'Right Alt',
-  Shift: 'Left Shift', ShiftRight: 'Right Shift', Meta: 'Left Meta', MetaRight: 'Right Meta',
-};
+const { bindableKeyLabel, bindableMouseLabel } = require('./input-allowlist');
+
+const LEFT_BUTTON = 1; // ignored by a capture: it is how the controller clicks to cancel
 const EVENTS = ['keydown', 'keyup', 'mousedown', 'mouseup'];
+const X11_RELEASE_HOLD_MS = 15; // S-RO-1 RO14: soft autorepeat can arrive as release-and-press pairs
 
-function keyName(keys, code) {
-  const found = Object.keys(keys).find(k => keys[k] === code);
-  if (!found) return `Key ${code}`;
-  return SIDED[found] || found;
-}
-
-/** @param {{load?:()=>{uIOhook:object, UiohookKey:object}, defer?:(fn:Function)=>void}} [o] */
+/** @param {{load?:()=>{uIOhook:object, UiohookKey:object}, defer?:(fn:Function)=>void, platform?:string}} [o] */
 function createUiohookListener(o = {}) {
   const load = o.load || (() => require('uiohook-napi'));
   const defer = o.defer || setImmediate;
+  const platform = o.platform || process.platform;
   let lib = null;
   let bound = null;      // the handlers on the hook, while it runs
   let finishCapture = null;
 
   const native = () => (lib = lib || load());
+
+  function removeHandlers() {
+    if (!bound) return false;
+    for (const name of EVENTS) lib.uIOhook.removeListener(name, bound[name]);
+    bound = null;
+    return true;
+  }
 
   function hookOn(handlers) {
     const { uIOhook } = native();
@@ -40,26 +40,18 @@ function createUiohookListener(o = {}) {
     }
   }
 
-  function removeHandlers() {
-    if (!bound) return false;
-    for (const name of EVENTS) lib.uIOhook.removeListener(name, bound[name]);
-    bound = null;
-    return true;
-  }
-
-  function hookOff() { if (removeHandlers()) lib.uIOhook.stop(); }
-
   function start(binding, onEdge) {
     const isKey = binding.type === 'key';
-    const key = (down) => (e) => { if (isKey && e.keycode === binding.code) onEdge(down); };
+    const key = (down) => (e) => { if (isKey && e.keycode === binding.keycode) onEdge(down); };
     const mouse = (down) => (e) => { if (!isKey && e.button === binding.button) onEdge(down); };
     hookOn({ keydown: key(true), keyup: key(false), mousedown: mouse(true), mouseup: mouse(false) });
   }
 
-  function stop() { hookOff(); }
+  function stop() { if (removeHandlers()) lib.uIOhook.stop(); }
 
   // Reports the first input when it is released, so the hook is never restarted with the chosen key still down (its
-  // auto-repeat would key the radio). Escape cancels. The stop is deferred out of the native callback.
+  // auto-repeat would key the radio). An input off the allow-list ends the capture as `{ refused: true }`, without
+  // saying which it was. Escape cancels. The stop is deferred out of the native callback.
   function capture() {
     return new Promise((resolve, reject) => {
       let pending = null; // the input that was pressed first
@@ -69,19 +61,22 @@ function createUiohookListener(o = {}) {
         defer(() => { lib.uIOhook.stop(); resolve(result); });
       };
       finishCapture = finish;
-      const nameKey = (code) => keyName(native().UiohookKey, code);
+      const report = () => finish(pending.binding || { refused: true });
       const handlers = {
         keydown: (e) => {
           if (pending || !e.keycode) return;
-          if (e.keycode === native().UiohookKey.Escape) { finish(null); return; }
-          pending = { type: 'key', code: e.keycode, name: nameKey(e.keycode) };
+          const keys = native().UiohookKey;
+          if (e.keycode === keys.Escape) { finish(null); return; }
+          const label = bindableKeyLabel(keys, e.keycode);
+          pending = { keycode: e.keycode, binding: label && { type: 'key', keycode: e.keycode, label } };
         },
-        keyup: (e) => { if (pending && pending.type === 'key' && e.keycode === pending.code) finish(pending); },
+        keyup: (e) => { if (pending && e.keycode === pending.keycode) report(); },
         mousedown: (e) => {
           if (pending || e.button === LEFT_BUTTON) return;
-          pending = { type: 'mouse', button: e.button, name: MOUSE_NAMES[e.button] || `Mouse ${e.button}` };
+          const label = bindableMouseLabel(e.button);
+          pending = { button: e.button, binding: label && { type: 'mouse', button: e.button, label } };
         },
-        mouseup: (e) => { if (pending && pending.type === 'mouse' && e.button === pending.button) finish(pending); },
+        mouseup: (e) => { if (pending && e.button === pending.button) report(); },
       };
       try {
         hookOn(handlers);
@@ -95,15 +90,15 @@ function createUiohookListener(o = {}) {
   function cancelCapture() { if (finishCapture) finishCapture(null); }
 
   function accepts(b) {
-    if (!b || typeof b.name !== 'string') return false;
-    if (b.type === 'key') return Number.isInteger(b.code) && b.code > 0;
-    return b.type === 'mouse' && Number.isInteger(b.button) && b.button !== LEFT_BUTTON;
+    if (!b || typeof b.label !== 'string') return false;
+    if (b.type === 'key') return !!lib && bindableKeyLabel(lib.UiohookKey, b.keycode) !== null;
+    return b.type === 'mouse' && bindableMouseLabel(b.button) !== null;
   }
 
   /** Loads the native module (which starts no hook). Throws if it cannot. */
   async function probe() { native(); }
 
-  return { kind: 'uiohook', probe, start, stop, capture, cancelCapture, accepts };
+  return { kind: 'uiohook', releaseHoldMs: platform === 'linux' ? X11_RELEASE_HOLD_MS : 0, probe, start, stop, capture, cancelCapture, accepts };
 }
 
 module.exports = { createUiohookListener };

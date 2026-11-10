@@ -6,8 +6,10 @@
 //  - losing the window (`blur`, `visibilitychange` to hidden) releases, because the keyup goes to another window;
 //  - a maximum key-down time releases a transmission anyway (the safety net), and the key must be lifted and
 //    pressed again to transmit afterwards.
-// A global input (docs/adr/0161 §3, `globalDown`/`globalUp`) is a second source: its release comes from outside the
-// window, so losing the window does not end it. The transmission lasts until every source is up; the fuse ends all.
+// Several sources can hold it at once (docs/adr/0161 §3, S-RO-1 RO14): `window` (the key), `button` (on screen) and
+// `global` (an input heard outside the window). It transmits while any holds. Losing the window ends the two that live
+// in the window, never `global`, whose release comes from outside. The fuse ends all and latches until every source
+// has let go.
 // lxsrs has no timeout of its own: it transmits for as long as `/ptt/start` keeps arriving every REPEAT_MS.
 
 export const PTT_REPEAT_MS = 400;
@@ -34,6 +36,7 @@ export function clampMaxTxSeconds(v) {
  * @param {()=>number} [o.getMaxTxSeconds]
  * @param {Function} [o.setInterval] @param {Function} [o.clearInterval] @param {Function} [o.setTimeout] @param {Function} [o.clearTimeout]
  * @param {(msg:string)=>void} [o.log]
+ * @param {()=>void} [o.onFuse]  the maximum transmit time ended a transmission
  */
 export function createPttController(o) {
   const si = o.setInterval || setInterval, ci = o.clearInterval || clearInterval;
@@ -42,24 +45,25 @@ export function createPttController(o) {
   const maxMs = () => clampMaxTxSeconds(o.getMaxTxSeconds ? o.getMaxTxSeconds() : PTT_MAX_TX_DEFAULT_S) * 1000;
   let held = false, repeat = null, fuse = null;
   let keyDown = false; // the PTT key is physically down (set on keydown, cleared on keyup, blur)
-  let windowKeying = false; // the window's key or on-screen button is keying
-  let globalPressed = false; // the global input is physically down; survives the fuse, so a re-press is a real one
-  let globalKeying = false; // the global input is keying
+  let latched = false; // the fuse fired and a source has not let go yet
+  const holding = { window: false, button: false, global: false };
+  const anyHolding = () => holding.window || holding.button || holding.global;
 
   function engage() {
-    if (held) return;
+    if (held || latched) return;
     held = true;
     o.post('/ptt/start');
     repeat = si(() => o.post('/ptt/start'), PTT_REPEAT_MS);
     fuse = st(() => {
       log(`PTT released after the ${maxMs() / 1000} s maximum transmit time`);
-      windowKeying = false; globalKeying = false;
-      release();
+      latched = true;
+      disengage();
+      if (o.onFuse) o.onFuse();
     }, maxMs());
     o.setActive(true);
   }
 
-  function release() {
+  function disengage() {
     if (!held) return;
     held = false;
     ci(repeat); repeat = null;
@@ -68,37 +72,27 @@ export function createPttController(o) {
     o.setActive(false);
   }
 
-  const settle = () => { if (!windowKeying && !globalKeying) release(); };
-
-  function down() { windowKeying = true; engage(); }
-  function up() { windowKeying = false; settle(); }
-
-  /** The global input went down. Repeats are ignored: only a press after a release keys again. */
-  function globalDown() {
-    if (globalPressed) return;
-    globalPressed = true;
-    globalKeying = true;
-    engage();
+  function settle() {
+    if (anyHolding()) return;
+    latched = false;
+    disengage();
   }
 
-  function globalUp() {
-    globalPressed = false;
-    globalKeying = false;
-    settle();
-  }
+  function down(source = 'button') { holding[source] = true; engage(); }
+  function up(source = 'button') { holding[source] = false; settle(); }
 
-  function releaseAll() { keyDown = false; up(); }
+  function releaseWindow() { keyDown = false; holding.window = false; holding.button = false; settle(); }
 
   o.doc.addEventListener('keydown', (e) => {
     if (e.code !== o.getKey() || e.repeat || o.isTyping()) return;
     if (e.preventDefault) e.preventDefault();
     keyDown = true;
-    down();
+    down('window');
   });
   // No isTyping() test: the release must work wherever focus has moved to since the key went down.
-  o.doc.addEventListener('keyup', (e) => { if (e.code === o.getKey()) releaseAll(); });
-  o.win.addEventListener('blur', releaseAll);
-  o.doc.addEventListener('visibilitychange', () => { if (o.doc.hidden) releaseAll(); });
+  o.doc.addEventListener('keyup', (e) => { if (e.code === o.getKey()) { keyDown = false; up('window'); } });
+  o.win.addEventListener('blur', releaseWindow);
+  o.doc.addEventListener('visibilitychange', () => { if (o.doc.hidden) releaseWindow(); });
 
-  return { down, up, globalDown, globalUp, isHeld: () => held, isKeyDown: () => keyDown };
+  return { down, up, isHeld: () => held, isKeyDown: () => keyDown };
 }

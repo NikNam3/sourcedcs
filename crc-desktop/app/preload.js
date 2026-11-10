@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('crcGlobalPtt', {
     configure:     (cfg) => ipcRenderer.invoke('global-ptt-configure', cfg),
     capture:       () => ipcRenderer.invoke('global-ptt-capture'),
     cancelCapture: () => ipcRenderer.send('global-ptt-cancel-capture'),
+    fuseFired:     () => ipcRenderer.send('global-ptt-fuse'),
     onEdge: (cb) => {
         const handler = (_event, down) => cb(down === true);
         ipcRenderer.on('global-ptt-edge', handler);

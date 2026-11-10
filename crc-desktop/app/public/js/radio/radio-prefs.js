@@ -5,7 +5,7 @@
 // "unlinked") and the controller's groups; the manual radios; the devices `{ deviceId, label }` (RQ9); the PTT key, its
 // maximum transmit time and the PTT target; the audio options (gains, TX sound set, noise, RQ18); the intercom
 // `{ unitId }` or null for none (H183: unitId null is the shared, non-DCS intercom); Global PTT (docs/adr/0161 §3:
-// `enabled`, null until the controller chooses, and the listener's own `binding`). A leaf: it imports
+// `enabled`, null until the controller chooses, and one binding per listener, S-RO-1 RO13). A leaf: it imports
 // nothing. It persists through whatever `bindRadioPrefsStorage` gives it (the panel binds settings.js's one `radio`
 // object + `saveSettings`), so node:test drives it with a plain object.
 //
@@ -40,18 +40,21 @@ function normalizeDevice(d) {
   return isObj(d) && str(d.deviceId) ? { deviceId: d.deviceId, label: typeof d.label === 'string' ? d.label : '' } : null;
 }
 
-/** A binding as the listener that made it reported it (`crc-desktop/global-ptt/`), or null. */
-function normalizeGlobalBinding(b) {
-  if (!isObj(b) || !str(b.name)) return null;
-  if (b.type === 'key' && Number.isInteger(b.code)) return { type: 'key', code: b.code, name: b.name };
-  if (b.type === 'mouse' && Number.isInteger(b.button)) return { type: 'mouse', button: b.button, name: b.name };
-  if (b.type === 'portal' && str(b.id)) return { type: 'portal', id: b.id, name: b.name };
+/** A binding as `crc-desktop/global-ptt/uiohook-listener.js` reported it, or null. */
+function normalizeUiohookBinding(b) {
+  if (!isObj(b) || !str(b.label)) return null;
+  if (b.type === 'key' && Number.isInteger(b.keycode)) return { type: 'key', keycode: b.keycode, label: b.label };
+  if (b.type === 'mouse' && Number.isInteger(b.button)) return { type: 'mouse', button: b.button, label: b.label };
   return null;
+}
+
+function normalizePortalBinding(b) {
+  return isObj(b) && str(b.shortcutId) && str(b.label) ? { shortcutId: b.shortcutId, label: b.label } : null;
 }
 
 function normalizeGlobalPtt(g) {
   const r = isObj(g) ? g : {};
-  return { enabled: typeof r.enabled === 'boolean' ? r.enabled : null, binding: normalizeGlobalBinding(r.binding) };
+  return { enabled: typeof r.enabled === 'boolean' ? r.enabled : null, uiohook: normalizeUiohookBinding(r.uiohook), portal: normalizePortalBinding(r.portal) };
 }
 
 /** A whole, valid prefs object from whatever was stored (anything: null, an old shape, a hand edit). */
@@ -102,7 +105,7 @@ export function withDevices(prefs, patch) { return { ...prefs, devices: { ...pre
 export function withPttKey(prefs, code) { return { ...prefs, pttKey: str(code) || PTT_KEY_DEFAULT }; }
 export function withMaxTx(prefs, seconds) { return { ...prefs, maxTxS: Number.isFinite(seconds) ? seconds : null }; }
 export function withPttTarget(prefs, radioId) { return { ...prefs, pttTarget: str(radioId) }; }
-/** Some of Global PTT's `{ enabled, binding }`. */
+/** Some of Global PTT's `{ enabled, uiohook, portal }`. */
 export function withGlobalPtt(prefs, patch) { return { ...prefs, globalPtt: normalizeGlobalPtt({ ...prefs.globalPtt, ...patch }) }; }
 /** Whether Global PTT is on: the controller's choice, else on in radio-only and off in the full app (/js/config.js). */
 export function globalPttEnabled(prefs) {

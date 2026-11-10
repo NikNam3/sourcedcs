@@ -11,7 +11,7 @@ const { connectPortal } = require('./portal-client');
 
 const CH = Object.freeze({
   status: 'global-ptt-status', configure: 'global-ptt-configure', capture: 'global-ptt-capture',
-  cancelCapture: 'global-ptt-cancel-capture', edge: 'global-ptt-edge',
+  cancelCapture: 'global-ptt-cancel-capture', edge: 'global-ptt-edge', fuse: 'global-ptt-fuse',
 });
 const OFF = Object.freeze({ enabled: false, binding: null });
 
@@ -19,9 +19,8 @@ const OFF = Object.freeze({ enabled: false, binding: null });
 function chooseListenerKind(platform, env) {
   if (platform === 'win32') return 'uiohook';
   if (platform !== 'linux') return null;
-  if (env.XDG_SESSION_TYPE === 'wayland') return 'portal';
-  if (env.XDG_SESSION_TYPE === 'x11') return env.DISPLAY ? 'uiohook' : null;
-  if (env.WAYLAND_DISPLAY) return 'portal';
+  // DISPLAY is set on Wayland too (XWayland), where a hook would start and hear next to nothing: the portal only.
+  if (env.XDG_SESSION_TYPE === 'wayland' || env.WAYLAND_DISPLAY) return 'portal';
   return env.DISPLAY ? 'uiohook' : null;
 }
 
@@ -48,24 +47,39 @@ function attach(win, deps = {}) {
     const listener = (deps.makeListener || makeListener)(kind, env);
     const wc = win.webContents;
     const sendEdge = (down) => { if (!wc.isDestroyed()) wc.send(CH.edge, down); };
-    const gate = listener ? createPttGate({ listener, sendEdge, warn }) : null;
+    // S-RO-1 RO8: a hidden page's timers are throttled, and the transmit fuse is one. Off while a listener runs, then
+    // back to what it was (radio-only keeps it off all the time, so that is what comes back).
+    let throttling = true;
+    const onRunning = (on) => {
+      if (wc.isDestroyed()) return;
+      if (on) { throttling = wc.getBackgroundThrottling(); wc.setBackgroundThrottling(false); }
+      else wc.setBackgroundThrottling(throttling);
+    };
+    const gate = listener ? createPttGate({ listener, sendEdge, onRunning, warn }) : null;
 
+    let reason = listener ? null : 'no-session';
     let probed = null;
     const available = () => (probed = probed || (listener
-      ? listener.probe().then(() => true, (err) => { warn(`not available: ${err.message}`); return false; })
+      ? listener.probe().then(() => true, (err) => {
+        warn(`not available: ${err.message}`);
+        reason = listener.kind === 'portal' ? 'no-portal' : 'no-native';
+        return false;
+      })
       : Promise.resolve(false)));
     const usable = async () => (gate && await available() ? gate : null);
 
     // Only the main window: the Casdoor popup and anything else have no business with this.
     const own = (fn, refused) => (event, arg) => (event.sender === wc ? fn(arg) : refused);
-    const unavailable = { available: false, kind: null, enabled: false, binding: null, running: false, capturing: false };
-    const statusOf = (g, s) => (g ? { available: true, kind: listener.kind, ...s } : unavailable);
+    const unavailable = { available: false, kind: null, reason: null, enabled: false, binding: null, running: false, capturing: false, failed: false };
+    const statusOf = (g, s) => (g ? { available: true, kind: listener.kind, reason: null, ...s } : { ...unavailable, reason });
 
-    ipc.handle(CH.status, own(async () => { const g = await usable(); return statusOf(g, g && g.status()); }, unavailable));
+    ipc.handle(CH.status, own(async () => { const g = await usable(); return statusOf(g, g && await g.status()); }, unavailable));
     ipc.handle(CH.configure, own(async (cfg) => { const g = await usable(); return statusOf(g, g && await g.configure(cfg)); }, unavailable));
     ipc.handle(CH.capture, own(async () => { const g = await usable(); return g ? g.capture() : null; }, null));
     const onCancel = own(() => { if (gate) gate.cancelCapture(); });
     ipc.on(CH.cancelCapture, onCancel);
+    const onFuse = own(() => { if (gate) gate.fuse(); });
+    ipc.on(CH.fuse, onFuse);
 
     // A page going away takes its PTT controller with it; the next page turns the listener on again if it wants it.
     const reset = () => { if (gate) gate.configure(OFF); };
@@ -78,6 +92,7 @@ function attach(win, deps = {}) {
       close() {
         for (const ch of [CH.status, CH.configure, CH.capture]) ipc.removeHandler(ch);
         ipc.removeListener(CH.cancelCapture, onCancel);
+        ipc.removeListener(CH.fuse, onFuse);
         if (!wc.isDestroyed()) {
           wc.removeListener('did-start-navigation', onNavigate);
           wc.removeListener('render-process-gone', reset);
