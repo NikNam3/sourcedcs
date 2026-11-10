@@ -1906,11 +1906,11 @@ the variation goes in that file's `magneticVariation` (`fixedDeg` or `offsetDeg`
 the ATIS text give the wind **magnetic** (`NNN°M`; the reference card's tooltip shows the true value, and
 the ATIS says "Wind not available." when the variation is unknown, H76).
 
-## 8K. The carrier (`CARRIER` Facility, `adr/0074`, `0113`-`0116`, `0156`)
+## 8K. The carrier (`CARRIER` Facility, `adr/0074`, `0113`-`0116`, `0156`, `0157`)
 
 Sign on to `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2` or `CV_DEP` (departure control) under **Panels → Acting As**
 (group `CARRIER`). A carrier Strip is a **launch** (`CV_LAUNCH`: ON DECK, AIRBORNE, KILO) or a **recovery**
-(`CV_RECOVERY`: STACK, COMMENCED, FINAL APP, DIRTY, BULLSEYE, PATTERN). When a carrier Position is left, its Strips stay
+(`CV_RECOVERY`: STACK, COMMENCED, FINAL APP, DIRTY, BULLSEYE, PATTERN, and in Case I SIGNAL CHARLIE). When a carrier Position is left, its Strips stay
 with it and the next controller on its list is **offered** the hat (§8M): `CV_APP1` → `CV_MARSHAL`, `CV_APP2`, `CV_DEP`,
 `CV_PRIFLY`; `CV_APP2` → `CV_MARSHAL`, `CV_APP1`, `CV_DEP`, `CV_PRIFLY`; `CV_PRIFLY` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`,
 `CV_DEP`; `CV_MARSHAL` → `CV_APP1`, `CV_APP2`, `CV_DEP`, `CV_PRIFLY`; `CV_DEP` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`,
@@ -1937,12 +1937,16 @@ A carrier Strip carries only: the side number, the type, the departure radial (a
 the squawk and the assignments ("Case I: no radar service"). An assigned heading and altitude are checked by conformance
 like any flight's; a speed is shown and not checked (crc-sync has only ground speed).
 
-### The flow, one button per state
+### The flow: the button is the state
+
+Each state has one button, its next step; where the flight can go two ways, the second is a button beside it (BOLTER
+beside TRAPPED, TO MARSHAL beside DROP, DROP beside LAUNCHED), on the Strip and on the MARSHAL row alike.
 
 **Departures.** PriFly creates the launch **ON DECK**.
 - **Case I:** PriFly's buttons are **DROP** (the aircraft has gone) and **TO MARSHAL** (it comes straight back to recover).
 - **Case II and III:** **LAUNCHED** hands it to departure control (`cv-dep-departures`), whose **KILO** records the
-  report; at KILO its buttons are **DROP** and **TO MARSHAL**.
+  report; at KILO its buttons are **DROP** and **TO MARSHAL**. **DROP** sits beside LAUNCHED too, for a jet that stays on
+  deck, and stays live when LAUNCHED cannot be pressed (no departure control).
 
 **TO MARSHAL** makes the launch the flight's recovery in place: the same Strip, flight and squawk, now at **STACK** in the
 Marshal's stack, accepted at once. The carrier hands nothing off the ship: the controller who takes a dropped departure
@@ -1950,15 +1954,23 @@ next (CTR, a GCI) creates their own Strip.
 
 **Arrivals, Case II and III.** The Marshal: **COMMENCE** (STACK to COMMENCED: the flight keeps the EAT it was working to),
 **TO APPR** (hands it to APP 1 or APP 2, alternately in push order; ⋯ → **To APP 1 / To APP 2** names the other lane). The
-lane: **DIRTY UP**, **FLY BULLS**, **TO PATTERN**, **DROP**. **Arrivals, Case I.** The Marshal's **SGNL C** hands
-the flight to PriFly (`cv-prifly-pattern`), whose **DROP** ends it.
+lane: **DIRTY UP**, **FLY BULLS**, then **TRAPPED** and **BOLTER**. **BOLTER** keeps the flight with the lane, in the
+pattern (`cv-app1-pattern`, `cv-app2-pattern`), where TRAPPED and BOLTER are offered again. **TRAPPED** is the landing:
+the Strip goes to PriFly **ON DECK** (`cv-prifly-launch`), the same Strip, flight and squawk, now a launch, and leaves the
+stack (a vacancy, nobody closes up). PriFly then **DROPs** it or launches it again as any launch. With nobody at PriFly
+and nobody offered its hat, TRAPPED is greyed "no receiving Position present"; BOLTER still works.
+
+**Arrivals, Case I.** There is no pattern in Case I, only the stack. The Marshal's **SGNL C** hands the flight to
+PriFly, **SIGNAL CHARLIE** (cleared to land, `cv-prifly-charlie`). PriFly's buttons are **TRAPPED** (on deck, as above:
+DROP or TO MARSHAL from there) and **BOLTER** (it stays cleared to land, with PriFly).
 
 **Back to stack** (⋯): the Marshal from COMMENCED, FINAL APP or DIRTY (on the lane's Strip too), the lane on its own
 Strip at FINAL APP or DIRTY. The flight returns as a new arrival: the next free slot at the top, a new EAT, angels and DME
 from the slot, its HDG, SPD and ALT gone. Not offered at BULLSEYE or in the pattern (a flight in the pattern stays in it).
 
 **Abort to Case II/III stack** (⋯, the Marshal): a Case I flight that cannot finish Case I (the weather went) goes to
-the Case II/III stack at the next free slot. Offered only on a Case I flight, and disabled while the ship is in Case I.
+the Case II/III stack at the next free slot, from the stack or from SIGNAL CHARLIE (PriFly's Strip). Offered only on a
+Case I flight, and disabled while the ship is in Case I.
 
 **Dragging a Strip into a lane Bay does not do it; the button does** (the drag is refused with the button's name).
 
@@ -2028,7 +2040,8 @@ the Case II/III stack at the next free slot. Offered only on a Case I flight, an
   and the marshal radial) / 360) ÷ 5 nm a minute + 5 minutes from now, rounded up to the minute and always after the latest
   EAT in the stack (the squadron's rule). It is an assigned EAT (underlined), so the Marshal can change or clear it.
 - **The Marshal and both approach controllers look at the same panel.** Each row's button is the flight's state
-  (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, TO PATTERN, DROP) and is live only for the controller who holds the Strip;
+  (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, then TRAPPED with BOLTER beside it; Case I: SGNL C, then PriFly's TRAPPED and
+  BOLTER) and is live only for the controller who holds the Strip; a trapped jet leaves the panel (it is a launch);
   everyone else sees it greyed as the status. The next flight to push has the blue COMMENCE.
 - **DME** in the table is the **assigned holding fix DME** (angels + 15, or the first fix + slot); the picture still puts
   each aircraft at its real range from the ship.
@@ -2070,8 +2083,9 @@ the Case II/III stack at the next free slot. Offered only on a Case I flight, an
   any other aircraft still alerts.
 - **Case I is never correlated automatically**: bind its track by hand (⋯ → Bind) if you want one. Case II and III
   correlate by squawk.
-- A launch counts once in the traffic count, a recovery once; a launch handed to the Marshal that lands on the ship counts
-  once, as a **local** movement (`adr/0109`).
+- A launch counts once in the traffic count; **the trap is the landing**: the trapped Strip, now a launch, counts once
+  when PriFly drops it (a recovery dropped without a trap, a divert, is not counted). A launch handed to the Marshal that
+  lands on the ship counts once, as a **local** movement (`adr/0109`, `adr/0157`).
 - **Not walked against a real DCS ship**: the banner reads "hull not found" until a hull track exists.
 
 ## 8L. Incirlik: the tower's pattern, the single frequency approach and PAR (`adr/0117`, `0123`, `0126`, `0130`)
