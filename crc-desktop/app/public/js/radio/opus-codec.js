@@ -61,26 +61,39 @@ export function createOpusEncoder(onFrame, onError = () => {}, codecs = browserC
 }
 
 /**
- * One decoder per sender (Opus is stateful). The packet number rides in the chunk timestamp so the output can be
- * placed in its slot.
+ * One decoder per sender (Opus is stateful). Each output is matched to its packet number by order: an AudioDecoder
+ * emits its outputs in decode order, but Chromium does not hand the input timestamp back unchanged (its timestamp
+ * helper restates it from the first chunk plus the decoded duration), so the packet number is kept in a queue here,
+ * not read back from `audio.timestamp`. A decoder that fails (a corrupt frame closes it) is replaced on the next
+ * packet, so one bad frame costs one frame, not the rest of the transmission.
  * @param {(pcm:Float32Array, packetNumber:number) => void} onPcm
  */
 export function createOpusDecoder(onPcm, onError = () => {}, codecs = browserCodecs()) {
-  const dec = new codecs.AudioDecoder({
-    output: (audio) => {
-      const pcm = new Float32Array(audio.numberOfFrames);
-      audio.copyTo(pcm, { planeIndex: 0, format: 'f32-planar' });
-      const packetNumber = audio.timestamp;
-      audio.close();
-      onPcm(pcm, packetNumber);
-    },
-    error: onError,
-  });
-  dec.configure(DECODER_CONFIG);
+  let pending = [];
+  let dec = null;
+  let seq = 0; // the chunk timestamps only need to rise
+  function open() {
+    pending = [];
+    dec = new codecs.AudioDecoder({
+      output: (audio) => {
+        const pcm = new Float32Array(audio.numberOfFrames);
+        audio.copyTo(pcm, { planeIndex: 0, format: 'f32-planar' });
+        audio.close();
+        const packetNumber = pending.shift();
+        if (packetNumber !== undefined) onPcm(pcm, packetNumber);
+      },
+      error: (e) => { onError(e); },
+    });
+    dec.configure(DECODER_CONFIG);
+  }
+  open();
   return {
     decode(opus, packetNumber) {
-      if (dec.state !== 'configured' || !opus.byteLength) return;
-      dec.decode(new codecs.EncodedAudioChunk({ type: 'key', timestamp: packetNumber, data: opus }));
+      if (!opus.byteLength) return;
+      if (dec.state === 'closed') open();
+      if (dec.state !== 'configured') return;
+      pending.push(packetNumber);
+      dec.decode(new codecs.EncodedAudioChunk({ type: 'key', timestamp: seq++, data: opus }));
     },
     close() { if (dec.state !== 'closed') dec.close(); },
   };

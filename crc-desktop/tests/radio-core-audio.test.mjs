@@ -196,3 +196,27 @@ test('mic constraints turn every browser processing flag off and pin the device'
   assert.equal(micConstraints(null).audio.deviceId, undefined);
   assert.equal(peakOf([Float32Array.from([0.1, -0.7]), Float32Array.from([0.3])]), Math.fround(0.7));
 });
+
+test('the packet number survives a decoder that restates timestamps (Chromium), and a failed decoder is replaced', () => {
+  const decoders = [];
+  class AudioDecoder {
+    constructor({ output, error }) { this.output = output; this.error = error; this.state = 'unconfigured'; this.n = 0; decoders.push(this); }
+    configure() { this.state = 'configured'; }
+    decode(chunk) {
+      if (chunk.data[0] === 0xff) { this.state = 'closed'; this.error(new Error('corrupt')); return; }
+      // Chromium-like: the output timestamp is the first input's plus the decoded duration, not the input's own
+      const ts = this.n++ * 40000;
+      this.output({ numberOfFrames: 1920, timestamp: ts, copyTo: (dst) => dst.fill(0.25), close() {} });
+    }
+    close() { this.state = 'closed'; }
+  }
+  class EncodedAudioChunk { constructor(o) { Object.assign(this, o); } }
+  const out = [];
+  const d = createOpusDecoder((pcm, n) => out.push(n), undefined, { AudioDecoder, EncodedAudioChunk });
+  d.decode(new Uint8Array([1]), 500);
+  d.decode(new Uint8Array([1]), 502); // 501 lost
+  d.decode(new Uint8Array([0xff]), 503); // corrupt: the decoder closes
+  d.decode(new Uint8Array([1]), 504);
+  assert.deepEqual(out, [500, 502, 504]);
+  assert.equal(decoders.length, 2, 'replaced after the failure');
+});
