@@ -11,14 +11,20 @@
 //   first keeps it and the second is left out of its group with `conflict` set (and `groupId` null, so the engine
 //   treats it as unlinked). Its membership is kept, so it rejoins as soon as the conflict is gone.
 //
-// The stored membership is `{ [radioId]: groupId | UNLINKED }` and holds only what differs from a kind's default:
-// a POSITION radio defaults to the automatic group, a GUARD or MANUAL radio to none.
+// - A receive-only radio (an Observer's Position, S-RADIO-1 RQ14) and a radio that already carries a conflict (no SRS
+//   slot, radio-set.js) are in no group, whatever the membership says.
+//
+// The stored membership is `{ [radioId]: groupId | null }` and holds only what differs from a kind's default: a
+// POSITION radio defaults to the automatic group, a GUARD or MANUAL radio to none. An explicit null is "unlinked", so a
+// Position radio taken out of the automatic group stays out across a restart and a re-staffing (RQ17).
 
 export const AUTO_GROUP_ID = 'AUTO';
 export const AUTO_GROUP_NAME = 'POSITIONS';
-/** The stored membership value for "in no group", where a kind's default would put it in one. */
-export const UNLINKED = 'UNLINKED';
 export const GROUP_NAME_MAX = 12;
+/** SRS gives a client 11 radio slots (lxsrs_v2 models.py MAX_RADIOS, S-RADIO-1 RQ13). */
+export const SRS_SLOTS = 11;
+/** The conflict on a radio left without an SRS slot: tuned nowhere, linked nowhere, never keyed. */
+export const NO_SLOT_CONFLICT = `no SRS slot (${SRS_SLOTS} in use)`;
 
 const khzOf = (mhz) => Math.round(mhz * 1000);
 
@@ -26,9 +32,9 @@ function defaultGroupOf(kind) { return kind === 'POSITION' ? AUTO_GROUP_ID : nul
 
 /** The group a radio asks to be in, before the one-frequency rule: a group id, or null for none. */
 export function intendedGroupOf(radio, membership = {}, groupIds = new Set([AUTO_GROUP_ID])) {
-  const stored = Object.hasOwn(membership, radio.id) ? membership[radio.id] : undefined;
-  const want = stored === undefined ? defaultGroupOf(radio.kind) : stored;
-  if (want === UNLINKED || want == null) return null;
+  if (radio.receiveOnly) return null;
+  const want = Object.hasOwn(membership, radio.id) ? membership[radio.id] : defaultGroupOf(radio.kind);
+  if (want == null) return null;
   return groupIds.has(want) ? want : null; // a group that no longer exists links nothing
 }
 
@@ -43,6 +49,7 @@ export function assignLinkGroups(radios, { groups = [], membership = {} } = {}) 
   const groupIds = new Set(byId.keys());
   const groupOfKhz = new Map(); // kHz -> the group id that holds it
   const out = radios.map((r) => {
+    if (r.conflict) return { ...r, groupId: null }; // already refused (no SRS slot): tuned nowhere, linked nowhere
     const want = intendedGroupOf(r, membership, groupIds);
     if (want === null) return { ...r, groupId: null, conflict: null };
     const khz = khzOf(r.mhz);
@@ -106,7 +113,7 @@ export function renameGroup(groups = [], id, name) {
 export function deleteGroup({ groups = [], membership = {} }, id) {
   if (id === AUTO_GROUP_ID) return { groups, membership };
   const next = { ...membership };
-  for (const [radioId, g] of Object.entries(membership)) if (g === id) next[radioId] = UNLINKED;
+  for (const [radioId, g] of Object.entries(membership)) if (g === id) next[radioId] = null;
   return { groups: groups.filter(g => g.id !== id), membership: next };
 }
 
@@ -115,7 +122,7 @@ export function moveRadio(membership = {}, radio, groupId) {
   const next = { ...membership };
   const target = groupId == null ? null : groupId;
   if (target === defaultGroupOf(radio.kind)) delete next[radio.id];
-  else next[radio.id] = target === null ? UNLINKED : target;
+  else next[radio.id] = target;
   return next;
 }
 
@@ -130,17 +137,23 @@ export function forgetRadio(membership = {}, radioId) {
 /** The radios a transmission on `radioId` keys: its whole group, or the radio alone when it is unlinked. */
 export function transmitRadioIds(set, radioId) {
   const r = set.radios.find(x => x.id === radioId);
-  if (!r) return [];
+  if (!mayTransmit(r)) return [];
   if (!r.groupId) return [r.id];
   return set.radios.filter(x => x.groupId === r.groupId).map(x => x.id);
 }
 
+/** A radio PTT may key: in the set, not receive-only, not refused a slot. */
+export function mayTransmit(radio) { return !!radio && !radio.receiveOnly && radio.conflict !== NO_SLOT_CONFLICT; }
+
 /**
- * The radio PTT transmits on: the controller's choice while it exists, else the automatic group's first radio, else
- * none. Never a guard or a manual radio the controller did not choose.
+ * The radio PTT transmits on (RQ17): the controller's choice while it exists and may transmit, else the automatic
+ * group's first radio, else the first radio that may transmit, else none. The fallback is not saved.
  */
 export function resolvePttTarget(set, wantedId) {
-  if (wantedId && set.radios.some(r => r.id === wantedId)) return wantedId;
+  const wanted = wantedId && set.radios.find(r => r.id === wantedId);
+  if (mayTransmit(wanted)) return wanted.id;
   const auto = set.groups.find(g => g.auto);
-  return auto && auto.radioIds.length ? auto.radioIds[0] : null;
+  if (auto && auto.radioIds.length) return auto.radioIds[0];
+  const first = set.radios.find(mayTransmit);
+  return first ? first.id : null;
 }

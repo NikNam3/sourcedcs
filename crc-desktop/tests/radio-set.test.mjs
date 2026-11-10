@@ -3,10 +3,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildRadioSet, positionRadios, rowsWithoutRadio, guardRadios, manualRadios, positionRowsOf, GUARDS,
+  buildRadioSet, positionRadios, rowsWithoutRadio, positionsWithoutRow, guardRadios, manualRadios, positionRowsOf, GUARDS,
+  assignSlots, slotKeyOf,
 } from '../app/public/js/radio/radio-set.js';
 import {
-  AUTO_GROUP_ID, UNLINKED, assignLinkGroups, createGroup, renameGroup, deleteGroup, moveRadio, forgetRadio,
+  AUTO_GROUP_ID, NO_SLOT_CONFLICT, SRS_SLOTS, mayTransmit, assignLinkGroups, createGroup, renameGroup, deleteGroup, moveRadio, forgetRadio,
   nextGroupName, groupNameProblem, transmitRadioIds, resolvePttTarget, intendedGroupOf,
 } from '../app/public/js/radio/link-groups.js';
 
@@ -40,7 +41,7 @@ test('a staffed Position gets its first UHF row and its first VHF row as radios,
   assert.deepEqual(ids(set), ['POSITION:P1:UHF', 'POSITION:P1:VHF', 'GUARD:UHF', 'GUARD:VHF']);
   assert.deepEqual(radio(set, 'POSITION:P1:UHF'), {
     id: 'POSITION:P1:UHF', kind: 'POSITION', positionId: 'P1', band: 'UHF', mhz: 275.8, modulation: 'AM',
-    label: 'P1 TWR', groupId: AUTO_GROUP_ID, conflict: null,
+    label: 'P1 TWR', groupId: AUTO_GROUP_ID, conflict: null, receiveOnly: false,
   });
   assert.equal(radio(set, 'POSITION:P1:VHF').mhz, 122.1);
   assert.deepEqual(group(set, AUTO_GROUP_ID).radioIds, ['POSITION:P1:UHF', 'POSITION:P1:VHF']);
@@ -116,7 +117,7 @@ test('staff then unstaff: the Position radios come and go, the membership stays'
 });
 
 test('a retune keeps the radio\'s identity and its group', () => {
-  const membership = { 'POSITION:P1:UHF': UNLINKED };
+  const membership = { 'POSITION:P1:UHF': null };
   const before = buildRadioSet({ staffed: staff('P1'), rows: ROWS, membership });
   const rows = ROWS.map(r => (r.positionId === 'P1' && r.label === 'TWR' ? { ...r, mhz: 280.0 } : r));
   const after = buildRadioSet({ staffed: staff('P1'), rows, membership });
@@ -148,7 +149,7 @@ test('a conflict: the first radio keeps the frequency, the second is left out of
 test('a conflict clears by itself when the other radio leaves the group, and the radio rejoins', () => {
   const groups = [{ id: 'G1', name: 'B' }];
   const manual = [{ id: 'm1', mhz: 275.8 }];
-  const membership = { 'MANUAL:m1': 'G1', 'POSITION:P1:UHF': UNLINKED };
+  const membership = { 'MANUAL:m1': 'G1', 'POSITION:P1:UHF': null };
   const set = buildRadioSet({ staffed: staff('P1'), rows: ROWS, manual, groups, membership });
   assert.equal(radio(set, 'MANUAL:m1').groupId, 'G1');
   assert.equal(radio(set, 'MANUAL:m1').conflict, null);
@@ -204,7 +205,7 @@ test('delete a group with radios in it: they become unlinked, a Position radio d
   const membership = { 'POSITION:P1:UHF': 'G1', 'GUARD:VHF': 'G1', 'GUARD:UHF': 'G2' };
   const d = deleteGroup({ groups, membership }, 'G1');
   assert.deepEqual(d.groups, [{ id: 'G2', name: 'B' }]);
-  assert.deepEqual(d.membership, { 'POSITION:P1:UHF': UNLINKED, 'GUARD:VHF': UNLINKED, 'GUARD:UHF': 'G2' });
+  assert.deepEqual(d.membership, { 'POSITION:P1:UHF': null, 'GUARD:VHF': null, 'GUARD:UHF': 'G2' });
   const set = buildRadioSet({ staffed: staff('P1'), rows: ROWS, ...d });
   assert.equal(radio(set, 'POSITION:P1:UHF').groupId, null);
   assert.equal(radio(set, 'GUARD:VHF').groupId, null);
@@ -221,7 +222,7 @@ test('move a radio: into a group, out of every group, back to its default (store
   const pos = { id: 'POSITION:P1:UHF', kind: 'POSITION' };
   const guard = { id: 'GUARD:UHF', kind: 'GUARD' };
   let m = moveRadio({}, pos, null);
-  assert.deepEqual(m, { 'POSITION:P1:UHF': UNLINKED });
+  assert.deepEqual(m, { 'POSITION:P1:UHF': null });
   m = moveRadio(m, pos, 'G1');
   assert.deepEqual(m, { 'POSITION:P1:UHF': 'G1' });
   m = moveRadio(m, pos, AUTO_GROUP_ID);
@@ -252,9 +253,71 @@ test('PTT keys the selected radio\'s whole group, or the radio alone when unlink
   assert.deepEqual(transmitRadioIds(set, 'nope'), []);
 });
 
-test('the PTT target: the controller\'s choice while it exists, else the automatic group\'s first radio, never a guard', () => {
+test('the PTT target: the controller\'s choice while it may transmit, else the automatic group\'s first, else the first radio', () => {
   const set = buildRadioSet({ staffed: staff('P2'), rows: ROWS });
   assert.equal(resolvePttTarget(set, 'GUARD:VHF'), 'GUARD:VHF');
   assert.equal(resolvePttTarget(set, 'POSITION:P1:UHF'), 'POSITION:P2:UHF'); // P1 left
-  assert.equal(resolvePttTarget(buildRadioSet({}), null), null);
+  assert.equal(resolvePttTarget(buildRadioSet({}), null), 'GUARD:UHF');
+  const observing = buildRadioSet({ staffed: [{ facilityId: F, positionId: 'P2', observer: true }], rows: ROWS });
+  assert.equal(resolvePttTarget(observing, 'POSITION:P2:UHF'), 'GUARD:UHF'); // never a receive-only radio
+});
+
+// ── Observers (S-RADIO-1 RQ14) ───────────────────────────────────────────────
+
+test('an Observer\'s Position radios are receive-only and unlinked, whatever the membership says, and never keyed', () => {
+  const staffed = [{ facilityId: F, positionId: 'P1' }, { facilityId: F, positionId: 'P2', observer: true }];
+  const groups = [{ id: 'G1', name: 'A' }];
+  const set = buildRadioSet({ staffed, rows: ROWS, groups, membership: { 'POSITION:P2:UHF': 'G1' } });
+  const obs = radio(set, 'POSITION:P2:UHF');
+  assert.equal(obs.receiveOnly, true);
+  assert.equal(obs.groupId, null);
+  assert.equal(obs.conflict, null);
+  assert.equal(radio(set, 'POSITION:P1:UHF').receiveOnly, false);
+  assert.deepEqual(group(set, AUTO_GROUP_ID).radioIds, ['POSITION:P1:UHF', 'POSITION:P1:VHF']);
+  assert.deepEqual(group(set, 'G1').radioIds, []);
+  assert.equal(mayTransmit(obs), false);
+  assert.deepEqual(transmitRadioIds(set, 'POSITION:P2:UHF'), []);
+});
+
+// ── Positions with no row (RQ15) ─────────────────────────────────────────────
+
+test('a staffed Position with no frequency row is listed for the panel\'s grey line', () => {
+  assert.deepEqual(positionsWithoutRow(staff('P1', 'P9'), ROWS), [{ facilityId: F, positionId: 'P9' }]);
+  assert.deepEqual(positionsWithoutRow(staff('P3'), ROWS), []); // a row, but outside both bands: the other note
+});
+
+// ── SRS slots (RQ13) ─────────────────────────────────────────────────────────
+
+test('one SRS slot per distinct frequency and modulation: duplicates share a slot', () => {
+  assert.equal(slotKeyOf({ mhz: 0.1 + 118.2, modulation: 'AM' }), slotKeyOf({ mhz: 118.3, modulation: 'AM' }));
+  assert.notEqual(slotKeyOf({ mhz: 118.3, modulation: 'AM' }), slotKeyOf({ mhz: 118.3, modulation: 'FM' }));
+  const manual = Array.from({ length: 12 }, (_, i) => ({ id: `d${i}`, mhz: 243.0 })); // all on guard
+  const set = buildRadioSet({ manual });
+  assert.ok(set.radios.every(r => r.conflict === null));
+});
+
+test('past 11 slots the overflow radios get the grey conflict: guards first, then Positions, then manual', () => {
+  const rows = Array.from({ length: 5 }, (_, i) => [row(`Q${i}`, 'U', 250 + i), row(`Q${i}`, 'V', 120 + i)]).flat();
+  const staffed = staff('Q0', 'Q1', 'Q2', 'Q3', 'Q4'); // 10 Position radios + 2 guards = 12 slots
+  const manual = [{ id: 'm1', mhz: 300.0 }];
+  const set = buildRadioSet({ staffed, rows, manual });
+  assert.equal(SRS_SLOTS, 11);
+  assert.equal(radio(set, 'GUARD:UHF').conflict, null);
+  assert.equal(radio(set, 'GUARD:VHF').conflict, null);
+  assert.equal(radio(set, 'POSITION:Q3:VHF').conflict, null);
+  assert.equal(radio(set, 'POSITION:Q4:UHF').conflict, null); // the 11th
+  assert.equal(radio(set, 'POSITION:Q4:VHF').conflict, NO_SLOT_CONFLICT);
+  assert.equal(radio(set, 'POSITION:Q4:VHF').groupId, null);
+  assert.equal(radio(set, 'MANUAL:m1').conflict, NO_SLOT_CONFLICT);
+  assert.equal(mayTransmit(radio(set, 'MANUAL:m1')), false);
+  assert.ok(!group(set, AUTO_GROUP_ID).radioIds.includes('POSITION:Q4:VHF'));
+  // a radio sharing a frequency already in a slot is never refused
+  const shared = assignSlots([...set.radios.map(r => ({ ...r, conflict: null })), { id: 'MANUAL:x', kind: 'MANUAL', mhz: 250, modulation: 'AM' }]);
+  assert.equal(shared.find(r => r.id === 'MANUAL:x').conflict, null);
+});
+
+test('a manual radio may be FM (RQ18); anything else is AM', () => {
+  const set = buildRadioSet({ manual: [{ id: 'f', mhz: 40.5, modulation: 'FM' }, { id: 'x', mhz: 251, modulation: 'INTERCOM' }] });
+  assert.equal(radio(set, 'MANUAL:f').modulation, 'FM');
+  assert.equal(radio(set, 'MANUAL:x').modulation, 'AM');
 });
