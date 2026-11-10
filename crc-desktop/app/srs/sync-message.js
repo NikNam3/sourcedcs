@@ -27,9 +27,16 @@ function cleanRadioLabel(value) {
 
 const round5 = (v) => (v ? Math.round(v * 1e5) / 1e5 : 0);
 
-/** One radio slot. @param {{hz?:number, modulation?:number, name?:string}} [r] */
+/** The radio `Model` this client reports (S-RADIO-1 RQ3; lxsrs_v2 sent linux1..11). */
+const RADIO_MODEL = 'crc';
+
+/**
+ * One radio slot. `name` and `model` are cleaned as models.py does. Pass `model` explicitly; it defaults to the name
+ * only so an empty slot stays empty. @param {{hz?:number, modulation?:number, name?:string, model?:string}} [r]
+ */
 function radioDict(r = {}) {
   const name = cleanRadioLabel(r.name || '');
+  const model = cleanRadioLabel(r.model ?? r.name ?? '');
   return {
     enc: false,
     encKey: 0,
@@ -37,7 +44,7 @@ function radioDict(r = {}) {
     modulation: r.modulation ?? Modulation.DISABLED,
     retransmit: false,
     secFreq: 1.0,
-    Model: name,
+    Model: model,
     Name: name,
     IntercomUnitId: 0,
   };
@@ -94,6 +101,6 @@ function decodeSyncMessage(line) {
 }
 
 module.exports = {
-  SRS_VERSION, MAX_RADIOS, MsgType, Modulation, UNTUNED_HZ,
+  SRS_VERSION, MAX_RADIOS, RADIO_MODEL, MsgType, Modulation, UNTUNED_HZ,
   cleanRadioLabel, radioDict, radioInfoDict, clientDict, encodeSyncMessage, decodeSyncMessage,
 };

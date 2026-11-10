@@ -6,12 +6,13 @@
 //   audio        the Opus frame, audioLength bytes
 //   frequencies  per frequency: f64 Hz, u8 modulation, u8 encryption               ("<dBB", 10 bytes each)
 //   fixed        u32 unitId, u64 packetNumber, u8 retransmissionCount              ("<IQB")
-//   guids        22 bytes transmissionGuid, then 22 bytes clientGuid
+//   guids        22 bytes originalGuid, then 22 bytes guid
 //
-// The SRS source (Common/Models/UDPVoicePacket.cs) calls the first GUID `OriginalClientGuid` and the last `Guid`: the
-// last is the client that sent this datagram (the server reads the sender from the last 22 bytes), the first is the
-// client that originated the audio. A client that is not relaying puts its own GUID in both, as lxsrs_v2 does. It is
-// not a per-transmission id (docs/wip/RADIO-CORE.md).
+// Named as the SRS source names them (Common/Models/UDPVoicePacket.cs, S-RADIO-1 RQ2): the last 22 bytes are `Guid`,
+// the client that sent this datagram (the server reads the sender there); the first are `OriginalClientGuid`, the
+// client that first transmitted the audio, which a retransmitting radio keeps. protocol.py calls them
+// `transmission_guid` and `client_guid`. A client that is not relaying puts its own GUID in both, as lxsrs_v2 does.
+// SRS has no per-transmission id (docs/wip/RADIO-CORE.md).
 
 const { GUID_LENGTH } = require('./srs-guid');
 
@@ -28,14 +29,14 @@ const FIXED_LENGTH = 13;
  * @param {number} p.unitId
  * @param {number|bigint} p.packetNumber
  * @param {number} p.retransmissionCount
- * @param {string} p.transmissionGuid 22 ASCII characters
- * @param {string} p.clientGuid 22 ASCII characters
+ * @param {string} p.originalGuid 22 ASCII characters: the client that first transmitted the audio
+ * @param {string} p.guid 22 ASCII characters: the client sending this datagram
  * @returns {Buffer}
  */
 function encodeVoicePacket(p) {
   const n = p.frequencies.length;
   if (p.modulations.length !== n || p.encryptions.length !== n) throw new Error('frequencies, modulations and encryptions differ in length');
-  if (p.transmissionGuid.length !== GUID_LENGTH || p.clientGuid.length !== GUID_LENGTH) throw new Error('an SRS GUID is 22 characters');
+  if (p.originalGuid.length !== GUID_LENGTH || p.guid.length !== GUID_LENGTH) throw new Error('an SRS GUID is 22 characters');
   const audio = Buffer.from(p.audio.buffer, p.audio.byteOffset, p.audio.byteLength);
   const freqLength = n * FREQUENCY_LENGTH;
   const total = HEADER_LENGTH + audio.length + freqLength + FIXED_LENGTH + 2 * GUID_LENGTH;
@@ -53,15 +54,15 @@ function encodeVoicePacket(p) {
   o = b.writeUInt32LE(p.unitId, o);
   o = b.writeBigUInt64LE(BigInt(p.packetNumber), o);
   o = b.writeUInt8(p.retransmissionCount, o);
-  o += b.write(p.transmissionGuid, o, GUID_LENGTH, 'latin1');
-  b.write(p.clientGuid, o, GUID_LENGTH, 'latin1');
+  o += b.write(p.originalGuid, o, GUID_LENGTH, 'latin1');
+  b.write(p.guid, o, GUID_LENGTH, 'latin1');
   return b;
 }
 
 /**
  * @param {Buffer} data
  * @returns {{audio:Buffer, frequencies:number[], modulations:number[], encryptions:number[], unitId:number,
- *   packetNumber:number, retransmissionCount:number, transmissionGuid:string, clientGuid:string}}
+ *   packetNumber:number, retransmissionCount:number, originalGuid:string, guid:string}}
  * @throws on a packet shorter than its header says or than its parts need
  */
 function decodeVoicePacket(data) {
@@ -86,9 +87,9 @@ function decodeVoicePacket(data) {
   const packetNumber = Number(data.readBigUInt64LE(o + 4));
   const retransmissionCount = data.readUInt8(o + 12);
   o += FIXED_LENGTH;
-  const transmissionGuid = data.toString('latin1', o, o + GUID_LENGTH);
-  const clientGuid = data.toString('latin1', o + GUID_LENGTH, o + 2 * GUID_LENGTH);
-  return { audio, frequencies, modulations, encryptions, unitId, packetNumber, retransmissionCount, transmissionGuid, clientGuid };
+  const originalGuid = data.toString('latin1', o, o + GUID_LENGTH);
+  const guid = data.toString('latin1', o + GUID_LENGTH, o + 2 * GUID_LENGTH);
+  return { audio, frequencies, modulations, encryptions, unitId, packetNumber, retransmissionCount, originalGuid, guid };
 }
 
 module.exports = { encodeVoicePacket, decodeVoicePacket, HEADER_LENGTH, FREQUENCY_LENGTH, FIXED_LENGTH };

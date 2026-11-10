@@ -8,7 +8,8 @@ const { encodeVoicePacket, decodeVoicePacket } = require('../app/srs/voice-packe
 const { makeSrsGuid, isSrsGuid, GUID_LENGTH } = require('../app/srs/srs-guid');
 const sm = require('../app/srs/sync-message');
 
-const fieldsOf = (f) => ({ ...f, audio: Buffer.from(f.audioHex, 'hex') });
+// protocol.py's names -> SRS's names (S-RADIO-1 RQ2): transmission_guid is SRS's OriginalClientGuid, client_guid its Guid.
+const fieldsOf = ({ transmissionGuid, clientGuid, ...f }) => ({ ...f, audio: Buffer.from(f.audioHex, 'hex'), originalGuid: transmissionGuid, guid: clientGuid });
 
 for (const p of fixtures.packets) {
   test(`voice packet "${p.name}" encodes to protocol.py's bytes`, () => {
@@ -16,7 +17,7 @@ for (const p of fixtures.packets) {
   });
   test(`voice packet "${p.name}" decodes to protocol.py's fields`, () => {
     const d = decodeVoicePacket(Buffer.from(p.hex, 'hex'));
-    const { audioHex, ...rest } = p.fields;
+    const { audioHex, audio, ...rest } = fieldsOf(p.fields);
     assert.equal(d.audio.toString('hex'), audioHex);
     for (const [k, v] of Object.entries(rest)) assert.deepEqual(d[k], v, k);
   });
@@ -33,7 +34,7 @@ test('a voice packet whose header length is wrong, or that is cut short, is refu
 test('encode refuses mismatched frequency lists and wrong-length GUIDs', () => {
   const f = fieldsOf(fixtures.packets[0].fields);
   assert.throws(() => encodeVoicePacket({ ...f, modulations: [] }), /differ/);
-  assert.throws(() => encodeVoicePacket({ ...f, clientGuid: 'short' }), /22/);
+  assert.throws(() => encodeVoicePacket({ ...f, guid: 'short' }), /22/);
 });
 
 test('an SRS GUID is a UUID4 without dashes, first 22 characters', () => {
