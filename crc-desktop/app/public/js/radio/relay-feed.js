@@ -6,7 +6,8 @@
 // status is cleared, and on every new socket the groups are sent again (checked every CHECK_MS against sync.js's
 // syncSocketGeneration, so a reconnect between two checks is seen too).
 //
-// Nothing runs at import: initRelayFeed() registers the handlers and starts the check, once.
+// Its two message types are registered at load, as every family's are (efsp-message-registry.js); initRelayFeed()
+// starts the check, once.
 
 import { sendToSync, isSyncOpen, syncSocketGeneration } from '../sync.js';
 import { registerEfspMessage } from '../panels/efsp/efsp-message-registry.js';
@@ -20,7 +21,6 @@ let _status = null;
 let _wasOpen = false;
 let _sentGen = -1; // the /feed socket the groups were last sent on
 let _started = false;
-let _registered = false; // the message handlers, once per page (the registry refuses a second)
 const _listeners = new Set();
 
 function setStatus(next) {
@@ -52,15 +52,13 @@ export function onRelayStatusChanged(fn) {
   return () => _listeners.delete(fn);
 }
 
+registerEfspMessage('radio-relay-status', (msg) => setStatus(msg));
+registerEfspMessage('radio-link-groups-ack', (msg) => { if (!msg.ok) console.warn('[radio] link groups refused:', msg.reason, msg.detail); });
+
 /** Once, from the radio panel's init. */
 export function initRelayFeed({ setInterval: every = setInterval } = {}) {
   if (_started) return;
   _started = true;
-  if (!_registered) {
-    _registered = true;
-    registerEfspMessage('radio-relay-status', (msg) => setStatus(msg));
-    registerEfspMessage('radio-link-groups-ack', (msg) => { if (!msg.ok) console.warn('[radio] link groups refused:', msg.reason, msg.detail); });
-  }
   const timer = every(() => {
     const open = isSyncOpen();
     if (!open && _wasOpen) { _sentKey = null; setStatus(null); }

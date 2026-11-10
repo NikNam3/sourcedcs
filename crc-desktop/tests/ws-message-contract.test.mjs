@@ -56,6 +56,7 @@ const REGISTERED = await (async () => {
     .flatMap(e => e.isDirectory() ? walk(path.join(dir, e.name)) : (e.name.endsWith('.js') ? [path.join(dir, e.name)] : []));
   await g.import('app.js');
   for (const f of walk(path.join(CLIENT_JS, 'panels'))) await g.import(f);
+  await g.import('radio/relay-feed.js'); // the relay's frames (docs/adr/0160); radio/ also holds a worklet, so not walked
   return (await g.import('panels/efsp/efsp-message-registry.js')).registeredEfspTypes();
 })();
 const HANDLED_BY_CLIENT = [...new Set([...CORE_CASES, ...REGISTERED])].sort();

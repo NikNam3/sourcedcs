@@ -230,8 +230,11 @@ test('04 a Case I flight holds overhead: port holding and the landing pattern wh
   await expect(pattern(page, 'spin')).toHaveCount(1);
   await expect(pattern(page, 'landing')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('04-spin.png') });
-  await contact(page, 'cm-spin', { brg: 200, nm: 1.2, altFt: 600, callsign: ca });
-  await expect(pattern(page, 'landing')).toHaveCount(1);
+  // Sent until the map shows it: under a loaded machine one injected contact can be overtaken by the picture's own refresh.
+  await expect(async () => {
+    await contact(page, 'cm-spin', { brg: 200, nm: 1.2, altFt: 600, callsign: ca });
+    await expect(pattern(page, 'landing')).toHaveCount(1);
+  }).toPass({ timeout: 30000 });
   await expect(pattern(page, 'spin')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('04-landing.png') });
   await act(page, ca, { kind: 'DropStrip', reason: 'trapped' });

@@ -93,6 +93,7 @@ async function openFieldPanel(page) {
  */
 async function besideStrips(page) {
   await page.evaluate(() => {
+    if (!crc.dock.isDockPanelOpen('efsp')) crc.dock.toggleDockPanel('efsp', true); // not restored yet after a reload
     const p = crc.dock.dock.api.getPanel('runwayStatus');
     if (p) crc.dock.dock.api.removePanel(p);
     crc.dock.dock.addPanel({ id: 'runwayStatus', component: 'runwayStatus', title: crc.dock.PANEL_TITLES.runwayStatus, position: { referencePanel: 'efsp', direction: 'right' } });
