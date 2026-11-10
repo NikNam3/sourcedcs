@@ -11,15 +11,17 @@
 // sender's unit id. Joining another client's intercom is taking its unit id as our own, `setIntercomUnit(id)`; null
 // goes back to the shared 1. The SRS client list (other clients with a unit id, as client.py's snapshot) is in the
 // state as `srsClients`, for the picker.
-// Relay (ADR 0158 §4, ADR 0159): every received packet is also offered to relay-path.js, which re-sends a pilot's
-// transmission on the other frequencies of its link group that we hold the relay lease for.
+// The relay is crc-sync's (docs/adr/0160), not ours. Two things on receive come from it: a packet whose
+// `originalGuid` is ours is our own voice relayed onto a frequency we also listen on, and is dropped (no echo); and
+// the relay's copy of a pilot we already heard directly (same original, same packet number) is dropped by
+// rx-dedupe.js, so a controller tuned to two frequencies of one network hears the pilot once.
 
 const { createSyncLink } = require('./sync-link');
 const { createVoiceLink } = require('./voice-link');
 const { radioInfoDict, MsgType, Modulation } = require('./sync-message');
 const { buildSlots, matchRadioIds, txChannels, selectedSlot } = require('./radio-slots');
 const { encodeVoicePacket } = require('./voice-packet');
-const { createRelayPath } = require('./relay-path');
+const { createRxDedupe } = require('./rx-dedupe');
 
 /** The unit id every CRC sends unless it joined an intercom: client.py's fixed shared 1 (S-RADIO-1 RQ3). */
 const UNIT_ID = 1;
@@ -38,7 +40,9 @@ function createSrsSession(o) {
   const log = o.log || (() => {});
   let slots = [], slotError = null, invalid = [], overflow = [];
   let pttDown = false, tx = { frequencies: [], modulations: [], encryptions: [], radioIds: [] };
-  let packetNumber = 0, unmatched = 0, pttError = null, unitId = UNIT_ID;
+  let packetNumber = 0, unmatched = 0, pttError = null, unitId = UNIT_ID, duplicates = 0;
+  const now = deps.now || Date.now; // housekeeping: the dedupe window
+  const dedupe = createRxDedupe();
   const clients = new Map(); // guid -> {name, unitId}
 
   const radioInfo = () => radioInfoDict({
@@ -84,19 +88,15 @@ function createSrsSession(o) {
     onReady: () => emit(),
     onEcho: () => sync.heard(),
     onPacket: (p) => {
-      relay.onPacket(p);
+      if (p.originalGuid === o.guid) return; // our own voice, relayed by crc-sync onto another frequency we hear
       const radioIds = matchRadioIds(slots, p.frequencies, p.modulations, p.encryptions);
       if (!radioIds.length) { unmatched++; return; }
+      if (!dedupe.first(p, now())) { duplicates++; return; }
       o.onRx({
         header: { radioIds, guid: p.guid, originalGuid: p.originalGuid, packetNumber: p.packetNumber, retransmissionCount: p.retransmissionCount },
         opus: p.audio,
       });
     },
-  });
-
-  const relay = createRelayPath({
-    guid: o.guid, send: (buf) => voice.send(buf), now: deps.now, log,
-    pttChannels: () => (pttDown ? tx.frequencies.map((hz, i) => ({ hz, modulation: tx.modulations[i] })) : []),
   });
 
   function state() {
@@ -111,7 +111,7 @@ function createSrsSession(o) {
       txRadioIds: pttDown ? tx.radioIds : [],
       unmatchedPackets: unmatched,
       droppedPackets: voice.droppedPackets(),
-      relayedPackets: relay.relayedPackets(),
+      duplicatePackets: duplicates,
       unitId,
       srsClients: [...clients.values()].filter(c => c.unitId > 0).sort((a, b) => a.name.localeCompare(b.name)),
     };
@@ -148,10 +148,6 @@ function createSrsSession(o) {
       sync.radiosChanged();
       emit();
     },
-    /** The renderer's link groups, as relay channels (relay-path.js normaliseGroups). */
-    setLinkGroups(groups) { relay.setLinkGroups(groups); },
-    /** The channel keys crc-sync granted this client the relay lease for. */
-    setRelayLeases(keys) { relay.setRelayLeases(keys); },
     /** One Opus frame from the renderer's encoder. Sent only while the key is down. */
     txFrame(opus) {
       if (!pttDown || !tx.frequencies.length) return false;

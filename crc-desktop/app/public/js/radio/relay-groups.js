@@ -1,10 +1,9 @@
-// What the relay may link (pure, a leaf; ADR 0158 §4, ADR 0159): the radio set's link groups as relay channels, and
-// the channel keys whose relay leases this client asks crc-sync for.
+// What this session asks crc-sync's relay to link (pure, a leaf; docs/adr/0160): the radio set's link groups as
+// channel keys, and which of them the relay is relaying.
 //
-// A channel is a frequency and a modulation, keyed "251000:AM" (integer kHz), the same key the local server's
-// relay-path.js and crc-sync's radio/relay-leases.js use. Only AM and FM are relayed; the intercom never is (H183). A
-// channel that any radio of the set has receive-only (an Observer's Position radio) is marked so: it is never a source
-// and never a target, and its lease is not asked for. A group with fewer than two channels has nothing to relay.
+// A channel is a frequency and a modulation, keyed "251000:AM" (integer kHz), the key crc-sync's radio/link-networks.js
+// reads. Left out: the intercom (H183, never relayed), every channel a radio of the set has receive-only (an Observer's
+// radio is never relayed either way), and unlinked radios. A group left with fewer than two channels links nothing.
 
 const RELAYABLE = new Set(['AM', 'FM']);
 
@@ -18,35 +17,39 @@ export function channelKey(mhz, modulation) {
 
 /**
  * @param {{radios:Array<{id:string, mhz:number|null, modulation?:string, groupId?:string|null, receiveOnly?:boolean}>,
- *   groups:Array<{id:string, radioIds:string[]}>}} set radio-set.js's output
- * @returns {Array<{id:string, channels:Array<{key:string, mhz:number, modulation:string, receiveOnly:boolean}>}>}
+ *   groups:Array<{id:string}>}} set radio-set.js's output
+ * @returns {Array<{id:string, channels:string[]}>} the groups to send, each with its channel keys sorted
  */
 export function relayGroupsOf(set) {
   const radios = (set && set.radios) || [];
   const receiveOnly = new Set(radios.filter(r => r.receiveOnly).map(r => channelKey(r.mhz, r.modulation)).filter(Boolean));
   const out = [];
   for (const g of (set && set.groups) || []) {
-    const channels = [];
+    const channels = new Set();
     for (const r of radios) {
       if (r.groupId !== g.id) continue;
       const key = channelKey(r.mhz, r.modulation);
-      if (!key || channels.some(c => c.key === key)) continue;
-      channels.push({ key, mhz: r.mhz, modulation: String(r.modulation || 'AM').toUpperCase(), receiveOnly: receiveOnly.has(key) });
+      if (key && !receiveOnly.has(key)) channels.add(key);
     }
-    if (channels.length >= 2) out.push({ id: g.id, channels });
+    if (channels.size >= 2) out.push({ id: g.id, channels: [...channels].sort() });
   }
   return out;
 }
 
-/** The channel keys to claim relay leases for: every relayable channel of every group, sorted. */
-export function leaseKeysOf(groups) {
-  const keys = new Set();
-  for (const g of groups || []) for (const c of g.channels) if (!c.receiveOnly) keys.add(c.key);
-  return [...keys].sort();
+/**
+ * The ids of the groups crc-sync relays: the relay is connected and one of the group's channels is in a network it
+ * reported for this session (`radio-relay-status`).
+ * @param {Array<{id:string, channels:string[]}>} groups relayGroupsOf
+ * @param {{networks:Array<{channels:string[]}>, connected:boolean}|null} status
+ */
+export function relayingGroupIds(groups, status) {
+  if (!status || !status.connected) return [];
+  const relayed = new Set((status.networks || []).flatMap(n => n.channels));
+  return (groups || []).filter(g => g.channels.some(c => relayed.has(c))).map(g => g.id);
 }
 
-/** The ids of the groups this client relays for: a group with a channel whose lease it holds. */
-export function relayingGroupIds(groups, held) {
-  const h = new Set(held || []);
-  return (groups || []).filter(g => g.channels.some(c => h.has(c.key))).map(g => g.id);
+/** The panel's one amber line when the relay is down for this session's networks, else null. */
+export function relayDownNote(status) {
+  if (!status || status.connected || !(status.networks || []).length) return null;
+  return `relay down: ${status.error || 'not connected to SRS'}`;
 }

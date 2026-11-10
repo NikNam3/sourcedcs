@@ -9,8 +9,6 @@
 //   setAudioOptions({inputGain, outputGain, soundSet, noise})
 //   setIdentity({name})                        the name in the SRS client list (default "CRC")
 //   setIntercomUnit(unitId|null)               join that SRS client's intercom (H183; state.srsClients lists them)
-//   setLinkGroups(groups)                      what the relay may link: relay-groups.js relayGroupsOf (ADR 0159)
-//   setRelayLeases(channelKeys)                the relay leases crc-sync granted this client ("251000:AM", ...)
 //   testMic() -> Promise<{peak, blocks}>
 //   onState(fn) -> unsubscribe                 radio-engine-state.js has the fields
 
@@ -39,8 +37,6 @@ const options = { inputGain: DEFAULT_INPUT_GAIN, outputGain: DEFAULT_OUTPUT_GAIN
 let micTap = null;
 let micDeviceId = null;
 let intercomUnit = null;
-let linkGroups = [];
-let relayLeases = [];
 
 const wireRadios = () => radios.map(r => ({ id: r.id, mhz: r.mhz, modulation: r.modulation || 'AM', label: r.label || r.id }));
 const modulationOf = (id) => ((radios.find(r => r.id === id) || {}).modulation || 'AM');
@@ -59,8 +55,6 @@ function build() {
       socket.send({ type: 'hello', name });
       socket.send({ type: 'radios', radios: wireRadios() });
       if (intercomUnit !== null) socket.send({ type: 'intercom-unit', unitId: intercomUnit });
-      socket.send({ type: 'link-groups', groups: linkGroups });
-      socket.send({ type: 'relay-leases', channels: relayLeases });
     },
     onMessage: (m) => { if (m.type === 'state') onServerState(m); },
     onFrame: ({ header, opus }) => { if (getEngineState().opusSupported) rx.receive(header, opus); },
@@ -176,18 +170,6 @@ export function setIdentity(id) {
 export function setIntercomUnit(unitId) {
   intercomUnit = Number.isInteger(unitId) && unitId > 0 ? unitId : null;
   engine().socket.send({ type: 'intercom-unit', unitId: intercomUnit });
-}
-
-/** @param {Array<{id:string, channels:Array<{key:string, mhz:number, modulation:string, receiveOnly:boolean}>}>} groups */
-export function setLinkGroups(groups) {
-  linkGroups = Array.isArray(groups) ? groups : [];
-  engine().socket.send({ type: 'link-groups', groups: linkGroups });
-}
-
-/** @param {string[]} channelKeys */
-export function setRelayLeases(channelKeys) {
-  relayLeases = Array.isArray(channelKeys) ? channelKeys.slice() : [];
-  engine().socket.send({ type: 'relay-leases', channels: relayLeases });
 }
 
 export async function testMic() {
