@@ -33,7 +33,7 @@ const REQUIRED_DEPARTURE_BLOCKS = [
 ];
 
 const REQUIRED_ARRIVAL_BLOCKS = [
-  '1', '2', '3', '4', '4B', '5', '6', '7', '8', '8B', '9', '9A-FUEL', '9E', '24', '25', '26',
+  '1', '2', '3', '4', '4B', '5', '6', '7', '8', '8B', '9', '9A-FUEL', '9E', '10', '24', '25', '26',
 ];
 
 function makeFlightData(overrides = {}) {

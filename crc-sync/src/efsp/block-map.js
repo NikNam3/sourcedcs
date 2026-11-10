@@ -247,6 +247,7 @@ const DEPARTURE_BLOCK_MAP = {
 // field a controller typed by hand. The guide's instinct assumes a radar
 // system with real track scratchpads; this one has none.
 //
+// Block 10 (ATIS) IS carried over (lane U-STRIP-ATIS, see its entry below).
 // Deliberately NOT carried over from DEPARTURE: Blocks 11/14/16/17/18
 // (APREQ, release/movement/taxi/takeoff times) are departure-specific
 // clearance-delivery concepts with no arrival equivalent.
@@ -296,6 +297,11 @@ const ARRIVAL_BLOCK_MAP = {
   // docs/adr/0126: LC's pattern cells (see DEPARTURE_BLOCK_MAP's 9J comment). They steer ARRIVAL's NLA.
   '9J-ENTRY':  { required: false, target: { kind: 'flightData', path: 'assigned.patternEntry' } },
   '9J-OPTION': { required: false, target: { kind: 'flightData', path: 'assigned.patternOption' } },
+  // The ATIS code the pilot reports ("with information X"), as on DEPARTURE: the same flight data field, written by
+  // whoever holds the Strip. FAA TBL 2-3-3 leaves 10-18 to a facility directive; ours is ATIS on every arrival
+  // (human 2026-11-10, lane U-STRIP-ATIS). Required like DEPARTURE's, so no Facility's hiddenBlocks can drop it. Never
+  // prefilled from the airport's current letter: the Strip records what the pilot said (JO 7110.65 ¶2-9-2).
+  '10':       { required: true,  target: { kind: 'flightData', path: 'assigned.atisCode' } },
   '20':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '21':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '24':       { required: true,  target: { kind: 'annotation' } },

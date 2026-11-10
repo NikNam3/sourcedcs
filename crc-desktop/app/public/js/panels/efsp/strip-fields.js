@@ -38,7 +38,7 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
   DEPARTURE:  [...COMPACT_BLOCKS_SHARED, '20', '21', '9A-SPEED'],
   // '7' is the ASSIGNED altitude on this strip type (annotation-routed, append-only);
   // the vector is the other constant.
-  ARRIVAL:    [...COMPACT_BLOCKS_SHARED, '9A-VECTOR', '9A-SPEED'],
+  ARRIVAL:    [...COMPACT_BLOCKS_SHARED, '10', '9A-VECTOR', '9A-SPEED'],
   // '7' stays as the FILED request here; '7A' is the assignment beside it.
   OVERFLIGHT: [...COMPACT_BLOCKS_SHARED, '7A', '9A-VECTOR', '9A-SPEED'],
   MISSION:    ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7'],
@@ -83,6 +83,11 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
 //  - The pattern cells P/S (9J-ENTRY) and OPT (9J-OPTION) where pattern traffic is worked: LC's arrivals and AP's
 //    arrivals, so the pilot's intentions can be set before the transfer (crc-sync docs/adr/0126, H150). Not on LC's
 //    departure face (H164 FT-Q3 a): a departure that stays in the pattern sets them in the expanded ▼ view.
+//  - ATIS (10) on every ARRIVAL, whichever Position holds it (this table's rows and the strip type's fallback), and on
+//    a DEPARTURE at GC and LC, where the pilot reports "with information X" at taxi and at the runway (human
+//    2026-11-10, lane U-STRIP-ATIS; JO 7110.65 ¶2-9-2: ask for the code when the pilot does not state it). CD keeps
+//    its own. Never prefilled: the Strip records what the pilot reported. These rows are still keyed by Position id
+//    (ADR 0056, from before ADR 0132); U-ROLE-POSITIONS re-keys them by role.
 //  - ALERT (14E) where an alert aircraft is ordered and moved: OPS sets it
 //    (decisions.md H56), and every ground Position shows it: CD, GC, LC
 //    (crc-sync docs/adr/0070).
@@ -90,16 +95,16 @@ export const COMPACT_BLOCKS_BY_POSITION = {
   DEPARTURE: {
     OPS: ['1', '3', '5', '6', '7', '8', '8A', '8B', '9', '9F', '3D', '3E', '3G', '14E'],
     CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21', '14E'],
-    GC: ['1', '3', '5', '8', '8A', '14A', '14D', '17', '14E'],
-    LC: ['1', '3', '5', '8A', '21', '14D', '18', '3G', '14E'],
+    GC: ['1', '3', '5', '8', '8A', '10', '14A', '14D', '17', '14E'],
+    LC: ['1', '3', '5', '8A', '10', '21', '14D', '18', '3G', '14E'],
     AP: ['1', '3', '5', '7', '8A', '9', '20', '21', '9A-SPEED', '14A', '22', '5A', 'SREG'],
     CTR: ['1', '3', '5', '7', '21', '20', '9A-SPEED', '8B', '9', '14A', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   ARRIVAL: {
-    GC: ['1', '3', '5', '8B'],
-    LC: ['1', '3', '5', '7', '8B', '9A-FUEL', '3F', '3G', '9J-ENTRY', '9J-OPTION'],
-    AP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG', '9J-ENTRY', '9J-OPTION'],
-    CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '9A-SPEED', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
+    GC: ['1', '3', '5', '8B', '10'],
+    LC: ['1', '3', '5', '7', '8B', '10', '9A-FUEL', '3F', '3G', '9J-ENTRY', '9J-OPTION'],
+    AP: ['1', '3', '5', '6', '7', '8A', '8B', '10', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG', '9J-ENTRY', '9J-OPTION'],
+    CTR: ['1', '3', '5', '6', '7', '10', '9A-VECTOR', '9A-SPEED', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   OVERFLIGHT: {
     AP: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG'],

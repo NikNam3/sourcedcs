@@ -249,3 +249,19 @@ test('a VFR strip shows callsign, type, code, VFR/ALT, HDG, SPEED, and RWY at an
     for (const id of ['9', '8B', '14A', '14D', '21', '10']) assert.equal(BLOCK_MAPS.VFR[id], undefined, id);
   } finally { setAirportSurfacePositions({}); }
 });
+
+// Lane U-STRIP-ATIS (human 2026-11-10): the ATIS code (Block 10) is on every ARRIVAL Strip's face, whichever Position
+// holds it, and on a DEPARTURE at GC and LC (CD already had it). Same flight data field on both strip types.
+test('ATIS (10) is on every ARRIVAL face and on a DEPARTURE at CD, GC and LC', () => {
+  assert.deepEqual(BLOCK_MAPS.ARRIVAL['10'].target, BLOCK_MAPS.DEPARTURE['10'].target);
+  assert.equal(BLOCK_MAPS.ARRIVAL['10'].label, 'ATIS');
+  for (const positionId of [...Object.keys(COMPACT_BLOCKS_BY_POSITION.ARRIVAL), 'NOLIST', null]) {
+    assert.ok(compactBlocksFor('ARRIVAL', positionId, null).includes('10'), `ARRIVAL at ${positionId}`);
+  }
+  for (const positionId of ['CD', 'GC', 'LC']) {
+    assert.ok(compactBlocksFor('DEPARTURE', positionId, null).includes('10'), `DEPARTURE at ${positionId}`);
+  }
+  for (const positionId of ['OPS', 'AP', 'CTR']) {
+    assert.equal(compactBlocksFor('DEPARTURE', positionId, null).includes('10'), false, `DEPARTURE at ${positionId}`);
+  }
+});
