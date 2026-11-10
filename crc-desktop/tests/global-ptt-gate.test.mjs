@@ -8,15 +8,15 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const { createPttGate } = require('../global-ptt/ptt-gate.js');
 
-const F13 = { type: 'key', code: 91, name: 'F13' };
-const F14 = { type: 'key', code: 92, name: 'F14' };
+const F13 = { type: 'key', keycode: 91, label: 'F13' };
+const F14 = { type: 'key', keycode: 92, label: 'F14' };
 
 function rig({ startFails = false } = {}) {
   const calls = [], edges = [], timers = [];
   const listener = {
     captureTimeoutMs: 1000,
     accepts: (b) => !!b && b.type === 'key',
-    start: async (b, onEdge) => { if (startFails) throw new Error('boom'); calls.push(['start', b.code]); listener.edge = onEdge; },
+    start: async (b, onEdge) => { if (startFails) throw new Error('boom'); calls.push(['start', b.keycode]); listener.edge = onEdge; },
     stop: async () => { calls.push(['stop']); },
     capture: () => new Promise((resolve) => { calls.push(['capture']); listener.finish = resolve; }),
     cancelCapture: () => { calls.push(['cancel']); listener.finish(null); },
@@ -66,7 +66,7 @@ test('only changes are forwarded, as a bare boolean', async () => {
 test('a new binding restarts the listener; the same one does not', async () => {
   const r = rig();
   await r.gate.configure({ enabled: true, binding: F13 });
-  await r.gate.configure({ enabled: true, binding: { ...F13, name: 'renamed' } });
+  await r.gate.configure({ enabled: true, binding: { ...F13, label: 'renamed' } });
   assert.equal(r.calls.length, 1);
   await r.gate.configure({ enabled: true, binding: F14 });
   assert.deepEqual(r.calls, [['start', 91], ['stop'], ['start', 92]]);
@@ -74,7 +74,7 @@ test('a new binding restarts the listener; the same one does not', async () => {
 
 test('a binding the listener cannot use counts as none (one made under another session type)', async () => {
   const r = rig();
-  const st = await r.gate.configure({ enabled: true, binding: { type: 'portal', id: 'x', name: 'Meta+F' } });
+  const st = await r.gate.configure({ enabled: true, binding: { shortcutId: 'x', label: 'Meta+F' } });
   assert.deepEqual(r.calls, []);
   assert.equal(st.binding, null);
 });
@@ -126,7 +126,7 @@ test('disabling during a capture cancels it and leaves nothing running', async (
   await tick();
   await r.gate.configure({ enabled: false, binding: null });
   assert.equal(await p, null);
-  assert.equal(r.gate.status().running, false);
+  assert.equal((await r.gate.status()).running, false);
   assert.equal(r.calls.filter(c => c[0] === 'start').length, 0);
 });
 
@@ -134,6 +134,7 @@ test('a listener that fails to start leaves it off and throws nothing', async ()
   const r = rig({ startFails: true });
   const st = await r.gate.configure({ enabled: true, binding: F13 });
   assert.equal(st.running, false);
+  assert.equal(st.failed, true);
 });
 
 test('shutdown stops the listener and nothing restarts it', async () => {
@@ -145,8 +146,30 @@ test('shutdown stops the listener and nothing restarts it', async () => {
   assert.equal(r.calls.filter(c => c[0] === 'start').length, 1);
 });
 
+test('a refused input from a capture binds nothing and is passed on as refused', async () => {
+  const r = rig();
+  await r.gate.configure({ enabled: true, binding: F13 });
+  const p = r.gate.capture();
+  await tick();
+  r.listener.finish({ refused: true });
+  assert.deepEqual(await p, { refused: true });
+  assert.deepEqual(r.calls.at(-1), ['start', 91]);
+});
+
+test('the fuse holds repeats back, and a release ends it', async () => {
+  const r = rig();
+  await r.gate.configure({ enabled: true, binding: F13 });
+  r.listener.edge(true);
+  r.gate.fuse();
+  r.listener.edge(true);
+  r.listener.edge(false);
+  assert.deepEqual(r.edges, [true, false]);
+  r.listener.edge(true);
+  assert.deepEqual(r.edges, [true, false, true]);
+});
+
 test('no code that handles an input can log it', () => {
-  for (const f of ['ptt-gate.js', 'uiohook-listener.js', 'portal-listener.js', 'portal-client.js']) {
+  for (const f of ['ptt-gate.js', 'edge-filter.js', 'input-allowlist.js', 'uiohook-listener.js', 'portal-listener.js', 'portal-client.js']) {
     const src = fs.readFileSync(path.join(import.meta.dirname, '../global-ptt', f), 'utf8');
     assert.doesNotMatch(src, /console\./, `${f} must not log`);
   }

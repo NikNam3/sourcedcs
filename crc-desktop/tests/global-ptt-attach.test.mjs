@@ -11,13 +11,15 @@ test('the listener follows the session', () => {
   assert.equal(chooseListenerKind('win32', {}), 'uiohook');
   assert.equal(chooseListenerKind('darwin', {}), null);
   assert.equal(chooseListenerKind('linux', { XDG_SESSION_TYPE: 'wayland', DISPLAY: ':0' }), 'portal');
-  assert.equal(chooseListenerKind('linux', { XDG_SESSION_TYPE: 'x11', DISPLAY: ':0', WAYLAND_DISPLAY: 'wayland-0' }), 'uiohook');
+  assert.equal(chooseListenerKind('linux', { XDG_SESSION_TYPE: 'x11', DISPLAY: ':0' }), 'uiohook');
+  assert.equal(chooseListenerKind('linux', { XDG_SESSION_TYPE: 'tty', DISPLAY: ':0' }), 'uiohook'); // startx
+  assert.equal(chooseListenerKind('linux', { WAYLAND_DISPLAY: 'wayland-0', DISPLAY: ':0' }), 'portal'); // XWayland is not X11
   assert.equal(chooseListenerKind('linux', { WAYLAND_DISPLAY: 'wayland-0' }), 'portal');
   assert.equal(chooseListenerKind('linux', { DISPLAY: ':0' }), 'uiohook');
   assert.equal(chooseListenerKind('linux', {}), null);
 });
 
-function rig({ probeFails = false, noListener = false } = {}) {
+function rig({ probeFails = false, noListener = false, throttling = true } = {}) {
   const handlers = {};
   const ipc = new EventEmitter();
   ipc.handle = (ch, fn) => { assert.equal(handlers[ch], undefined, `${ch} registered twice`); handlers[ch] = fn; };
@@ -26,6 +28,9 @@ function rig({ probeFails = false, noListener = false } = {}) {
   const sent = [];
   wc.isDestroyed = () => false;
   wc.send = (ch, v) => sent.push([ch, v]);
+  wc.throttling = throttling;
+  wc.getBackgroundThrottling = () => wc.throttling;
+  wc.setBackgroundThrottling = (v) => { wc.throttling = v; };
   const win = new EventEmitter();
   win.webContents = wc;
   const listener = {
@@ -34,14 +39,14 @@ function rig({ probeFails = false, noListener = false } = {}) {
     accepts: (b) => !!b,
     start: async (_b, onEdge) => { listener.started++; listener.edge = onEdge; },
     stop: async () => { listener.stopped++; },
-    capture: async () => ({ type: 'key', code: 91, name: 'F13' }),
+    capture: async () => ({ type: 'key', keycode: 91, label: 'F13' }),
     cancelCapture() {},
   };
   attach(win, { ipcMain: ipc, platform: 'linux', env: {}, makeListener: () => (noListener ? null : listener) });
   const call = (ch, arg, sender = wc) => handlers[ch]({ sender }, arg);
   return { handlers, ipc, wc, win, listener, sent, call };
 }
-const ON = { enabled: true, binding: { type: 'key', code: 91, name: 'F13' } };
+const ON = { enabled: true, binding: { type: 'key', keycode: 91, label: 'F13' } };
 
 test('attaching starts nothing', async (t) => {
   t.after(shutdown);
@@ -69,6 +74,38 @@ test('an edge reaches the window as a bare boolean', async (t) => {
   t.after(shutdown);
   const r = rig();
   await r.call(CH.configure, ON);
+  r.listener.edge(true);
+  r.listener.edge(false);
+  assert.deepEqual(r.sent, [[CH.edge, true], [CH.edge, false]]);
+});
+
+test('throttling is off while the listener runs, then back as it was', async (t) => {
+  t.after(shutdown);
+  let r = rig();
+  await r.call(CH.configure, ON);
+  assert.equal(r.wc.throttling, false);
+  await r.call(CH.configure, { enabled: false, binding: null });
+  assert.equal(r.wc.throttling, true);
+  await shutdown();
+  r = rig({ throttling: false }); // radio-only keeps it off
+  await r.call(CH.configure, ON);
+  await r.call(CH.configure, { enabled: false, binding: null });
+  assert.equal(r.wc.throttling, false);
+});
+
+test('the reason for "not available" reaches SETUP', async (t) => {
+  t.after(shutdown);
+  assert.equal((await rig({ noListener: true }).call(CH.status)).reason, 'no-session');
+  await shutdown();
+  assert.equal((await rig({ probeFails: true }).call(CH.status)).reason, 'no-native');
+});
+
+test('the renderer reporting the fuse reaches the gate', async (t) => {
+  t.after(shutdown);
+  const r = rig();
+  await r.call(CH.configure, ON);
+  r.listener.edge(true);
+  r.ipc.emit(CH.fuse, { sender: r.wc });
   r.listener.edge(true);
   r.listener.edge(false);
   assert.deepEqual(r.sent, [[CH.edge, true], [CH.edge, false]]);
@@ -107,6 +144,7 @@ test('shutdown stops the listener and removes the IPC; attaching again works', a
   assert.equal(r.listener.stopped, 1);
   assert.deepEqual(r.handlers, {});
   assert.equal(r.ipc.listenerCount(CH.cancelCapture), 0);
+  assert.equal(r.ipc.listenerCount(CH.fuse), 0);
   await shutdown(); // twice is fine
   const again = rig();
   assert.equal((await again.call(CH.status)).available, true);

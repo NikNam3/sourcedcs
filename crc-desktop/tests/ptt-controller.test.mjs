@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPttController, clampMaxTxSeconds, PTT_MAX_TX_DEFAULT_S, PTT_REPEAT_MS } from '../app/public/js/ptt-controller.js';
 
-function rig({ typing = false, maxS } = {}) {
+function rig({ typing = false, maxS, onFuse } = {}) {
   const handlers = { doc: {}, win: {} };
   const posts = []; const active = []; const logs = [];
   let now = 0; const timers = new Map(); let nextId = 1;
@@ -24,7 +24,7 @@ function rig({ typing = false, maxS } = {}) {
   const win = { addEventListener: (n, f) => { handlers.win[n] = f; } };
   const ptt = createPttController({
     post: (p) => posts.push(p), setActive: (on) => active.push(on), getKey: () => 'Space', isTyping: () => state.typing,
-    win, doc, getMaxTxSeconds: maxS === undefined ? undefined : () => maxS, log: (m) => logs.push(m),
+    win, doc, getMaxTxSeconds: maxS === undefined ? undefined : () => maxS, log: (m) => logs.push(m), onFuse,
     setInterval: (fn, ms) => addTimer(fn, ms, true), clearInterval: (id) => timers.delete(id),
     setTimeout: (fn, ms) => addTimer(fn, ms, false), clearTimeout: (id) => timers.delete(id),
   });
@@ -101,22 +101,22 @@ test('the maximum is configurable and clamped', () => {
 
 test('global: press starts and re-sends, release stops', () => {
   const r = rig();
-  r.ptt.globalDown();
+  r.ptt.down('global');
   assert.deepEqual(r.posts, ['/ptt/start']);
   r.advance(PTT_REPEAT_MS);
   assert.equal(r.posts.length, 2);
-  r.ptt.globalUp();
+  r.ptt.up('global');
   assert.equal(r.posts.at(-1), '/ptt/stop');
   assert.equal(r.ptt.isHeld(), false);
 });
 
 test('global: a held input survives the window losing focus or hiding', () => {
   const r = rig();
-  r.ptt.globalDown();
+  r.ptt.down('global');
   r.handlers.win.blur();
   r.doc.hidden = true; r.handlers.doc.visibilitychange();
   assert.equal(r.ptt.isHeld(), true);
-  r.ptt.globalUp();
+  r.ptt.up('global');
   assert.equal(r.ptt.isHeld(), false);
 });
 
@@ -129,15 +129,15 @@ test('a window-held key is still released by blur while nothing global is down',
 
 test('window and global both down: releasing either keeps it on until both are up', () => {
   let r = rig();
-  r.key('keydown'); r.ptt.globalDown();
+  r.key('keydown'); r.ptt.down('global');
   assert.equal(r.posts.filter(p => p === '/ptt/start').length, 1, 'one transmission, not two');
   r.key('keyup');
   assert.equal(r.ptt.isHeld(), true);
-  r.ptt.globalUp();
+  r.ptt.up('global');
   assert.equal(r.ptt.isHeld(), false);
   r = rig();
-  r.ptt.globalDown(); r.key('keydown');
-  r.ptt.globalUp();
+  r.ptt.down('global'); r.key('keydown');
+  r.ptt.up('global');
   assert.equal(r.ptt.isHeld(), true);
   r.key('keyup');
   assert.equal(r.ptt.isHeld(), false);
@@ -146,40 +146,72 @@ test('window and global both down: releasing either keeps it on until both are u
 
 test('window and global both down: blur leaves the global one transmitting', () => {
   const r = rig();
-  r.key('keydown'); r.ptt.globalDown();
+  r.key('keydown'); r.ptt.down('global');
   r.handlers.win.blur();
   assert.equal(r.ptt.isHeld(), true);
-  r.ptt.globalUp();
+  r.ptt.up('global');
   assert.equal(r.ptt.isHeld(), false);
 });
 
-test('global: the fuse ends it, and only a release and a new press key again', () => {
+test('global: the fuse ends it and latches until the source lets go', () => {
   const r = rig();
-  r.ptt.globalDown();
+  r.ptt.down('global');
   r.advance(PTT_MAX_TX_DEFAULT_S * 1000);
   assert.equal(r.ptt.isHeld(), false);
   assert.equal(r.posts.at(-1), '/ptt/stop');
-  r.ptt.globalDown(); // a repeat of the press the fuse ended
+  r.ptt.down('global'); // a repeat of the press the fuse ended
   assert.equal(r.ptt.isHeld(), false);
-  r.ptt.globalUp();
-  r.ptt.globalDown();
+  r.ptt.up('global');
+  r.ptt.down('global');
   assert.equal(r.ptt.isHeld(), true);
+});
+
+test('the latch holds until every source has let go', () => {
+  const r = rig();
+  r.key('keydown'); r.ptt.down('global');
+  r.advance(PTT_MAX_TX_DEFAULT_S * 1000);
+  r.key('keyup');
+  r.key('keydown'); // a new window press while global is still down and latched
+  assert.equal(r.ptt.isHeld(), false);
+  r.key('keyup'); r.ptt.up('global');
+  r.key('keydown');
+  assert.equal(r.ptt.isHeld(), true);
+});
+
+test('the fuse is reported', () => {
+  let fired = 0;
+  const r = rig({ onFuse: () => fired++ });
+  r.ptt.down('global');
+  r.advance(PTT_MAX_TX_DEFAULT_S * 1000);
+  assert.equal(fired, 1);
+});
+
+test('the on-screen button is its own source, and goes with the window', () => {
+  let r = rig();
+  r.ptt.down(); r.key('keydown'); r.ptt.up();
+  assert.equal(r.ptt.isHeld(), true, 'the key still holds');
+  r.key('keyup');
+  assert.equal(r.ptt.isHeld(), false);
+  r = rig();
+  r.ptt.down();
+  r.handlers.win.blur();
+  assert.equal(r.ptt.isHeld(), false);
 });
 
 test('the fuse ends both sources together, and runs from the start of the transmission', () => {
   const r = rig();
   r.key('keydown');
   r.advance(10000);
-  r.ptt.globalDown();
+  r.ptt.down('global');
   r.key('keyup');
   r.advance(PTT_MAX_TX_DEFAULT_S * 1000 - 10000);
   assert.equal(r.ptt.isHeld(), false);
-  r.ptt.globalUp();
+  r.ptt.up('global');
   assert.equal(r.posts.filter(p => p === '/ptt/stop').length, 1);
 });
 
 test('global: a release with nothing held sends nothing', () => {
   const r = rig();
-  r.ptt.globalUp();
+  r.ptt.up('global');
   assert.deepEqual(r.posts, []);
 });

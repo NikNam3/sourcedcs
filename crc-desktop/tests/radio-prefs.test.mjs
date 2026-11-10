@@ -9,7 +9,7 @@ test('nothing stored: the defaults', () => {
   assert.deepEqual(P.normalizeRadioPrefs(null), {
     audio: {}, groups: [], membership: {}, manual: [],
     devices: { input: null, output: null }, intercom: null, pttKey: 'Space', maxTxS: null, pttTarget: null,
-    globalPtt: { enabled: null, binding: null },
+    globalPtt: { enabled: null, uiohook: null, portal: null },
     soundSet: 'RADIO_TRANS', noise: true, inputGain: 0.5, outputGain: 1,
   });
   assert.deepEqual(P.normalizeRadioPrefs('junk'), P.normalizeRadioPrefs(undefined));
@@ -131,7 +131,10 @@ test('Global PTT: unset is off in the full app and on in radio-only; a choice wi
 });
 
 test('Global PTT: every listener\'s binding survives a save, and junk is dropped', () => {
-  const keep = (binding) => P.normalizeRadioPrefs(JSON.parse(JSON.stringify(P.withGlobalPtt(P.normalizeRadioPrefs(null), { binding })))).globalPtt.binding;
-  for (const b of [{ type: 'key', code: 91, name: 'F13' }, { type: 'mouse', button: 4, name: 'Mouse 4' }, { type: 'portal', id: 'crc_ptt', name: 'Meta+F' }]) assert.deepEqual(keep(b), b);
-  for (const b of [{ type: 'key', code: 'x', name: 'F13' }, { type: 'key', code: 91 }, { type: 'joystick', button: 1, name: 'B1' }, 'junk']) assert.equal(keep(b), null);
+  const keep = (patch, slot) => P.normalizeRadioPrefs(JSON.parse(JSON.stringify(P.withGlobalPtt(P.normalizeRadioPrefs(null), patch)))).globalPtt[slot];
+  for (const b of [{ type: 'key', keycode: 91, label: 'F13' }, { type: 'mouse', button: 4, label: 'Mouse 4' }]) assert.deepEqual(keep({ uiohook: b }, 'uiohook'), b);
+  const portal = { shortcutId: 'crc_ptt', label: 'Meta+F' };
+  assert.deepEqual(keep({ portal }, 'portal'), portal);
+  for (const b of [{ type: 'key', keycode: 'x', label: 'F13' }, { type: 'key', keycode: 91 }, { type: 'joystick', button: 1, label: 'B1' }, 'junk']) assert.equal(keep({ uiohook: b }, 'uiohook'), null);
+  assert.equal(keep({ portal: { label: 'x' } }, 'portal'), null);
 });

@@ -5,16 +5,17 @@ import assert from 'node:assert/strict';
 import { setRadioPanelIsClient, wireGlobalPtt } from '../app/public/js/radio/radio-ptt.js';
 import { _resetRadioPrefsForTest, updateRadioPrefs, withGlobalPtt } from '../app/public/js/radio/radio-prefs.js';
 
-const F13 = { type: 'key', code: 91, name: 'F13' };
+const F13 = { type: 'key', keycode: 91, label: 'F13' };
 
-function rig({ client = true } = {}) {
+async function rig({ client = true } = {}) {
   _resetRadioPrefsForTest();
   setRadioPanelIsClient(client);
   const configured = [], calls = [];
   let edge = null;
-  const bridge = { onEdge: (cb) => { edge = cb; return () => { edge = null; }; }, configure: (cfg) => { configured.push(cfg); return Promise.resolve({ binding: cfg.binding }); } };
-  const controller = { globalDown: () => calls.push('down'), globalUp: () => calls.push('up') };
+  const bridge = { status: async () => ({ available: true, kind: 'uiohook' }), onEdge: (cb) => { edge = cb; return () => { edge = null; }; }, configure: (cfg) => { configured.push(cfg); return Promise.resolve({ binding: cfg.binding }); } };
+  const controller = { down: (s) => calls.push(`down:${s}`), up: (s) => calls.push(`up:${s}`) };
   const off = wireGlobalPtt(controller, bridge);
+  await new Promise(res => setImmediate(res));
   return { configured, calls, edge: (d) => edge(d), off, hasEdge: () => !!edge };
 }
 
@@ -22,41 +23,59 @@ test('no bridge (a plain browser): nothing happens', () => {
   assert.doesNotThrow(() => wireGlobalPtt({}, null)());
 });
 
-test('off by default in the full app: the main process is told to listen for nothing', (t) => {
-  const r = rig();
+test('off by default in the full app: the main process is told to listen for nothing', async (t) => {
+  const r = await rig();
   t.after(r.off);
   assert.deepEqual(r.configured, [{ enabled: false, binding: null }]);
 });
 
-test('enabling and binding reach the main process, once each', (t) => {
-  const r = rig();
+test('enabling and binding reach the main process, once each', async (t) => {
+  const r = await rig();
   t.after(r.off);
   updateRadioPrefs(p => withGlobalPtt(p, { enabled: true }));
-  updateRadioPrefs(p => withGlobalPtt(p, { binding: F13 }));
+  updateRadioPrefs(p => withGlobalPtt(p, { uiohook: F13 }));
   updateRadioPrefs(p => ({ ...p, noise: false })); // an unrelated pref sends nothing
   assert.deepEqual(r.configured.slice(1), [{ enabled: true, binding: null }, { enabled: true, binding: F13 }]);
 });
 
-test('not the radio client: never enabled, and a press does not key', (t) => {
-  const r = rig({ client: false });
+test('not the radio client: never enabled, and a press does not key', async (t) => {
+  const r = await rig({ client: false });
   t.after(r.off);
-  updateRadioPrefs(p => withGlobalPtt(p, { enabled: true, binding: F13 }));
+  updateRadioPrefs(p => withGlobalPtt(p, { enabled: true, uiohook: F13 }));
   assert.ok(r.configured.every(c => c.enabled === false));
   r.edge(true);
   assert.deepEqual(r.calls, []);
 });
 
-test('edges drive the controller; a release passes even when no longer the client', (t) => {
-  const r = rig();
+test('edges drive the controller; a release passes even when no longer the client', async (t) => {
+  const r = await rig();
   t.after(r.off);
   r.edge(true);
   setRadioPanelIsClient(false);
   r.edge(false);
-  assert.deepEqual(r.calls, ['down', 'up']);
+  assert.deepEqual(r.calls, ['down:global', 'up:global']);
 });
 
-test('the unsubscribe drops the edge listener', () => {
-  const r = rig();
+test('the unsubscribe drops the edge listener', async () => {
+  const r = await rig();
   r.off();
   assert.equal(r.hasEdge(), false);
+});
+
+test('the binding sent is the one for this session\'s listener', async (t) => {
+  const r = await rig();
+  t.after(r.off);
+  updateRadioPrefs(p => withGlobalPtt(p, { enabled: true, portal: { shortcutId: 'crc_ptt', label: 'Meta+F' } }));
+  assert.deepEqual(r.configured.at(-1), { enabled: true, binding: null });
+});
+
+test('no listener here: nothing is configured', async () => {
+  _resetRadioPrefsForTest();
+  setRadioPanelIsClient(true);
+  const configured = [];
+  const off = wireGlobalPtt({}, { status: async () => ({ available: false }), onEdge: () => () => {}, configure: (c) => configured.push(c) });
+  await new Promise(res => setImmediate(res));
+  updateRadioPrefs(p => withGlobalPtt(p, { enabled: true }));
+  assert.deepEqual(configured, []);
+  off();
 });
