@@ -165,6 +165,7 @@ function panelControlRows() {
     { id: 'settings', label: PANEL_TITLES.settings },
     { id: 'airport',  label: PANEL_TITLES.airport },
     { id: 'radio',    label: PANEL_TITLES.radio },
+    { id: 'radio2',   label: PANEL_TITLES.radio2 },
     { id: 'efsp',     label: PANEL_TITLES.efsp },
     { id: 'airspace', label: PANEL_TITLES.airspace },
     { id: 'runwayStatus', label: PANEL_TITLES.runwayStatus },

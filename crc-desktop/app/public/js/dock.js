@@ -13,6 +13,7 @@ import { initCarrierMapPanel } from './panels/efsp/carrier-map-panel.js';
 import { initParPanel } from './panels/efsp/par-panel.js';
 import { initMetricsPanel } from './panels/metrics-panel.js';
 import { initFrequencyPanel } from './panels/efsp/frequency-panel.js';
+import { initRadioPanel } from './radio/radio-panel.js';
 import { getActiveRadars } from './picture.js';
 import { map } from './map-handle.js';
 import { PANEL_TITLES, registerDockActions, setDock } from './dock-handle.js';
@@ -57,6 +58,7 @@ export function initDock() {
         case 'airport':  return mountExistingPanel('aprt-panel', initAprtPanel);
         case 'radars':   return mountExistingPanel('radars-panel', initRadarPanel);
         case 'radio':    return mountExistingPanel('srs-radio-panel', null);
+        case 'radio2':   return mountExistingPanel('radio-panel', initRadioPanel);
         case 'efsp':     return mountExistingPanel('efsp-panel', initEfspPanel);
         case 'airspace': return mountExistingPanel('airspace-panel', initAirspacePanel);
         case 'runwayStatus': return mountExistingPanel('runway-status-panel', initRunwayStatusPanel);
@@ -208,7 +210,7 @@ const PANEL_SIDE = {
   track: 'left', radars: 'left', airport: 'left', efsp: 'left', airspace: 'left',
   runwayStatus: 'left', carrier: 'left', marshal: 'left', carrierMap: 'left', par: 'left', metrics: 'left', frequencies: 'left',
   settings: 'right',
-  radio: 'bottom',
+  radio: 'bottom', radio2: 'bottom',
 };
 
 // Track Info's reopen path: clicking a track on the map (showTrackPanel, in
@@ -378,6 +380,11 @@ const DOCKABLE_PANELS = {
     position: { direction: 'below' },
     initialHeight: 90,
   }, true),
+  // The new radio panel (docs/adr/0158, RADIO-SET): a tab beside the SRS panel while that is open, else its own
+  // full-width bottom strip like it. The SRS panel stays the default; the supervisor swaps them at integration.
+  radio2: () => (dock.api.getPanel('radio')
+    ? withRememberedPlacement('radio2', { id: 'radio2', component: 'radio2', title: PANEL_TITLES.radio2, position: { referencePanel: 'radio' } }, false)
+    : withRememberedPlacement('radio2', { id: 'radio2', component: 'radio2', title: PANEL_TITLES.radio2, position: { direction: 'below' }, initialHeight: 160 }, true)),
 };
 
 function isDockPanelOpen(id) {
@@ -451,7 +458,7 @@ function toggleDockPanel(id, open, { preserveFocus } = {}) {
 // reopened.
 const PANEL_FLOAT_KEY = 'crc-desktop-panel-float';
 const SIDE_SIZE_KEY = 'crc-desktop-side-size';
-const PLACEMENT_TRACKED_IDS = ['track', 'radars', 'settings', 'airport', 'calls', 'radio'];
+const PLACEMENT_TRACKED_IDS = ['track', 'radars', 'settings', 'airport', 'calls', 'radio', 'radio2'];
 
 function _loadJSON(key) {
   try {

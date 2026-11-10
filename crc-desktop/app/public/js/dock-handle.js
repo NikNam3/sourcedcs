@@ -21,6 +21,7 @@ export const PANEL_TITLES = {
   settings: 'SETTINGS',
   airport:  'AIRPORT',
   radio:    'RADIO',
+  radio2:   'RADIO 2',
   efsp:     'FLIGHT STRIPS',
   airspace: 'AIRSPACE',
   runwayStatus: 'RUNWAY STATUS',
