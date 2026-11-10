@@ -16,10 +16,10 @@ const IS_LINUX = process.platform === 'linux';
 const IS_WIN   = process.platform === 'win32';
 // Which SRS client runs (ADR 0158 step 2, S-RADIO-1 RQ11): config.json `radioClient`, "lxsrs" (the Python bridge) or
 // "node" (the built-in client, app/srs/). Only one may run, or the controller is two SRS clients and hears every call
-// twice. Unset: lxsrs on Linux, where it has always run, node elsewhere (Windows never had a radio).
+// twice. Unset: node everywhere (H186, crc-desktop 2.2.0); lxsrs stays selectable until it is removed (H185).
 const RADIO_CLIENT = config.radioClient === 'node' || config.radioClient === 'lxsrs'
     ? config.radioClient
-    : (IS_LINUX ? 'lxsrs' : 'node');
+    : 'node';
 
 let nodeProc = null;
 let pyProc   = null;

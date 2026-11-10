@@ -83,7 +83,7 @@ test('every panel sized small keeps its bottom control reachable (U12)', async (
     ['track', '#track-panel'], ['radars', '#radars-panel'], ['airport', '#aprt-panel'], ['efsp', '#efsp-panel'],
     ['airspace', '#airspace-panel'], ['runwayStatus', '#runway-status-panel'], ['carrier', '#carrier-mgmt-panel'],
     ['marshal', '#marshal-panel'], ['carrierMap', '#carrier-map-panel'], ['par', '#par-panel'], ['metrics', '#metrics-panel'],
-    ['settings', '#settings-panel'], ['radio', '#srs-radio-panel'],
+    ['settings', '#settings-panel'], ['radio2', '#radio-panel'], ['radio', '#srs-radio-panel'],
   ];
   const problems = [];
   for (const [id, sel] of panels) {

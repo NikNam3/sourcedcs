@@ -68,5 +68,6 @@ import { startApp } from './app.js';
 setInterval(atcTick, 500);
 // app.js's boot sequence (it ran last among the "provider" scripts).
 startApp();
-// srs-radio.js ran after app.js; it is self-contained (its own DOM elements by id).
-await import('./srs-radio.js');
+// srs-radio.js ran after app.js; it is self-contained (its own DOM elements by id). It drives the Python bridge, so it
+// runs only when that is the radio client (config.json radioClient "lxsrs"; the built-in radio is the default, H186).
+if (typeof RADIO_CLIENT !== 'undefined' && RADIO_CLIENT === 'lxsrs') await import('./srs-radio.js');

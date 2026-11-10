@@ -20,8 +20,8 @@ export const PANEL_TITLES = {
   radars:   'PANELS',
   settings: 'SETTINGS',
   airport:  'AIRPORT',
-  radio:    'RADIO',
-  radio2:   'RADIO 2',
+  radio:    'RADIO (PYTHON)', // the lxsrs bridge's panel, until it is removed (H185)
+  radio2:   'RADIO',          // the built-in radio (ADR 0158), the default since 2.2.0 (H186)
   efsp:     'FLIGHT STRIPS',
   airspace: 'AIRSPACE',
   runwayStatus: 'RUNWAY STATUS',

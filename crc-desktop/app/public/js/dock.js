@@ -808,7 +808,8 @@ function buildDefaultDockLayout() {
   // radars-panel's Panels section cover reopening them respectively.
   addMissingRequiredPanels();
   ensureTrackPanel();
-  toggleDockPanel('radio', true);
+  // The radio panel of the client main.js runs (config.json radioClient, H186: the built-in one unless set to lxsrs).
+  toggleDockPanel(typeof RADIO_CLIENT !== 'undefined' && RADIO_CLIENT === 'lxsrs' ? 'radio' : 'radio2', true);
   // Settings/Airport/Squawk C/S intentionally NOT added here — they start
   // closed; the user opts in via the radars-panel's Panels checkboxes.
 }

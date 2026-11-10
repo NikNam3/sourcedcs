@@ -13,7 +13,7 @@ const DATA_DIR         = path.join(__dirname, 'data');
 const FONTS_DIR        = path.join(PUBLIC_DIR, 'fonts');
 const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
 // Which SRS client runs (ADR 0158 step 2, S-RADIO-1 RQ11): 'lxsrs' (the Python bridge, /srs-api/) or 'node' (/srs).
-const RADIO_CLIENT     = process.env.CRC_RADIO_CLIENT === 'node' ? 'node' : 'lxsrs';
+const RADIO_CLIENT     = process.env.CRC_RADIO_CLIENT === 'lxsrs' ? 'lxsrs' : 'node'; // H186: the built-in radio unless lxsrs is chosen
 
 // This is the renderer's local server, built on Node's own `http`/`https`
 // modules (no Express): it serves app/public, generates /js/config.js and
