@@ -1795,6 +1795,7 @@
    "deleteGroup",
    "forgetRadio",
    "groupNameProblem",
+   "groupPttRadio",
    "intendedGroupOf",
    "mayTransmit",
    "moveRadio",

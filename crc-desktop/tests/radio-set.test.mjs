@@ -321,3 +321,17 @@ test('a manual radio may be FM (RQ18); anything else is AM', () => {
   assert.equal(radio(set, 'MANUAL:f').modulation, 'FM');
   assert.equal(radio(set, 'MANUAL:x').modulation, 'AM');
 });
+
+test('PTT is per group: a group keys through its first radio that may transmit', async () => {
+  const { groupPttRadio } = await import('../app/public/js/radio/link-groups.js');
+  const set = {
+    radios: [
+      { id: 'A', receiveOnly: true, conflict: null, kind: 'POSITION' },
+      { id: 'B', receiveOnly: false, conflict: null, kind: 'POSITION' },
+    ],
+    groups: [{ id: 'AUTO', auto: true, radioIds: ['A', 'B'] }, { id: 'G1', radioIds: [] }],
+  };
+  assert.equal(groupPttRadio(set, set.groups[0]), 'B');
+  assert.equal(groupPttRadio(set, set.groups[1]), null);
+  assert.equal(groupPttRadio(set, null), null);
+});

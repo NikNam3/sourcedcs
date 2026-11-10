@@ -55,11 +55,15 @@ export function buildRadioRow(radio, ctx) {
   const row = el('div', 'radio-row', null, { dataset: { radioId: radio.id } });
   if (radio.receiveOnly) row.classList.add('radio-row-rxonly');
 
-  const target = el('button', 'radio-target' + (ctx.isTarget ? ' radio-target-on' : ''), ctx.isTarget ? '●' : '○', {
-    type: 'button', title: ctx.isTarget ? 'PTT transmits on this radio\'s group' : 'Transmit on this radio\'s group', disabled: !mayTransmit(radio),
-  });
-  target.addEventListener('click', () => ctx.onTarget());
-  row.appendChild(target);
+  // PTT is per group: a linked radio's mark is on its group's header (link-group-editor.js); an unlinked radio is its own.
+  if (ctx.inGroup) row.appendChild(el('span', 'radio-target-spacer'));
+  else {
+    const target = el('button', 'radio-target' + (ctx.isTarget ? ' radio-target-on' : ''), ctx.isTarget ? '●' : '○', {
+      type: 'button', title: ctx.isTarget ? 'PTT transmits on this radio' : 'Transmit on this radio', disabled: !mayTransmit(radio),
+    });
+    target.addEventListener('click', () => ctx.onTarget());
+    row.appendChild(target);
+  }
 
   row.appendChild(el('span', 'radio-label', radio.label, { title: radio.label }));
   row.appendChild(frequencyCell(radio, ctx));

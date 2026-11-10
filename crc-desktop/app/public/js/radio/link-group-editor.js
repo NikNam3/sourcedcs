@@ -11,13 +11,24 @@ import { el } from './radio-dom.js';
 // cockpit: nothing more, and nothing when not.
 const relayMark = () => el('span', 'radio-note radio-relaying', 'RELAYING', { title: 'Pilots on one frequency of this group are relayed by crc-sync onto the others, and onto every group linked to it' });
 
+// PTT is per group (the human, 2026-11-10): the mark is on the group's header; PTT transmits on all its radios.
+function pttMark(ptt) {
+  const b = el('button', 'radio-target' + (ptt.isTarget ? ' radio-target-on' : ''), ptt.isTarget ? '●' : '○', {
+    type: 'button', title: ptt.isTarget ? 'PTT transmits on this group' : 'Transmit on this group', disabled: !!ptt.disabled,
+  });
+  b.addEventListener('click', () => ptt.onTarget());
+  return b;
+}
+
 /**
  * @param {{ id, name, auto } | null} group   null: the unlinked section
- * @param {object} ctx  relaying (crc-sync relays the group's network), renaming (this group's id is being renamed), renameError, onRename(on), onRenameCommit(text), onDelete()
+ * @param {object} ctx  relaying (crc-sync relays the group's network), ptt ({isTarget, disabled, onTarget}: PTT is per
+ *   group), renaming (this group's id is being renamed), renameError, onRename(on), onRenameCommit(text), onDelete()
  */
 export function buildGroupHeader(group, ctx = {}) {
   const head = el('div', 'radio-group-head');
   if (!group) { head.appendChild(el('span', 'radio-group-name', 'UNLINKED')); return head; }
+  if (ctx.ptt) head.appendChild(pttMark(ctx.ptt));
   if (group.auto) {
     head.appendChild(el('span', 'radio-group-name', group.name, { title: 'Every Position radio, linked: PTT transmits on all of them' }));
     if (ctx.relaying) head.appendChild(relayMark());

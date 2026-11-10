@@ -67,6 +67,8 @@
   gap: 4px;
   padding: 1px 0;
 }
+/* a group header's PTT mark sits where a row's would */
+.radio-group-head .radio-target { width: 16px; text-align: left; }
 .radio-target { background: transparent; border: none; color: var(--efsp-muted, #8c9aa6); cursor: pointer; padding: 0; font-size: 11px; }
 .radio-target-on { color: var(--efsp-text, #d8e0e6); }
 .radio-target:disabled { color: var(--efsp-faint, #56616c); cursor: default; }
@@ -82,7 +84,8 @@ button.radio-mod { font-family: inherit; background: transparent; border: 1px so
 .radio-row-tx .radio-tx { color: #8fd17a; }
 .radio-row-tx { background: rgba(100,160,80,0.10); }
 .radio-row-rxonly .radio-tx { visibility: hidden; }
-.radio-vol, .radio-pan, .radio-gain { height: 4px; cursor: pointer; min-width: 0; }
+.radio-vol, .radio-pan, .radio-gain { height: 4px; cursor: pointer; min-width: 0; width: 100%; box-sizing: border-box; margin: 0; }
+.radio-target-spacer { display: block; }
 .radio-vol-lbl { color: var(--efsp-muted, #8c9aa6); font-size: 10px; font-variant-numeric: tabular-nums; }
 .radio-mute { font-family: inherit; font-size: 10px; background: transparent; color: var(--efsp-muted, #8c9aa6); border: 1px solid var(--efsp-line, #2e3740); padding: 0 3px; cursor: pointer; }
 .radio-mute-on { color: var(--efsp-text, #d8e0e6); border-color: var(--efsp-line-2, #4a5560); }

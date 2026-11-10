@@ -14,7 +14,7 @@ import { el } from './radio-dom.js';
 import { readRadioInputs } from './radio-inputs.js';
 import { buildRadioSet, positionsWithoutRow, rowsWithoutRadio } from './radio-set.js';
 import {
-  createGroup, deleteGroup, intendedGroupOf, moveRadio, renameGroup, resolvePttTarget,
+  createGroup, deleteGroup, groupPttRadio, intendedGroupOf, moveRadio, renameGroup, resolvePttTarget,
 } from './link-groups.js';
 import {
   getRadioPrefs, onRadioPrefsChanged, radioAudioOf, removeManualRadio, retuneManualRadio, updateRadioPrefs,
@@ -88,6 +88,17 @@ function rowCtx(radio, prefs) {
   };
 }
 
+// A group's PTT mark: lit when the PTT target is one of its radios; a press targets its first radio that may transmit.
+function pttCtx(group) {
+  const full = _set.groups.find(g => g.id === group.id);
+  const radioId = groupPttRadio(_set, full);
+  const target = _set.radios.find(r => r.id === _target);
+  return {
+    isTarget: !!target && target.groupId === group.id, disabled: !radioId,
+    onTarget: () => { if (radioId) update(p => withPttTarget(p, radioId)); },
+  };
+}
+
 function groupCtx(group) {
   return {
     renaming: _ui.renaming === group.id, renameError: _ui.renaming === group.id ? _ui.renameError : null,
@@ -124,9 +135,10 @@ function buildBody(prefs, notes) {
   for (const section of panelSections(_set)) {
     const sec = el('div', 'radio-section' + (section.group && section.group.auto ? ' radio-section-auto' : ''));
     const relaying = !!section.group && relayingIds().includes(section.group.id);
-    sec.appendChild(buildGroupHeader(section.group, { ...(section.group && !section.group.auto ? groupCtx(section.group) : {}), relaying }));
+    const ptt = section.group ? pttCtx(section.group) : null;
+    sec.appendChild(buildGroupHeader(section.group, { ...(section.group && !section.group.auto ? groupCtx(section.group) : {}), relaying, ptt }));
     if (!section.radios.length) sec.appendChild(el('div', 'radio-note radio-empty', section.group && section.group.auto ? 'no Position radio' : 'no radio'));
-    for (const r of section.radios) sec.appendChild(buildRadioRow(r, rowCtx(r, prefs)));
+    for (const r of section.radios) sec.appendChild(buildRadioRow(r, { ...rowCtx(r, prefs), inGroup: !!section.group }));
     frag.appendChild(sec);
   }
   const foot = el('div', 'radio-foot');

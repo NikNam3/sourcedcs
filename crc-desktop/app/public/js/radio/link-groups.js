@@ -158,6 +158,14 @@ export function mayTransmit(radio) { return !!radio && !radio.receiveOnly && rad
  * The radio PTT transmits on (RQ17): the controller's choice while it exists and may transmit, else the automatic
  * group's first radio, else the first radio that may transmit, else none. The fallback is not saved.
  */
+/** The radio a group's PTT keys (the engine transmits on that radio's whole group): its first that may transmit, or null. */
+export function groupPttRadio(set, group) {
+  if (!group) return null;
+  const byId = new Map(set.radios.map(r => [r.id, r]));
+  const r = group.radioIds.map(id => byId.get(id)).find(mayTransmit);
+  return r ? r.id : null;
+}
+
 export function resolvePttTarget(set, wantedId) {
   const wanted = wantedId && set.radios.find(r => r.id === wantedId);
   if (mayTransmit(wanted)) return wanted.id;

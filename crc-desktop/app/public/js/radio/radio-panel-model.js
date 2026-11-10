@@ -23,7 +23,7 @@ export function panelSections(set) {
 
 /** The link menu of a radio: every group, with the one it is in (or asked to be in) marked, then "unlink". */
 export function linkMenuOptions(set, radio, intendedGroupId = radio.groupId) {
-  const opts = set.groups.map(g => ({ groupId: g.id, label: g.auto ? `${g.name} (auto)` : g.name, current: g.id === intendedGroupId }));
+  const opts = set.groups.map(g => ({ groupId: g.id, label: g.name, current: g.id === intendedGroupId }));
   opts.push({ groupId: null, label: 'UNLINK', current: !intendedGroupId });
   return opts;
 }
