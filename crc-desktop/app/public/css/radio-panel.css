@@ -40,6 +40,7 @@
 .radio-note { color: var(--efsp-muted, #8c9aa6); font-size: 10px; }
 .radio-note.radio-conflict { color: var(--efsp-attn, #e0a83c); }
 .radio-panel-note { margin: 1px 0; }
+.radio-panel-note.radio-problem { color: var(--efsp-attn, #e0a83c); }
 .radio-empty { padding: 2px 0 2px 20px; }
 
 .radio-section {

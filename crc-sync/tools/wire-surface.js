@@ -52,11 +52,11 @@ function messageTypes() {
     ...walk(path.join(EFSP, 'wire'))];
   for (const f of [...efspFiles, path.join(SRC, 'ws-hub.js')]) for (const t of grab(read(f), /type: '(efsp-[a-z-]+)'/g)) outbound.add(t);
   for (const f of families.FAMILIES) { outbound.delete(f.type); for (const t of [f.ackType, f.deltaType]) if (t) outbound.add(t); }
-  // The radio relay family (docs/adr/0159): its own file under src/radio/, its frames in wire/frames.js.
+  // The radio relay family (docs/adr/0160): its own file under src/radio/, its frames in wire/frames.js.
   const relayWire = read(path.join(SRC, 'radio', 'relay-wire.js'));
-  const relayIn = grab(relayWire, /const [A-Z_]+ = '(radio-relay-[a-z-]+)'/g);
-  if (!relayIn.length) throw new Error('wire-surface: no radio-relay message type in src/radio/relay-wire.js; update tools/wire-surface.js');
-  for (const f of efspFiles) for (const t of grab(read(f), /type: '(radio-relay-[a-z-]+)'/g)) outbound.add(t);
+  const relayIn = grab(relayWire, /const [A-Z_]+ = '(radio-[a-z-]+)'/g);
+  if (!relayIn.length) throw new Error('wire-surface: no radio- message type in src/radio/relay-wire.js; update tools/wire-surface.js');
+  for (const f of efspFiles) for (const t of grab(read(f), /type: '(radio-[a-z-]+)'/g)) outbound.add(t);
   return { clientToServer: uniq([...clientToServer, ...relayIn]), serverToClient: uniq([...outbound]) };
 }
 

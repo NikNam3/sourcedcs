@@ -6,13 +6,14 @@
 
 import { el } from './radio-dom.js';
 
-// The one grey mark on a group this client relays for (ADR 0159): it holds a relay lease on one of its frequencies, so
-// a pilot on one of them is re-sent on the others by this client. Dark cockpit: nothing more, and nothing when not.
-const relayMark = () => el('span', 'radio-note radio-relaying', 'RELAYING', { title: 'Pilots on one frequency of this group are relayed by you onto the others' });
+// The one grey mark on a group crc-sync relays (docs/adr/0160): a pilot on one of its frequencies is re-sent on every
+// other frequency of its network (this group, and any other controller's group sharing a frequency with it). Dark
+// cockpit: nothing more, and nothing when not.
+const relayMark = () => el('span', 'radio-note radio-relaying', 'RELAYING', { title: 'Pilots on one frequency of this group are relayed by crc-sync onto the others, and onto every group linked to it' });
 
 /**
  * @param {{ id, name, auto } | null} group   null: the unlinked section
- * @param {object} ctx  relaying (this client holds a relay lease in the group), renaming (this group's id is being renamed), renameError, onRename(on), onRenameCommit(text), onDelete()
+ * @param {object} ctx  relaying (crc-sync relays the group's network), renaming (this group's id is being renamed), renameError, onRename(on), onRenameCommit(text), onDelete()
  */
 export function buildGroupHeader(group, ctx = {}) {
   const head = el('div', 'radio-group-head');

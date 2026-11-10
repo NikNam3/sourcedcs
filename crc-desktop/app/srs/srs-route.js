@@ -12,8 +12,6 @@
 //   {type:'radios', radios:[{id, mhz, modulation, label}]}
 //   {type:'ptt', down, radioIds}
 //   {type:'intercom-unit', unitId}             join that client's intercom (null: the shared default)
-//   {type:'link-groups', groups:[{id, channels:[{mhz, modulation, receiveOnly}]}]}   what the relay may link (ADR 0159)
-//   {type:'relay-leases', channels:['251000:AM', ...]}                              the relay leases crc-sync granted us
 // and binary srs-frame.js frames with one Opus frame each, sent while the key is down.
 // Server to renderer: text {type:'state', ...} and binary srs-frame.js frames of received audio.
 
@@ -97,10 +95,6 @@ function attachSrsRoute(server, o) {
         session.setRadios(Array.isArray(msg.radios) ? msg.radios : []);
       } else if (msg.type === 'intercom-unit' && session) {
         session.setIntercomUnit(msg.unitId ?? null);
-      } else if (msg.type === 'link-groups' && session) {
-        session.setLinkGroups(Array.isArray(msg.groups) ? msg.groups : []);
-      } else if (msg.type === 'relay-leases' && session) {
-        session.setRelayLeases(Array.isArray(msg.channels) ? msg.channels : []);
       } else if (msg.type === 'ptt' && session) {
         session.ptt(msg.down === true, Array.isArray(msg.radioIds) ? msg.radioIds : []);
       }

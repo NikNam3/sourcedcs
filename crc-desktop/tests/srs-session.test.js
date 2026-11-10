@@ -89,6 +89,24 @@ test('a received packet goes to the renderer with every matching radio; an unmat
   assert.equal(states.at(-1).unmatchedPackets, 1);
 });
 
+test('crc-sync\'s relay (ADR 0160): its copy of a pilot already heard plays once, our own voice relayed back not at all', () => {
+  const { s, udp, rx, states, echo } = rig();
+  echo();
+  s.setRadios(RADIOS);
+  const RELAY = 'R'.repeat(22);
+  const pkt = (hz, o) => encodeVoicePacket({ audio: Buffer.from([1]), frequencies: [hz], modulations: [0], encryptions: [0],
+    unitId: 1, packetNumber: 9, retransmissionCount: 0, originalGuid: OTHER, guid: OTHER, ...o });
+  udp[0].emit('message', pkt(251e6));
+  udp[0].emit('message', pkt(122.1e6, { guid: RELAY, retransmissionCount: 1 }));
+  assert.equal(rx.length, 1, 'the relay\'s copy on the other frequency is dropped');
+  udp[0].emit('message', pkt(122.1e6, { guid: RELAY, retransmissionCount: 1, packetNumber: 10 }));
+  assert.equal(rx.length, 2, 'a packet heard only through the relay plays');
+  udp[0].emit('message', pkt(122.1e6, { guid: RELAY, retransmissionCount: 1, originalGuid: G }));
+  assert.equal(rx.length, 2, 'our own voice, relayed onto a frequency we hear, is no echo');
+  s.setRadios(RADIOS);
+  assert.equal(states.at(-1).duplicatePackets, 1);
+});
+
 test('more than eleven channels: the rest is an error in the state', () => {
   const { s, states } = rig();
   s.setRadios(Array.from({ length: 12 }, (_, i) => ({ id: `M${i}`, mhz: 250 + i })));
