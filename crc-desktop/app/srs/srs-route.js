@@ -84,7 +84,7 @@ function attachSrsRoute(server, o) {
       try { msg = JSON.parse(data.toString('utf8')); } catch { return; }
       if (msg.type === 'hello' && !session) {
         session = makeSession({
-          host: o.srsHost, port: o.srsPort, guid,
+          host: o.srsHost, port: o.srsPort, guid, debug: process.env.CRC_SRS_DEBUG === '1',
           name: typeof msg.name === 'string' && msg.name.trim() ? msg.name.trim().slice(0, 64) : DEFAULT_NAME,
           onState: (s) => sendState({ enabled: true, ...s }),
           onRx: ({ header, opus }) => { if (ws.readyState === ws.OPEN) ws.send(encodeFrame(header, opus)); },

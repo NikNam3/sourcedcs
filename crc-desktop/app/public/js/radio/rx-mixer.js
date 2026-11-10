@@ -1,8 +1,12 @@
-// The receive side of the Web Audio graph (ADR 0158 §1, §6): per radio, the band-pass, its gain and pan, into one
-// master gain and the output device. It replaces lxsrs_v2's OptionalOpusPlaybackSink mixing thread: the graph mixes.
+// The receive side of the Web Audio graph (ADR 0158 §1, §6): per radio, the voice at the radio's volume and the radio's
+// own sounds at a fixed level, both through its pan into one master gain and the output device. It replaces lxsrs_v2's
+// OptionalOpusPlaybackSink mixing thread: the graph mixes.
 //
-//   frame source ─┐
-//   tone, noise ──┴─> band-pass ─> gain (volume, 0 when muted) ─> pan ─> master (output gain) ─> destination
+//   frame source ───────────────> voice gain (volume, 0 when muted) ─┐
+//   tone, noise ─> band-pass ───> sound gain (1, 0 when muted) ──────┴─> pan ─> master (output gain) ─> destination
+//
+// The volume is the voice's alone, as in lxsrs_v2 (its noise was its own stream at a fixed level): turning a radio up
+// makes the pilot louder, not the static. The voice is played as decoded, unfiltered, as lxsrs_v2 played it.
 
 import { SAMPLE_RATE } from './radio-audio-constants.js';
 
@@ -35,16 +39,20 @@ export function createRxMixer(ctx, effects) {
     const c = chains.get(id);
     if (!c) return;
     const a = audioOf(id);
-    c.gain.gain.value = a.muted ? 0 : a.volume;
+    c.voice.gain.value = a.muted ? 0 : a.volume;
+    c.sound.gain.value = a.muted ? 0 : 1;
     c.pan.pan.value = Math.max(-1, Math.min(1, a.pan));
   };
   const chain = (id) => {
     if (!chains.has(id)) {
       const filter = effects.bandPass();
-      const gain = ctx.createGain();
+      const voice = ctx.createGain();
+      const sound = ctx.createGain();
       const pan = ctx.createStereoPanner();
-      filter.output.connect(gain); gain.connect(pan); pan.connect(master);
-      chains.set(id, { filter, gain, pan });
+      voice.connect(pan);
+      filter.output.connect(sound); sound.connect(pan);
+      pan.connect(master);
+      chains.set(id, { filter, voice, sound, pan });
       apply(id);
     }
     return chains.get(id);
@@ -65,7 +73,7 @@ export function createRxMixer(ctx, effects) {
       buf.copyToChannel(pcm, 0);
       const src = ctx.createBufferSource();
       src.buffer = buf;
-      src.connect(chain(id).filter.input);
+      src.connect(chain(id).voice);
       src.start(at);
     },
     /** Drops the chains of radios that are gone. */
@@ -73,7 +81,7 @@ export function createRxMixer(ctx, effects) {
       const keep = new Set(ids);
       for (const [id, c] of chains) {
         if (keep.has(id)) continue;
-        c.filter.output.disconnect(); c.gain.disconnect(); c.pan.disconnect();
+        c.filter.output.disconnect(); c.voice.disconnect(); c.sound.disconnect(); c.pan.disconnect();
         chains.delete(id);
       }
     },

@@ -43,6 +43,15 @@ function createSrsSession(o) {
   let packetNumber = 0, unmatched = 0, pttError = null, unitId = UNIT_ID, duplicates = 0;
   const now = deps.now || Date.now; // housekeeping: the dedupe window
   const dedupe = createRxDedupe();
+  // CRC_SRS_DEBUG=1 (server.js): one log line per received transmission, to see whose audio arrives on what.
+  const traced = new Map();
+  function traceRx(p) {
+    const key = `${p.originalGuid}|${p.guid}`, t = now();
+    if (t - (traced.get(key) || 0) > 2000) {
+      log(`rx from=${p.guid} original=${p.originalGuid}${p.originalGuid === o.guid ? ' (OURS)' : ''} rt=${p.retransmissionCount} unit=${p.unitId} freqs=${p.frequencies.map(f => (f / 1e6).toFixed(3)).join(',')}`);
+    }
+    traced.set(key, t);
+  }
   const clients = new Map(); // guid -> {name, unitId}
 
   const radioInfo = () => radioInfoDict({
@@ -88,6 +97,7 @@ function createSrsSession(o) {
     onReady: () => emit(),
     onEcho: () => sync.heard(),
     onPacket: (p) => {
+      if (o.debug) traceRx(p);
       if (p.originalGuid === o.guid) return; // our own voice, relayed by crc-sync onto another frequency we hear
       const radioIds = matchRadioIds(slots, p.frequencies, p.modulations, p.encryptions);
       if (!radioIds.length) { unmatched++; return; }
