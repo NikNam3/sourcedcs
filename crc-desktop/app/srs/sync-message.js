@@ -32,7 +32,9 @@ const RADIO_MODEL = 'crc';
 
 /**
  * One radio slot. `name` and `model` are cleaned as models.py does. Pass `model` explicitly; it defaults to the name
- * only so an empty slot stays empty. @param {{hz?:number, modulation?:number, name?:string, model?:string}} [r]
+ * only so an empty slot stays empty. `intercomUnitId` is set on the intercom radio only (client.py add_intercom: it
+ * must equal the sender's unitId for SRS to route it).
+ * @param {{hz?:number, modulation?:number, name?:string, model?:string, intercomUnitId?:number}} [r]
  */
 function radioDict(r = {}) {
   const name = cleanRadioLabel(r.name || '');
@@ -46,7 +48,7 @@ function radioDict(r = {}) {
     secFreq: 1.0,
     Model: model,
     Name: name,
-    IntercomUnitId: 0,
+    IntercomUnitId: r.intercomUnitId || 0,
   };
 }
 

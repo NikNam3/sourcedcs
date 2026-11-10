@@ -74,6 +74,9 @@ test('a press transmits on the pressed radio\'s group, or on it alone; never on 
   assert.deepEqual(txRadioIdsFor(radios, 'OBS2'), []);
   assert.deepEqual(txRadioIdsFor(radios, 'OBS'), []);
   assert.deepEqual(txRadioIdsFor(radios, 'nope'), []);
+  const withIc = [...radios, { id: 'IC', modulation: 'INTERCOM', groupId: 'auto' }];
+  assert.deepEqual(txRadioIdsFor(withIc, 'P1U'), ['P1U', 'P1V'], 'the intercom never rides with a group (H183)');
+  assert.deepEqual(txRadioIdsFor(withIc, 'IC'), ['IC']);
 });
 
 test('a device is picked by id, then by label, else the default with a note', () => {

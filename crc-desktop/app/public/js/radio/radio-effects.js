@@ -15,8 +15,8 @@ export const TX_SOUNDS = Object.freeze({
 export const SOUND_SETS = Object.freeze(Object.keys(TX_SOUNDS));
 export const DEFAULT_SOUND_SET = 'RADIO_TRANS';
 
-/** Background noise per modulation (effects.py `_NOISE_FILES`; intercom is not ported, S-RADIO-2 RQ18). */
-export const NOISE_FILES = Object.freeze({ AM: 'UHF_NOISE.wav', FM: 'FM_NOISE.wav' });
+/** Background noise per modulation (effects.py `_NOISE_FILES`). */
+export const NOISE_FILES = Object.freeze({ AM: 'UHF_NOISE.wav', FM: 'FM_NOISE.wav', INTERCOM: 'VHF_NOISE.wav' });
 /** Noise level, a fraction of full scale (effects.py `_NOISE_VOLUME`). */
 export const NOISE_VOLUME = 0.12;
 

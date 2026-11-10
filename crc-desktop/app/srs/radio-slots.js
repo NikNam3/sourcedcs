@@ -20,8 +20,14 @@ const MATCH_TOLERANCE_HZ = 500;
 /** A channel name is tuned literally (122.105 goes out as 122 105 000 Hz): SRS and DCS do no 8.33 conversion. */
 const mhzToHz = (mhz) => Math.round(Number(mhz) * 1e6);
 
-/** The modulations a radio here may have (S-RADIO-2 RQ18: AM, and FM for manual radios; no intercom). */
-const MODULATIONS = Object.freeze({ AM: Modulation.AM, FM: Modulation.FM });
+/** The modulations a radio here may have: AM, FM for manual radios (S-RADIO-2 RQ18), and the intercom (H183). */
+const MODULATIONS = Object.freeze({ AM: Modulation.AM, FM: Modulation.FM, INTERCOM: Modulation.INTERCOM });
+
+/**
+ * The intercom radio's frequency: client.py's make_radio(100.0). SRS routes intercom by unit id, not frequency. There
+ * is at most one, it takes slot 0 as client.py puts it, and it is never part of a transmission on other radios (H183).
+ */
+const INTERCOM_HZ = 100;
 
 const sameChannel = (s, hz, modulation) => Math.abs(s.hz - hz) < MATCH_TOLERANCE_HZ && s.modulation === modulation;
 
@@ -36,8 +42,14 @@ function buildSlots(radios) {
   for (const r of radios || []) {
     if (!r || typeof r.id !== 'string' || seen.has(r.id)) continue;
     seen.add(r.id);
-    const hz = mhzToHz(r.mhz);
     const modulation = MODULATIONS[String(r.modulation || 'AM').toUpperCase()];
+    if (modulation === Modulation.INTERCOM) {
+      if (slots.some(s => s.modulation === Modulation.INTERCOM)) { invalid.push(r.id); continue; }
+      if (slots.length >= MAX_RADIOS) { overflow.push(r.id); continue; }
+      slots.unshift({ radioIds: [r.id], hz: INTERCOM_HZ, modulation, name: r.label || 'intercom' });
+      continue;
+    }
+    const hz = mhzToHz(r.mhz);
     if (!(hz > 0) || modulation === undefined) { invalid.push(r.id); continue; }
     const shared = slots.find(s => sameChannel(s, hz, modulation));
     if (shared) { shared.radioIds.push(r.id); continue; }
@@ -65,10 +77,14 @@ function matchRadioIds(slots, frequencies, modulations, encryptions) {
 
 /**
  * What a transmission on these radios carries: one entry per slot that holds one of them (ADR 0158 §4: a group
- * transmits as one packet stream with every frequency of the group). Radios with no slot are left out.
+ * transmits as one packet stream with every frequency of the group). Radios with no slot are left out, and so is the
+ * intercom when any other radio is named.
  */
 function txChannels(slots, radioIds) {
   const want = new Set(radioIds);
+  // The intercom goes out alone or not at all: never in the packets of a group (H183).
+  const others = slots.some(s => s.modulation !== Modulation.INTERCOM && s.radioIds.some(id => want.has(id)));
+  if (others) for (const s of slots) if (s.modulation === Modulation.INTERCOM) for (const id of s.radioIds) want.delete(id);
   const frequencies = [], modulations = [], encryptions = [], used = [];
   for (const s of slots) {
     const mine = s.radioIds.filter(id => want.has(id));
@@ -84,4 +100,4 @@ function selectedSlot(slots, radioIds) {
   return i < 0 ? 0 : i;
 }
 
-module.exports = { MATCH_TOLERANCE_HZ, MODULATIONS, mhzToHz, buildSlots, matchRadioIds, txChannels, selectedSlot };
+module.exports = { MATCH_TOLERANCE_HZ, MODULATIONS, INTERCOM_HZ, mhzToHz, buildSlots, matchRadioIds, txChannels, selectedSlot };

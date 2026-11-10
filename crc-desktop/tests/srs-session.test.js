@@ -94,3 +94,27 @@ test('more than eleven channels: the rest is an error in the state', () => {
   s.setRadios(Array.from({ length: 12 }, (_, i) => ({ id: `M${i}`, mhz: 250 + i })));
   assert.match(states.at(-1).error, /11/);
 });
+
+test('intercom: the unit id follows setIntercomUnit into RADIO_UPDATE and packets; the client list is in the state', () => {
+  const { s, tcp, udp, states, echo } = rig();
+  echo();
+  s.setRadios([{ id: 'IC', mhz: 0, modulation: 'INTERCOM', label: 'Intercom' }, ...RADIOS]);
+  tcp[0].emit('data', Buffer.from(JSON.stringify({ MsgType: MsgType.SYNC, Clients: [
+    { ClientGuid: OTHER, Name: 'Viper 1-1', RadioInfo: { unitId: 4242 } },
+    { ClientGuid: 'x'.repeat(22), Name: 'spectator', RadioInfo: { unitId: 0 } },
+    { ClientGuid: G, Name: 'us', RadioInfo: { unitId: 1 } }] }) + '\n'));
+  assert.deepEqual(states.at(-1).srsClients, [{ name: 'Viper 1-1', unitId: 4242 }]);
+  s.setIntercomUnit(4242);
+  const ri = tcp[0].written.at(-1).Client.RadioInfo;
+  assert.equal(ri.unitId, 4242);
+  assert.equal(ri.radios[0].modulation, 2);
+  assert.equal(ri.radios[0].IntercomUnitId, 4242);
+  assert.equal(ri.radios[1].IntercomUnitId, 0);
+  s.ptt(true, ['IC']); s.txFrame(Buffer.from([1]));
+  const p = decodeVoicePacket(udp[0].sent.at(-1));
+  assert.deepEqual([p.unitId, p.frequencies, p.modulations], [4242, [100], [2]]);
+  tcp[0].emit('data', Buffer.from(JSON.stringify({ MsgType: MsgType.CLIENT_DISCONNECT, Client: { ClientGuid: OTHER } }) + '\n'));
+  assert.deepEqual(states.at(-1).srsClients, []);
+  s.setIntercomUnit(null);
+  assert.equal(states.at(-1).unitId, 1);
+});

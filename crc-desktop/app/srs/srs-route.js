@@ -11,6 +11,7 @@
 //   {type:'hello', name}                       starts the SRS session; `name` is shown in the SRS client list
 //   {type:'radios', radios:[{id, mhz, modulation, label}]}
 //   {type:'ptt', down, radioIds}
+//   {type:'intercom-unit', unitId}             join that client's intercom (null: the shared default)
 // and binary srs-frame.js frames with one Opus frame each, sent while the key is down.
 // Server to renderer: text {type:'state', ...} and binary srs-frame.js frames of received audio.
 
@@ -92,6 +93,8 @@ function attachSrsRoute(server, o) {
         session.start();
       } else if (msg.type === 'radios' && session) {
         session.setRadios(Array.isArray(msg.radios) ? msg.radios : []);
+      } else if (msg.type === 'intercom-unit' && session) {
+        session.setIntercomUnit(msg.unitId ?? null);
       } else if (msg.type === 'ptt' && session) {
         session.ptt(msg.down === true, Array.isArray(msg.radioIds) ? msg.radioIds : []);
       }

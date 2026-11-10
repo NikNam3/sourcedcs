@@ -7,14 +7,18 @@
 // while UDP is not ready is refused in the state (S-RADIO-1 RQ4).
 // Receive: a packet is handed on with the radios it matches (radio-slots.js). One that matches none is dropped and
 // counted: the server sent something we did not tune.
+// Intercom (H183, client.py add_intercom/set_intercom_unit): SRS routes an intercom packet to the clients with the
+// sender's unit id. Joining another client's intercom is taking its unit id as our own, `setIntercomUnit(id)`; null
+// goes back to the shared 1. The SRS client list (other clients with a unit id, as client.py's snapshot) is in the
+// state as `srsClients`, for the picker.
 
 const { createSyncLink } = require('./sync-link');
 const { createVoiceLink } = require('./voice-link');
-const { radioInfoDict } = require('./sync-message');
+const { radioInfoDict, MsgType, Modulation } = require('./sync-message');
 const { buildSlots, matchRadioIds, txChannels, selectedSlot } = require('./radio-slots');
 const { encodeVoicePacket } = require('./voice-packet');
 
-/** The unit id every CRC sends: client.py's fixed shared 1 (S-RADIO-1 RQ3). */
+/** The unit id every CRC sends unless it joined an intercom: client.py's fixed shared 1 (S-RADIO-1 RQ3). */
 const UNIT_ID = 1;
 
 /**
@@ -31,17 +35,44 @@ function createSrsSession(o) {
   const log = o.log || (() => {});
   let slots = [], slotError = null, invalid = [], overflow = [];
   let pttDown = false, tx = { frequencies: [], modulations: [], encryptions: [], radioIds: [] };
-  let packetNumber = 0, unmatched = 0, pttError = null;
+  let packetNumber = 0, unmatched = 0, pttError = null, unitId = UNIT_ID;
+  const clients = new Map(); // guid -> {name, unitId}
 
   const radioInfo = () => radioInfoDict({
-    radios: slots.map(s => ({ hz: s.hz, modulation: s.modulation, name: s.name, model: 'crc' })),
-    unit: o.name, unitId: UNIT_ID, selected: selectedSlot(slots, tx.radioIds),
+    radios: slots.map(s => ({
+      hz: s.hz, modulation: s.modulation, name: s.name, model: 'crc',
+      intercomUnitId: s.modulation === Modulation.INTERCOM ? unitId : 0,
+    })),
+    unit: o.name, unitId, selected: selectedSlot(slots, tx.radioIds),
   });
+
+  function noteClient(c) {
+    if (!c || !c.ClientGuid || c.ClientGuid === o.guid) return false;
+    const next = { name: c.Name || '', unitId: (c.RadioInfo && c.RadioInfo.unitId) || 0 };
+    const prev = clients.get(c.ClientGuid);
+    if (prev && prev.name === next.name && prev.unitId === next.unitId) return false;
+    clients.set(c.ClientGuid, next);
+    return true;
+  }
+  function onMessage(m) {
+    let changed = false;
+    if (m.MsgType === MsgType.CLIENT_DISCONNECT) changed = clients.delete(m.Client && m.Client.ClientGuid);
+    else if ([MsgType.UPDATE, MsgType.RADIO_UPDATE, MsgType.SYNC].includes(m.MsgType)) {
+      changed = noteClient(m.Client);
+      for (const c of m.Clients || []) changed = noteClient(c) || changed;
+    }
+    if (changed) emit();
+  }
 
   let lastConnected = false;
   const sync = createSyncLink({
     host: o.host, port: o.port, guid: o.guid, name: o.name, coalition: o.coalition || 0, getRadioInfo: radioInfo,
-    onState: (s) => { if (s.connected && !lastConnected) voice.reopen(); lastConnected = s.connected; emit(); },
+    onState: (s) => {
+      if (s.connected && !lastConnected) voice.reopen();
+      if (!s.connected) clients.clear();
+      lastConnected = s.connected; emit();
+    },
+    onMessage,
     net: deps.net, timers: deps.timers, now: deps.now, log,
   });
 
@@ -71,6 +102,8 @@ function createSrsSession(o) {
       txRadioIds: pttDown ? tx.radioIds : [],
       unmatchedPackets: unmatched,
       droppedPackets: voice.droppedPackets(),
+      unitId,
+      srsClients: [...clients.values()].filter(c => c.unitId > 0).sort((a, b) => a.name.localeCompare(b.name)),
     };
   }
   function emit() { o.onState(state()); }
@@ -97,13 +130,21 @@ function createSrsSession(o) {
       sync.radiosChanged();
       emit();
     },
+    /** Join another client's intercom by taking its unit id; null for the shared default. */
+    setIntercomUnit(id) {
+      const next = Number.isInteger(id) && id > 0 ? id : UNIT_ID;
+      if (next === unitId) return;
+      unitId = next;
+      sync.radiosChanged();
+      emit();
+    },
     /** One Opus frame from the renderer's encoder. Sent only while the key is down. */
     txFrame(opus) {
       if (!pttDown || !tx.frequencies.length) return false;
       packetNumber++;
       return voice.send(encodeVoicePacket({
         audio: opus, frequencies: tx.frequencies, modulations: tx.modulations, encryptions: tx.encryptions,
-        unitId: UNIT_ID, packetNumber, retransmissionCount: 0, originalGuid: o.guid, guid: o.guid,
+        unitId, packetNumber, retransmissionCount: 0, originalGuid: o.guid, guid: o.guid,
       }));
     },
     state,

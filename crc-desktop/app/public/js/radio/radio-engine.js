@@ -8,6 +8,7 @@
 //   setDevices({inputId, outputId, inputLabel?, outputLabel?})
 //   setAudioOptions({inputGain, outputGain, soundSet, noise})
 //   setIdentity({name})                        the name in the SRS client list (default "CRC")
+//   setIntercomUnit(unitId|null)               join that SRS client's intercom (H183; state.srsClients lists them)
 //   testMic() -> Promise<{peak, blocks}>
 //   onState(fn) -> unsubscribe                 radio-engine-state.js has the fields
 
@@ -35,6 +36,7 @@ let devices = { inputId: null, outputId: null, inputLabel: null, outputLabel: nu
 const options = { inputGain: DEFAULT_INPUT_GAIN, outputGain: DEFAULT_OUTPUT_GAIN, soundSet: DEFAULT_SOUND_SET, noise: true };
 let micTap = null;
 let micDeviceId = null;
+let intercomUnit = null;
 
 const wireRadios = () => radios.map(r => ({ id: r.id, mhz: r.mhz, modulation: r.modulation || 'AM', label: r.label || r.id }));
 const modulationOf = (id) => ((radios.find(r => r.id === id) || {}).modulation || 'AM');
@@ -49,7 +51,11 @@ function build() {
 
   const socket = createSrsSocket({
     url: `ws://${location.host}/srs`,
-    onOpen: () => { socket.send({ type: 'hello', name }); socket.send({ type: 'radios', radios: wireRadios() }); },
+    onOpen: () => {
+      socket.send({ type: 'hello', name });
+      socket.send({ type: 'radios', radios: wireRadios() });
+      if (intercomUnit !== null) socket.send({ type: 'intercom-unit', unitId: intercomUnit });
+    },
     onMessage: (m) => { if (m.type === 'state') onServerState(m); },
     onFrame: ({ header, opus }) => { if (getEngineState().opusSupported) rx.receive(header, opus); },
     onClose: () => { tx.up(); setEngineState({ connected: false, udpReady: false }); closeMic(); },
@@ -82,6 +88,7 @@ function onServerState(m) {
   setEngineState({
     connected: !!m.connected, udpReady: !!m.udpReady, enabled: m.enabled ?? null, error: m.error || null,
     overflowRadioIds: m.overflowRadioIds || [], invalidRadioIds: m.invalidRadioIds || [],
+    srsClients: m.srsClients || [], intercomUnitId: m.unitId || 1,
   });
   if (m.connected) openMic(); else closeMic();
 }
@@ -158,6 +165,11 @@ export function setIdentity(id) {
   if (next === name) return;
   name = next;
   if (parts) parts.socket.reconnect(); // the SRS name is sent in SYNC: a new session, the same GUID
+}
+
+export function setIntercomUnit(unitId) {
+  intercomUnit = Number.isInteger(unitId) && unitId > 0 ? unitId : null;
+  engine().socket.send({ type: 'intercom-unit', unitId: intercomUnit });
 }
 
 export async function testMic() {

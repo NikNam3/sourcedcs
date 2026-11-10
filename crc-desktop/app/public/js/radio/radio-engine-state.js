@@ -9,14 +9,16 @@
 //   opusSupported   WebCodecs has Opus both ways; null until checked
 //   deviceNote      a saved device that was not found, or null
 //   overflowRadioIds, invalidRadioIds  radios the server could not tune
+//   srsClients      the other SRS clients with a unit id, [{name, unitId}], for the intercom picker (H183)
+//   intercomUnitId  the unit id we send (1, the shared default, until an intercom is joined)
 
 const state = {
   connected: false, udpReady: false, enabled: null, error: null, rxRadioIds: [], txRadioIds: [], opusSupported: null,
-  deviceNote: null, overflowRadioIds: [], invalidRadioIds: [],
+  deviceNote: null, overflowRadioIds: [], invalidRadioIds: [], srsClients: [], intercomUnitId: 1,
 };
 const listeners = new Set();
 
-const same = (a, b) => (Array.isArray(a) && Array.isArray(b) ? a.length === b.length && a.every((v, i) => v === b[i]) : a === b);
+const same = (a, b) => (Array.isArray(a) && Array.isArray(b) ? JSON.stringify(a) === JSON.stringify(b) : a === b);
 
 export function getEngineState() { return { ...state }; }
 

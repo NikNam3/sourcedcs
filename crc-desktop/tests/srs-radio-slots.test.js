@@ -13,9 +13,18 @@ test('radios on one frequency and modulation share a slot; slots keep the order 
   assert.deepEqual(invalid, []);
 });
 
-test('a bad frequency or a modulation other than AM/FM is invalid (no intercom)', () => {
-  const { invalid } = buildSlots([R('Z', 0), R('I', 100, { modulation: 'INTERCOM' }), R('X', 'abc')]);
-  assert.deepEqual(invalid, ['Z', 'I', 'X']);
+test('a bad frequency or an unknown modulation is invalid', () => {
+  const { invalid } = buildSlots([R('Z', 0), R('H', 251, { modulation: 'HAVEQUICK' }), R('X', 'abc')]);
+  assert.deepEqual(invalid, ['Z', 'H', 'X']);
+});
+
+test('the intercom takes slot 0 at 100 Hz; a second one is invalid; it never rides with other radios (H183)', () => {
+  const { slots, invalid } = buildSlots([R('A', 251), R('IC', 0, { modulation: 'INTERCOM' }), R('IC2', 0, { modulation: 'INTERCOM' })]);
+  assert.deepEqual(slots.map(s => [s.radioIds[0], s.hz, s.modulation]), [['IC', 100, 2], ['A', 251e6, 0]]);
+  assert.deepEqual(invalid, ['IC2']);
+  assert.deepEqual(txChannels(slots, ['A', 'IC']).radioIds, ['A']);
+  assert.deepEqual(txChannels(slots, ['IC']).frequencies, [100]);
+  assert.deepEqual(matchRadioIds(slots, [100], [2], [0]), ['IC']);
 });
 
 test('past eleven distinct channels the first eleven are tuned and the rest reported', () => {
