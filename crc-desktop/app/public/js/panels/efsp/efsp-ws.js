@@ -6,7 +6,10 @@ import {
 import { ageResyncs, beginResync, boardCursorName, endResync, endResyncs, heartbeatGaps, resyncPositionOf } from './sync-cursor.js';
 import { addEfspMessageObserver } from './efsp-message-registry.js';
 import { markEfspChanged } from './efsp-change-bus.js';
-import { allFacilityIds, DEFAULT_FACILITY_ID } from './facility-topology.js';
+import { DEFAULT_FACILITY_ID } from './facility-topology.js';
+import { getSignedOnPositions, observerKeys, setObserverKeys, setSignedOnAt } from './signed-on-state.js';
+
+export { getActingPositions, getSignedOnPositions, isObserverAt } from './signed-on-state.js';
 
 // Client-side EFSP WebSocket helpers — constructs efsp-mutation/efsp-
 // set-positions/efsp-resync messages, sends them via sync.js's existing
@@ -15,17 +18,10 @@ import { allFacilityIds, DEFAULT_FACILITY_ID } from './facility-topology.js';
 // as sync.js itself (which also has none) — the logic worth testing in
 // isolation (message merging, rebase) already lives in efsp-state.js.
 
-// WP4A (docs/adr/0013): keyed by facilityId — each Facility's signed-on-Position
-// set is independent server-side (a separate PositionStore instance per
-// Facility), so the client tracks them the same way. Position IDs are
-// globally unique across Facilities in this slice (OPS/CD/GC/LC/AP vs
-// CTR never collide), which is what lets getActingPositions() below still
-// return one flat, facility-agnostic list for every pre-WP4A call site.
-let _actingPositionsByFacility = Object.fromEntries(allFacilityIds().map(f => [f, []]));
+// WP4A (docs/adr/0013): keyed by facilityId. What the server has this session signed on at lives in signed-on-state.js.
 let _ackedByFacility = {};     // facilityId -> the last `signedOn` the SERVER acknowledged (e2e waits on this, not on the claim)
 let _declaredByFacility = {};   // facilityId -> positionIds the controller asked for
-let _observerKeys = new Set(); // 'facility/position' where the controller is Observer (coverage message)
-let _primaryKeys = new Set();   // ... and where Primary
+let _primaryKeys = new Set();   // 'facility/position' where the controller is Primary (coverage message)
 let _redeclare = null;          // { expectPrimary, acksPending } while a reconnect's re-declaration is in flight
 
 function efspClientMutationId() {
@@ -147,43 +143,18 @@ export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEF
 
 /**
  * Sets the FULL signed-on-Position set for ONE Facility — mirrors position-store.js's own "declare your full set each call" contract, per Facility (docs/adr/0013: each Facility has its own PositionStore instance server-side).
- * `_declared` is what the controller asked for and is re-sent on every connect; `_actingPositionsByFacility` is what
+ * `_declared` is what the controller asked for and is re-sent on every connect; signed-on-state.js holds what
  * the server said (the ack's `signedOn`), set optimistically here until the ack lands.
  */
 export function sendEfspSetPositions(facilityId, signedOn) {
   _notice(''); // a new declaration answers the reconnect notice
   _declaredByFacility[facilityId] = [...signedOn];
-  _actingPositionsByFacility[facilityId] = [...signedOn];
+  setSignedOnAt(facilityId, signedOn);
   _sendEfsp({ version: 1, type: 'efsp-set-positions', facilityId, signedOn });
-}
-
-/** Every Position the server has this controller signed on at (Primary or Observer): what the Acting-As checkboxes show and what a new declaration extends. */
-export function getSignedOnPositions(facilityId) {
-  if (facilityId) return [...(_actingPositionsByFacility[facilityId] || [])];
-  return Object.values(_actingPositionsByFacility).flat();
-}
-
-/**
- * The Positions this controller may ACT at: signed on and Primary. An Observer watches (crc-sync's docs/adr/0105 / the
- * GCLC finding), so it is offered no action and shows no COMBINED line. A Position the coverage message has not named
- * yet counts as Primary (sign-on just landed), and the coverage message that follows corrects it.
- *
- * @param {string} [facilityId] — omit to get the flattened union across
- *   EVERY Facility (every pre-WP4A call site in bay-view.js/efsp-panel.js
- *   does this — Position IDs are globally unique across Facilities this
- *   slice, so a flat list is exactly as correct as a facility-scoped one
- *   for "is this controller signed on at Position X").
- */
-export function getActingPositions(facilityId) {
-  const facilities = facilityId ? [facilityId] : Object.keys(_actingPositionsByFacility);
-  return facilities.flatMap(f => (_actingPositionsByFacility[f] || []).filter(p => !_observerKeys.has(`${f}/${p}`)));
 }
 
 /** What the server last acknowledged as signed on at this Facility (not the optimistic claim). */
 export function getAckedPositions(facilityId) { return [...(_ackedByFacility[facilityId] || [])]; }
-
-/** Is the controller an Observer (not Primary) at this Position? */
-export function isObserverAt(facilityId, positionId) { return _observerKeys.has(`${facilityId}/${positionId}`); }
 
 let _noticeListener = null;
 /** combination.js registers the one visible line a sign-on notice is shown on. */
@@ -207,7 +178,7 @@ export function noteEfspPositionsAck(msg) {
   if (!f || !Array.isArray(msg.signedOn)) return;
   const asked = _declaredByFacility[f] || [];
   _ackedByFacility[f] = [...msg.signedOn];
-  _actingPositionsByFacility[f] = [...msg.signedOn];
+  setSignedOnAt(f, msg.signedOn);
   _declaredByFacility[f] = [...msg.signedOn];
   if (_redeclare) {
     _redeclare.acksPending.delete(f);
@@ -224,15 +195,15 @@ export function noteCoveragePositions(list) {
   const observer = new Set(list.filter(p => p.isPrimary === false).map(p => `${p.facilityId}/${p.positionId}`));
   const primary = new Set(list.filter(p => p.isPrimary).map(p => `${p.facilityId}/${p.positionId}`));
   const same = (a, b) => a.size === b.size && [...a].every(k => b.has(k));
-  const changed = !same(observer, _observerKeys) || !same(primary, _primaryKeys);
-  _observerKeys = observer;
+  const changed = !same(observer, observerKeys()) || !same(primary, _primaryKeys);
+  setObserverKeys(observer);
   _primaryKeys = primary;
   // Primary or Observer decides what a panel offers (getActingPositions): every panel that reads it hears 'positions'.
   if (changed) markEfspChanged('positions');
   if (!_redeclare || _redeclare.acksPending.size > 0) return;
   const { expectPrimary } = _redeclare;
   _redeclare = null;
-  const lost = [...expectPrimary].filter(k => _observerKeys.has(k));
+  const lost = [...expectPrimary].filter(k => observerKeys().has(k));
   if (!lost.length) return;
   const byFacility = {};
   for (const k of lost) { const [f, p] = k.split('/'); (byFacility[f] = byFacility[f] || []).push(p); }

@@ -1,5 +1,5 @@
 'use strict';
-import { showConnWidget } from '../sync.js';
+import { showConnWidget } from '../sync-connection.js';
 import { apiToIndicated } from '../altimetry.js';
 
 // ── Tools tab: DCS altitude calculator ────────────────────────────────────

@@ -12,7 +12,7 @@ const JS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'app', 
 
 // Reviewed expressions that are HTML by construction: each builds its markup from escapeHtml() parts or constants.
 const ALLOWED = {
-  'sync.js': [/^_connFieldRow\(/],               // label, id and value all go through escapeHtml
+  'sync-connection.js': [/^_connFieldRow\(/],               // label, id and value all go through escapeHtml
   'update-required.js': [/^link$/, /^BTN2?$/],   // link is built with escapeHtml'd href and text; BTN* are style constants
   'srs-radio.js': [/^modBadge$/],
   'airspace-geometry-editor.js': [/^sketchSvg\(/], // numbers only, by construction (airspace-geometry-model.js)                // built just above from escapeHtml'd parts

@@ -1,11 +1,11 @@
 'use strict';
 
 // The radio set's inputs from the EFSP state, read where they live (never copied): the Positions this session is
-// signed on at, Primary or Observer (S-RADIO-1 RQ14, efsp-ws.js), and the frequency table rows (frequency-state.js).
+// signed on at, Primary or Observer (S-RADIO-1 RQ14, signed-on-state.js), and the frequency table rows (frequency-state.js).
 // radio-set.js stays pure: the panel passes it what this returns. Both change under change-bus topic `positions`
 // (a sign-on ack, a coverage message that moves Primary/Observer, a frequency delta) or `snapshot`.
 
-import { getSignedOnPositions, isObserverAt } from '../panels/efsp/efsp-ws.js';
+import { getSignedOnPositions, isObserverAt } from '../panels/efsp/signed-on-state.js';
 import { getFrequencyRows } from '../panels/efsp/frequency-state.js';
 import { allFacilityIds } from '../panels/efsp/facility-topology.js';
 
