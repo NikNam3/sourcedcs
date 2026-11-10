@@ -9,7 +9,7 @@
 // (the soak host wraps it by name, so the call must go through it). `rejectedReplicaRefusal` is `StripOps#rejectedReplicaRefusal`
 // (board/strip-ops.js).
 
-const { alsoHandoffInto } = require('./nla-also');
+const { alsoHandoffInto } = require('../nla-also');
 const { keyBetween, rebalance, needsRebalance } = require('../order-key');
 const { runwayRackFor } = require('../runway-status');
 const authority = require('../authority');

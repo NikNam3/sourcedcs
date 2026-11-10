@@ -1,7 +1,7 @@
 'use strict';
 import { CARRIER_HANDOFFS } from './efsp-nla.js';
 
-// The buttons beside a Strip's NLA (crc-sync docs/adr/0157, board/nla-also.js): the server's `strip.nla.also`, a list of
+// The buttons beside a Strip's NLA (crc-sync docs/adr/0157, efsp/nla-also.js): the server's `strip.nla.also`, a list of
 // next actions that are each either a carrier handoff (the CarrierHandoff op) or the drop (the DropStrip op). Pure: the
 // Strip's life block (carrier-panel.js) and the MARSHAL panel's row both draw what this returns, so the two always offer
 // the same buttons. A sibling stays offered when the NLA itself is inhibited (BOLTER beside a TRAPPED with no PriFly).

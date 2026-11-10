@@ -30,7 +30,7 @@ flight in a "pattern" the human says Case I does not have, and leaves PriFly no 
    next actions, each a carrier handoff (`carrierHandoff`, the CarrierHandoff op) or the drop (`toState: 'DROPPED'` alone,
    the DropStrip op), each with its own `inhibited` when it has one. `nlaStatusFor` puts the list on the wire as
    `strip.nla.also` **even when the NLA itself is inhibited**: BOLTER stays live beside a TRAPPED with no PriFly. The shaping
-   is one small module (`crc-sync/src/efsp/board/nla-also.js`); the client draws it with one leaf
+   is one small module (`crc-sync/src/efsp/nla-also.js`); the client draws it with one leaf
    (`crc-desktop/.../efsp/nla-also.js`) on the Strip (beside the NLA button) and on the MARSHAL row (a second button), so
    both are visible buttons, never a menu item only. N siblings, not two: precedent was ADR 0156's single `alsoHandoff`
    (TO MARSHAL beside DROP), which is now `also` with one entry; FINAL's `alsoLegal` is a drag rule, not a button, and stays.

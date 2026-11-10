@@ -5,7 +5,7 @@
 // collaborator because they call each other: InvokeNla runs TransferStrip, SetState and DropStrip, and the
 // rejected-replica rules gate every op.
 
-const { alsoStatus } = require('./nla-also');
+const { alsoStatus } = require('../nla-also');
 const { MAX_FREE_TEXT } = require('../flight-data-store');
 const { deepClone } = require('./strip-util');
 const { undoDeclarationProblem } = require('../undo/undo-history');
@@ -602,7 +602,7 @@ class StripOps {
     }
     const status = result.transferTo ? { toState: result.toState, transferTo: result.transferTo } : { toState: result.toState };
     // docs/adr/0074, 0156: which carrier handoff this NLA button records, so the panel labels it from the model's own
-    // table; docs/adr/0157: the next actions offered beside it (board/nla-also.js).
+    // table; docs/adr/0157: the next actions offered beside it (efsp/nla-also.js).
     if (result.carrierHandoff) status.carrierHandoff = result.carrierHandoff;
     if (also) status.also = also;
     return status;

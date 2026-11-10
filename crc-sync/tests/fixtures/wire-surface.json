@@ -1,5 +1,5 @@
 {
-  "protocol": 5,
+  "protocol": 6,
   "surface": {
     "clientToServer": [
       "aptConfigSet",
@@ -172,13 +172,17 @@
     "carrier": {
       "handoffs": [
         "ABORT_TO_STACK",
+        "BOLTER",
+        "CASE_I_BOLTER",
         "CASE_I_TO_PRIFLY",
+        "CASE_I_TRAPPED",
         "COMMENCE",
         "DEPARTURE_TO_MARSHAL",
         "LAUNCH_TO_DEPARTURE",
         "LAUNCH_TO_MARSHAL",
         "RETURN_TO_STACK",
-        "TO_APPROACH"
+        "TO_APPROACH",
+        "TRAPPED"
       ],
       "triggerTypes": [
         "CONTROLLER_INITIATED"

@@ -45,7 +45,7 @@
 // by ws-hub.js's setOnEfspChange hook, so the two still move together.
 
 const { WALL_CLOCK } = require('../mission-clock');
-const { alsoKey } = require('./board/nla-also');
+const { alsoKey } = require('./nla-also');
 
 /** Stable identity for a status, for change detection only — never sent anywhere. */
 function statusKey(status) {
