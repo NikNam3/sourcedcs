@@ -164,10 +164,16 @@ function classifyLocality(strip, flightData, homeAirports, opts) {
       return { locality: 'LOCAL', localityBasis: 'CONVERTED_ARRIVAL' };
     }
     const launch = strip.stripType === 'CV_LAUNCH';
+    // docs/adr/0157: a launch that was a recovery trapped here: it landed on this hull, and departed it too if it was
+    // launched again (dropped past ON_DECK).
+    const trapped = launch && !!strip.previousLeg && strip.previousLeg.stripType === 'CV_RECOVERY';
     const ato = (flightData && flightData.ato) || {};
     const car = ato.carrier || null;
     const atoEnd = (place, onHull) => (onHull && car ? _code(car.hullCode) : _code(place && place.location));
-    if (launch) dep = hull;
+    if (trapped) {
+      dest = hull;
+      if (opts && opts.preDropState && opts.preDropState !== 'ON_DECK') dep = hull;
+    } else if (launch) dep = hull;
     else dest = hull;
     if (!dep) dep = atoEnd(ato.departure, car && car.departs);
     if (!dest) dest = atoEnd(ato.recovery, car && car.recovers);

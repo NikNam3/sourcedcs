@@ -9,6 +9,7 @@
 // (the soak host wraps it by name, so the call must go through it). `rejectedReplicaRefusal` is `StripOps#rejectedReplicaRefusal`
 // (board/strip-ops.js).
 
+const { alsoHandoffInto } = require('./nla-also');
 const { keyBetween, rebalance, needsRebalance } = require('../order-key');
 const { runwayRackFor } = require('../runway-status');
 const authority = require('../authority');
@@ -311,6 +312,12 @@ class Placement {
     if (nla.carrierHandoff && nla.toState === impliedState) {
       const t = this._rules.carrierHandoffs[nla.carrierHandoff];
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `use the ${t ? t.label : nla.carrierHandoff} button — a carrier handoff is recorded, not dragged` };
+    }
+    // docs/adr/0157: the same for a handoff offered beside the NLA (BOLTER into the pattern Bay).
+    const sibling = alsoHandoffInto(nla, impliedState);
+    if (sibling) {
+      const t = this._rules.carrierHandoffs[sibling.carrierHandoff];
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `use the ${t ? t.label : sibling.carrierHandoff} button — a carrier handoff is recorded, not dragged` };
     }
     if (nla.toState !== impliedState && (nla.alsoLegal || []).includes(impliedState)) {
       return { ok: true, impliedState };

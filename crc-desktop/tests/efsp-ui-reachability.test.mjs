@@ -2859,7 +2859,7 @@ test('a CV_RECOVERY Strip (crc-sync docs/adr/0156): its button is its state, COM
 
 test('a launch at KILO: DROP is the NLA and TO MARSHAL its own button, for departure control only', async () => {
   const kilo = stripAt({ stripType: 'CV_LAUNCH', state: 'KILO', ownerPositionId: 'CV_DEP', bayId: 'cv-dep-departures',
-    nla: { toState: 'DROPPED', alsoHandoff: 'DEPARTURE_TO_MARSHAL' } });
+    nla: { toState: 'DROPPED', also: [{ carrierHandoff: 'DEPARTURE_TO_MARSHAL', toState: 'STACK' }] } });
   const r = await carrierRender(kilo, { signedOn: ['CV_DEP'] });
   const extra = descendants(r.el).find(c => c.dataset && c.dataset.carrierHandoff === 'DEPARTURE_TO_MARSHAL');
   assert.equal(extra.textContent, 'TO MARSHAL');
@@ -2868,6 +2868,31 @@ test('a launch at KILO: DROP is the NLA and TO MARSHAL its own button, for depar
   assert.ok(descendants(r.el).some(c => c.classList && c.classList.contains('efsp-nla-btn') && c.textContent === 'DROP'));
   const notMine = await carrierRender(kilo, { signedOn: ['CV_MARSHAL'] });
   assert.equal(descendants(notMine.el).filter(c => c.dataset && c.dataset.carrierHandoff === 'DEPARTURE_TO_MARSHAL').length, 0);
+});
+
+test('crc-sync docs/adr/0157: TRAPPED is the NLA and BOLTER its own button; BOLTER stays live when TRAPPED is inhibited', async () => {
+  const at = (nla) => stripAt({ stripType: 'CV_RECOVERY', state: 'CV_PATTERN', ownerPositionId: 'CV_APP1', bayId: 'cv-app1-pattern', nla });
+  const also = [{ carrierHandoff: 'BOLTER', toState: 'CV_PATTERN' }];
+  const r = await carrierRender(at({ toState: 'ON_DECK', transferTo: 'CV_PRIFLY', carrierHandoff: 'TRAPPED', also }), { signedOn: ['CV_APP1'] });
+  const buttons = descendants(r.el).filter(c => c.dataset && c.dataset.carrierHandoff);
+  assert.deepEqual(buttons.map(b => b.textContent), ['TRAPPED', 'BOLTER']);
+  click(buttons[1]);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.sent.at(-1).op)), { kind: 'CarrierHandoff', transfer: 'BOLTER' });
+  const off = await carrierRender(at({ inhibited: 'no receiving Position present', reason: 'NLA_INHIBITED', also }), { signedOn: ['CV_APP1'] });
+  const trapped = descendants(off.el).find(c => c.classList && c.classList.contains('efsp-nla-btn') && c.textContent === 'TRAPPED');
+  const bolter = descendants(off.el).find(c => c.dataset && c.dataset.carrierHandoff === 'BOLTER');
+  assert.deepEqual([trapped && trapped.disabled, trapped && trapped.title], [true, 'no receiving Position present']);
+  assert.equal(bolter.disabled, false);
+});
+
+test('crc-sync docs/adr/0157: a trapped jet on deck in Case II/III has LAUNCHED and DROP; DROP sends DropStrip', async () => {
+  const deck = stripAt({ stripType: 'CV_LAUNCH', state: 'ON_DECK', ownerPositionId: 'CV_PRIFLY', bayId: 'cv-prifly-launch',
+    nla: { toState: 'CV_AIRBORNE', transferTo: 'CV_DEP', carrierHandoff: 'LAUNCH_TO_DEPARTURE', also: [{ toState: 'DROPPED' }] } });
+  const r = await carrierRender(deck, { signedOn: ['CV_PRIFLY'] });
+  const drop = descendants(r.el).find(c => c.dataset && c.dataset.nlaAlso === 'DROP');
+  assert.equal(drop.textContent, 'DROP');
+  click(drop);
+  assert.equal(JSON.parse(JSON.stringify(r.sent.at(-1).op)).kind, 'DropStrip');
 });
 
 test('the carrier Strip\'s cells: angels read-only from the server, fuel and the assignments typed; the callsign leads only while there is no side number', async () => {

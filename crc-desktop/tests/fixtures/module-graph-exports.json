@@ -1272,6 +1272,10 @@
    "mtrRouteNote",
    "routeForDesignator"
   ],
+  "panels/efsp/nla-also.js": [
+   "nlaAlsoActions",
+   "nlaAlsoSignature"
+  ],
   "panels/efsp/ordnance-advisory.js": [
    "ORDNANCE_NO_RUNWAY_STATUS_REASON",
    "hungOrdnanceAdvisoryFor",

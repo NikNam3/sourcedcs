@@ -283,7 +283,7 @@ export function occupancy({ caseValue, rows, tankerOnStation, contactOf }) {
     const sequenced = c === 'II' || c === 'III';
     if (sequenced && (r.kind === 'hold' || r.kind === 'comm' || r.kind === 'approach')) out.approach = true;
     if (r.kind === 'hold' && (c === 'I' || c === 'II')) { out.landing = true; out.portHolding = true; }
-    else if (r.kind === 'pattern') {
+    else if (r.kind === 'pattern' || r.kind === 'charlie') { // in the landing pattern, or cleared to land (Case I, docs/adr/0157)
       const contact = contactOf ? contactOf(r) : null;
       if (contact && contact.at && distanceNm(contact.at) <= SPIN_WITHIN_NM && Number.isFinite(contact.altFt) && contact.altFt >= SPIN_MIN_FT) out.spin = true;
       else out.landing = true;

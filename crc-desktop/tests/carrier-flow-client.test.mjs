@@ -34,8 +34,10 @@ test('the other lane: the Marshal at COMMENCED names APP 1 or APP 2', () => {
 test('Abort to the Case II/III stack: a Case I flight, listed disabled while the ship is in Case I', () => {
   const off = carrierMenuItems(rec('STACK'), { acting: ['CV_MARSHAL'], shipCase: 'I', flightCase: 'I' }).find(i => i.key === 'carrier-abort');
   assert.deepEqual([off.enabled, off.reason], [false, 'Case I is active']);
-  const on = carrierMenuItems(rec('CV_PATTERN', 'CV_PRIFLY'), { acting: ['CV_MARSHAL'], shipCase: 'II', flightCase: 'I' }).find(i => i.key === 'carrier-abort');
+  const on = carrierMenuItems(rec('SIGNAL_CHARLIE', 'CV_PRIFLY'), { acting: ['CV_MARSHAL'], shipCase: 'II', flightCase: 'I' }).find(i => i.key === 'carrier-abort');
   assert.deepEqual([on.enabled, on.as, on.op.transfer], [true, 'CV_MARSHAL', 'ABORT_TO_STACK']);
+  assert.equal(carrierMenuItems(rec('CV_PATTERN', 'CV_PRIFLY'), { acting: ['CV_MARSHAL'], shipCase: 'II', flightCase: 'I' }).some(i => i.key === 'carrier-abort'), false,
+    'Case I has no pattern (crc-sync docs/adr/0157)');
   assert.equal(carrierMenuItems(rec('STACK'), { acting: ['CV_MARSHAL'], shipCase: 'III', flightCase: 'III' }).some(i => i.key === 'carrier-abort'), false);
 });
 

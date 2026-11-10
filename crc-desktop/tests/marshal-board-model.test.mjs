@@ -39,6 +39,12 @@ test('landing order: in the pattern and on the approach by range, then the comme
   assert.deepEqual(b.caseI, []);
 });
 
+test('a Case I flight PriFly has cleared to land (SIGNAL_CHARLIE, crc-sync docs/adr/0157) is its own kind, first in the Case I table', () => {
+  const b = build([], [strip('a', 'STACK'), strip('b', 'SIGNAL_CHARLIE', 'CV_PRIFLY')],
+    { caseI: [{ flightDataId: 'a', stackIndex: 0, status: 'HOLDING', angels: 2 }, { flightDataId: 'b', stackIndex: 1, status: 'HOLDING', angels: 3 }] });
+  assert.deepEqual(b.caseI.map((r) => [r.seq, r.flightDataId, r.kind]), [[1, 'b', 'charlie'], [2, 'a', 'hold']]);
+});
+
 test('every live CV_RECOVERY is on the board, in its own Case\'s table; launches and other Strips are not', () => {
   const b = build([entry('c', 0)], [strip('c', 'STACK'), strip('a', 'STACK'), strip('b', 'ON_DECK', 'CV_PRIFLY', 'CV_LAUNCH'),
     strip('d', 'DROPPED'), strip('e', 'ON_FINAL', 'PAR', 'FINAL')], { caseI: [{ flightDataId: 'a', stackIndex: 0, status: 'HOLDING', angels: 3 }] });

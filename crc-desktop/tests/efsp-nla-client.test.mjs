@@ -193,10 +193,12 @@ test('every carrier state has its plain button label (docs/adr/0156); a drop rea
   assert.equal(L('CV_RECOVERY', 'COMMENCED', { toState: 'FINAL_APPROACH', carrierHandoff: 'TO_APPROACH' }), 'TO APPR');
   assert.equal(L('CV_RECOVERY', 'FINAL_APPROACH', { toState: 'DIRTY' }), 'DIRTY UP');
   assert.equal(L('CV_RECOVERY', 'DIRTY', { toState: 'BULLSEYE' }), 'FLY BULLS');
-  assert.equal(L('CV_RECOVERY', 'BULLSEYE', { toState: 'CV_PATTERN' }), 'TO PATTERN');
-  assert.equal(L('CV_RECOVERY', 'STACK', { toState: 'CV_PATTERN', carrierHandoff: 'CASE_I_TO_PRIFLY' }), 'SGNL C');
-  assert.equal(L('CV_RECOVERY', 'CV_PATTERN', { toState: 'DROPPED' }), 'DROP');
-  assert.equal(L('CV_LAUNCH', 'ON_DECK', { toState: 'DROPPED', alsoHandoff: 'LAUNCH_TO_MARSHAL' }), 'DROP', 'Case I on deck');
+  // crc-sync docs/adr/0157: TRAPPED is the NLA after FLY BULLS, in the pattern and at Signal Charlie
+  for (const s of ['BULLSEYE', 'CV_PATTERN']) assert.equal(L('CV_RECOVERY', s, { toState: 'ON_DECK', transferTo: 'CV_PRIFLY', carrierHandoff: 'TRAPPED' }), 'TRAPPED', s);
+  assert.equal(L('CV_RECOVERY', 'STACK', { toState: 'SIGNAL_CHARLIE', carrierHandoff: 'CASE_I_TO_PRIFLY' }), 'SGNL C');
+  assert.equal(L('CV_RECOVERY', 'SIGNAL_CHARLIE', { toState: 'ON_DECK', carrierHandoff: 'CASE_I_TRAPPED' }), 'TRAPPED');
+  assert.equal(L('CV_RECOVERY', 'CV_PATTERN', { inhibited: 'no receiving Position present' }), 'TRAPPED', 'inhibited: still labelled');
+  assert.equal(L('CV_LAUNCH', 'ON_DECK', { toState: 'DROPPED', also: [{ carrierHandoff: 'LAUNCH_TO_MARSHAL', toState: 'STACK' }] }), 'DROP', 'Case I on deck');
   assert.equal(L('CV_LAUNCH', 'ON_DECK', { toState: 'CV_AIRBORNE', carrierHandoff: 'LAUNCH_TO_DEPARTURE' }), 'LAUNCHED');
   assert.equal(L('CV_LAUNCH', 'CV_AIRBORNE', { toState: 'KILO' }), 'KILO');
   assert.equal(L('DEPARTURE', 'CLEARED', { toState: 'PUSHBACK' }), 'Approve Pushback');

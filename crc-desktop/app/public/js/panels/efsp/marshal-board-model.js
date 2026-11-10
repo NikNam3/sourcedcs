@@ -12,11 +12,13 @@
 const KLB = 1000;
 
 /** The kinds, in landing order: the ones on the approach first, then the commenced, then the holding. */
-export const KIND_RANK = Object.freeze({ pattern: 0, approach: 0, comm: 1, hold: 2 });
+export const KIND_RANK = Object.freeze({ charlie: 0, pattern: 0, approach: 0, comm: 1, hold: 2 });
 
 /** A recovery state's kind (crc-sync authority/strip-types/cv-recovery.js). */
 export const KIND_OF_STATE = Object.freeze({
   STACK: 'hold', COMMENCED: 'comm', FINAL_APPROACH: 'approach', DIRTY: 'approach', BULLSEYE: 'approach', CV_PATTERN: 'pattern',
+  // Case I has no pattern (crc-sync docs/adr/0157): a flight PriFly has cleared to land is its own kind.
+  SIGNAL_CHARLIE: 'charlie',
 });
 
 /** Fuel in thousands of pounds, one decimal; '' when none was typed. */

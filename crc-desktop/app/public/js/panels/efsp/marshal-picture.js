@@ -34,7 +34,7 @@ export function pictureModel(rows, ctx) {
   const topFix = Math.max(firstFix + 1, ...holding.map((r) => (Number.isFinite(r.marshalDme) ? r.marshalDme : 0)));
   const aircraft = [];
   for (const r of rows) {
-    if (r.kind === 'hold' || r.kind === 'pattern') continue;
+    if (r.kind === 'hold' || r.kind === 'pattern' || r.kind === 'charlie') continue;
     // Without a radar contact an aircraft cannot be placed by DME: it is not drawn rather than drawn in the wrong place.
     if (!Number.isFinite(r.dme)) continue;
     aircraft.push({

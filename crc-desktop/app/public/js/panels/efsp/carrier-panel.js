@@ -3,6 +3,7 @@ import { NM_M, projectPos } from '../../geo.js';
 import { getLatestTrack } from '../../picture.js';
 import { correlatedTrackIdForStrip, getEfspStrip } from './efsp-state.js';
 import { CARRIER_HANDOFFS } from './efsp-nla.js';
+import { nlaAlsoActions } from './nla-also.js';
 import { isCarrierStrip } from './strip-fields.js';
 import { carrierBannerParts, carrierDerivedFor, carrierStateOf, getEfspCarrier } from './carrier-state.js';
 import { getActingPositions, sendEfspMutation, settleEfspAck } from './efsp-ws.js';
@@ -92,26 +93,46 @@ export function carrierDecorateNlaButton(btn, strip) {
   btn.title = btn.title || `${t.label} — ${t.trigger.replace(/_/g, ' ').toLowerCase()}`;
 }
 
+/** What each sibling button does, in its tooltip (crc-sync docs/adr/0157). */
+const ALSO_TITLES = {
+  LAUNCH_TO_MARSHAL: 'Hands the flight to the Marshal as its recovery: it joins the stack.',
+  DEPARTURE_TO_MARSHAL: 'Hands the flight to the Marshal as its recovery: it joins the stack.',
+  BOLTER: 'Bolter: the flight stays with you, in the pattern.',
+  CASE_I_BOLTER: 'Bolter: the flight stays with you, cleared to land.',
+  DROP: 'Drop the Strip.',
+};
+
 /**
- * The second handoff button a Strip may carry (crc-sync docs/adr/0156): TO MARSHAL beside a launch's DROP, the handoff the
- * server names in `strip.nla.alsoHandoff` (a Strip has one NLA, §3.5 rule 1, so this is its own button).
+ * The buttons beside a Strip's NLA (crc-sync docs/adr/0157): the server's `strip.nla.also` (nla-also.js), TO MARSHAL beside
+ * a launch's DROP, BOLTER beside TRAPPED, DROP beside LAUNCHED. Live only for the controller holding the Strip; an inhibited
+ * one is drawn disabled with its reason.
  */
 export function carrierExtraNlaButtons(strip) {
-  const key = strip && strip.nla && strip.nla.alsoHandoff;
-  const t = key && CARRIER_HANDOFFS[key];
-  if (!t || !getActingPositions('CARRIER').includes(strip.ownerPositionId) || !t.from.includes(strip.ownerPositionId)) return [];
-  const btn = _cel('button', 'efsp-sbtn efsp-sbtn-go efsp-nla-btn efsp-carrier-handoff', t.label);
-  btn.dataset.carrierHandoff = key;
-  btn.dataset.carrierTrigger = t.trigger;
-  btn.title = 'Hands the flight to the Marshal as its recovery: it joins the stack.';
-  btn.addEventListener('pointerdown', (e) => e.stopPropagation());
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const live = getEfspStrip(strip.stripId) || strip;
-    sendEfspMutation(strip.ownerPositionId, live, { kind: 'CarrierHandoff', transfer: key });
-    btn.disabled = true;
-  });
-  return [btn];
+  if (!strip || !getActingPositions('CARRIER').includes(strip.ownerPositionId)) return [];
+  const out = [];
+  for (const a of nlaAlsoActions(strip)) {
+    const t = a.handoff ? CARRIER_HANDOFFS[a.handoff] : null;
+    if (t && !t.from.includes(strip.ownerPositionId)) continue;
+    const drop = !a.handoff;
+    const btn = _cel('button', `efsp-sbtn${drop ? '' : ' efsp-sbtn-go'} efsp-nla-btn${t ? ' efsp-carrier-handoff' : ''}`, a.label);
+    if (t) { btn.dataset.carrierHandoff = a.handoff; btn.dataset.carrierTrigger = t.trigger; }
+    btn.dataset.nlaAlso = a.key;
+    btn.title = a.inhibited || ALSO_TITLES[a.key] || a.label;
+    btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    if (a.inhibited) {
+      btn.disabled = true;
+      btn.classList.add('efsp-nla-btn-denied');
+    } else {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const live = getEfspStrip(strip.stripId) || strip;
+        sendEfspMutation(strip.ownerPositionId, live, a.op);
+        btn.disabled = true;
+      });
+    }
+    out.push(btn);
+  }
+  return out;
 }
 
 /** A signature of everything derived that a carrier Strip draws, for the keyed reconciler (bay-view.js's _stripRenderSignature). */

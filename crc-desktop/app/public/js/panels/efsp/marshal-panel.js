@@ -10,6 +10,7 @@ import { carrierCreateSeed } from './panel/carrier-create.js';
 import { carrierCheckIn } from './carrier-checkin.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { nlaButtonLabel } from './efsp-nla.js';
+import { nlaAlsoActions, nlaAlsoSignature } from './nla-also.js';
 import {
   buildBoard, clockText, dropSlot, eatMinuteText, fuelBlockOp, fuelText, headerFigures, headerParts, marksOf, passClearanceOp, setAngelsOp, setDmeOp, setEatOp
 } from './marshal-board-model.js';
@@ -19,7 +20,8 @@ import { circleModel, renderMarshalCircle } from './marshal-circle.js';
 // The MARSHAL panel: the one panel for arriving traffic (crc-sync docs/adr/0156; ADR 0114's board). Every recovery from STACK to
 // its drop, in its own Case's table (a flight keeps the Case it was given): Case II/III as SEQ SIDE TYPE FUEL EAT ANG DME beside the
 // Case III picture, Case I as SEQ SIDE TYPE FUEL ANG beside the overhead circle. The Marshal and both approach controllers look at
-// it; each row's button is its state (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, TO PATTERN, DROP), live only for the Strip's owner.
+// it; each row's button is its state (COMMENCE, TO APPR, DIRTY UP, FLY BULLS, then TRAPPED with BOLTER beside it; Case I: SGNL C,
+// then TRAPPED / BOLTER at PriFly, crc-sync docs/adr/0157), live only for the Strip's owner.
 //
 // Dark cockpit (memory feedback_dark_cockpit_ui): grey while the recovery is in order. Amber is "look at this now": a flight past
 // its EAT that has not pushed, an angels or EAT changed and not yet passed. There is no fuel rule. Nothing here tells anyone what
@@ -61,10 +63,10 @@ function _approachText() {
 
 function _sendStackOp(op) { return sendCarrier('sequencesStack', op); }
 
-/** The row's button: its Strip's next step (the server's NLA), live only for the controller who holds the Strip. */
-function _advance(row) {
+/** The row's button: its Strip's next step (the server's NLA), or one beside it (`op`), live only for the controller who holds the Strip. */
+function _advance(row, op = { kind: 'InvokeNla' }) {
   const strip = row.stripId ? getEfspStrip(row.stripId) : null;
-  if (strip && getActingPositions('CARRIER').includes(strip.ownerPositionId)) sendEfspMutation(strip.ownerPositionId, strip, { kind: 'InvokeNla' });
+  if (strip && getActingPositions('CARRIER').includes(strip.ownerPositionId)) sendEfspMutation(strip.ownerPositionId, strip, op);
 }
 
 const COLUMNS = Object.freeze({
@@ -198,13 +200,18 @@ function _collect(view) {
   return buildBoard({ view, strips: getAllEfspStrips(), flightDataOf: getEfspFlightData, posOf: shipBearingRangeOf, now: missionNow() });
 }
 
-/** The row's button: its label (the Strip's NLA, the button being the status) and whether this controller may press it. */
+/**
+ * The row's buttons: the Strip's NLA (the button being the status) and the ones beside it (crc-sync docs/adr/0157: BOLTER
+ * beside TRAPPED), each with whether this controller may press it.
+ */
 function _actionOf(r) {
   const strip = r.stripId ? getEfspStrip(r.stripId) : null;
   const label = strip ? nlaButtonLabel(strip) : null;
   const inhibited = strip && strip.nla && strip.nla.inhibited;
   const mine = !!strip && getActingPositions('CARRIER').includes(strip.ownerPositionId);
-  return { label, live: mine && !inhibited, title: inhibited || (mine ? '' : `${strip ? strip.ownerPositionId : '—'} has it`) };
+  const notMine = `${strip ? strip.ownerPositionId : '—'} has it`;
+  const also = nlaAlsoActions(strip).map((x) => ({ key: x.key, label: x.label, op: x.op, live: mine && !x.inhibited, title: x.inhibited || (mine ? '' : notMine) }));
+  return { label, live: mine && !inhibited, title: inhibited || (mine ? '' : notMine), also, alsoSig: nlaAlsoSignature(strip) };
 }
 
 /** The Marshal types FUEL, EAT, ANG and DME on the rows the Marshal holds (crc-sync docs/adr/0156); everyone else reads. */
@@ -214,7 +221,7 @@ function _rowSignature(r, m, ctx) {
   const a = _actionOf(r);
   return [r.flightDataId, r.seq, r.state, r.side, r.type, r.fuelLb, r.eatUtc, r.eatSet ? 1 : 0, r.angels, r.angelsSet ? 1 : 0,
     r.marshalDme, r.dmeSet ? 1 : 0, r.slot, r.late ? 1 : 0, m.angels ? 1 : 0, m.eat ? 1 : 0, ctx.canSequence ? 1 : 0, ctx.section,
-    a.label, a.live ? 1 : 0, _marshalEdits(r, ctx.canSequence) ? 1 : 0].join('/');
+    a.label, a.live ? 1 : 0, a.alsoSig, _marshalEdits(r, ctx.canSequence) ? 1 : 0].join('/');
 }
 
 /** A figure the Marshal may type over on a holding row it holds; plain text otherwise. `set` underlines an assigned value. */
@@ -276,6 +283,14 @@ function _drawRow(r, m, ctx) {
     b.disabled = !a.live;
     if (a.title) b.title = a.title;
     b.addEventListener('click', (e) => { e.stopPropagation(); _advance(r); });
+    act.appendChild(b);
+  }
+  for (const x of a.also) {
+    const b = _el('button', 'mb-btn', x.label);
+    b.type = 'button'; b.dataset.marshalAction = 'also'; b.dataset.nlaAlso = x.key;
+    b.disabled = !x.live;
+    if (x.title) b.title = x.title;
+    b.addEventListener('click', (e) => { e.stopPropagation(); _advance(r, x.op); });
     act.appendChild(b);
   }
   tr.appendChild(act);
