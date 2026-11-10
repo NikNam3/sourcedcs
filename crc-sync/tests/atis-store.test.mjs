@@ -85,3 +85,11 @@ test('getActive prunes an entry once presenceTtlMs lapses without a fresh start/
     }, 20);
   });
 });
+
+test('firstRefused names the first frequency another owner holds, or null when all are free (docs/adr/0158 §5)', () => {
+  const store = new AtisStore();
+  store.start(121500000, 'owner-a', {});
+  assert.equal(store.firstRefused([251000000, 121500000], 'owner-b'), 121500000);
+  assert.equal(store.firstRefused([251000000, 121500000], 'owner-a'), null, 'its own frequencies never refuse it');
+  assert.equal(store.firstRefused([251000000], 'owner-b'), null);
+});

@@ -1,6 +1,7 @@
 'use strict';
 
-// Per-airport ATIS operating config: saved frequency, runway, info letter,
+// Per-airport ATIS operating config: saved frequency (and an optional VHF
+// one, docs/adr/0158 §5), runway, info letter,
 // and manually-entered wx (visibility + up to 3 cloud layers). Used to live
 // entirely in crc-desktop's per-client localStorage (settings.aprtAtisFreq /
 // settings.aprtManualWx) — or, for runway/info letter, nowhere persisted at
@@ -14,12 +15,8 @@
 
 const fs = require('fs');
 const { statePaths, ensureDirFor } = require('./state-paths');
+const { bandOf } = require('./radio/bands');
 const log = require('./log').logger('apt-config');
-
-// Overridable so tests can exercise the mutate/persist path against a temp
-// file instead of the real squadron-wide config.
-const { read: APT_CONFIG_READ_PATH, write: APT_CONFIG_PATH } =
-  statePaths('apt-config.json', process.env.CRCSYNC_APT_CONFIG_PATH);
 
 const KEY_MAX_LEN   = 40; // airport ICAO/name — generous, these are always short
 const FREQ_MAX_LEN  = 16;
@@ -33,6 +30,18 @@ const MAX_AIRPORTS     = 500; // no DCS theater has anywhere near this many airp
 
 function _clean(v, maxLen) {
   return typeof v === 'string' ? v.slice(0, maxLen) : '';
+}
+
+// The optional VHF ATIS frequency (docs/adr/0158 §5): '' clears it, anything else must be a plain MHz number in the VHF
+// band (radio/bands.js). The other frequency (`freq`, the UHF one) is not band-checked: it never was, and a saved one
+// outside UHF must stay settable. Returns the cleaned string, or null when the value is refused.
+const MHZ_RE = /^\d{1,3}(\.\d{1,3})?$/;
+function _cleanVhfFreq(v) {
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  if (t === '') return '';
+  if (!MHZ_RE.test(t) || bandOf(Number(t)) !== 'VHF') return null;
+  return t;
 }
 
 function _cleanClouds(clouds) {
@@ -89,11 +98,20 @@ function createAptConfig({ env = process.env } = {}) {
     if (!cleanKey || !patch || typeof patch !== 'object') return false;
     if (!byAirport[cleanKey] && Object.keys(byAirport).length >= MAX_AIRPORTS) return false;
 
-    const existing = byAirport[cleanKey] || { freq: '', rwy: '', info: '', manualWx: { vis: '', clouds: [] } };
+    // A patch carrying a VHF frequency outside the band is refused whole, so nothing of it half-applies.
+    let vhfFreq;
+    if (patch.vhfFreq !== undefined) {
+      vhfFreq = _cleanVhfFreq(patch.vhfFreq);
+      if (vhfFreq == null) return false;
+    }
+
+    // An entry saved before the VHF frequency existed has no `vhfFreq`; readers take a missing one as ''.
+    const existing = byAirport[cleanKey] || { freq: '', vhfFreq: '', rwy: '', info: '', manualWx: { vis: '', clouds: [] } };
     const next = { ...existing, manualWx: { ...existing.manualWx } };
     let changed = false;
 
     if (typeof patch.freq === 'string') { next.freq = _clean(patch.freq, FREQ_MAX_LEN); changed = true; }
+    if (vhfFreq !== undefined) { next.vhfFreq = vhfFreq; changed = true; }
     if (typeof patch.rwy  === 'string') { next.rwy  = _clean(patch.rwy,  RWY_MAX_LEN);  changed = true; }
     if (typeof patch.info === 'string') { next.info = _clean(patch.info, INFO_MAX_LEN); changed = true; }
     if (patch.manualWx && typeof patch.manualWx === 'object') {
