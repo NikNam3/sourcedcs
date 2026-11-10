@@ -16,5 +16,7 @@
    timer runs before the queued `/srs` frames are handled, sees no packet for 450 ms and ends the sender, and the next
    frame starts a new one. Candidates: judge the timeout on the frames' arrival time at the local server (carried in the
    frame header), or end a sender only after the queued frames are handled; check with a long-task trace first.
+   Still seen after the volume and layout fixes (the human, 2026-11-10 evening: "incoming audio still sometimes cuts
+   off"), so it is not caused by the band-pass or the mixer.
 2. **The controller cuts out for pilots now and then** (TX). Suspect the same main-thread stalls bunching the frames
    sent; measure the send spacing at the local server before changing anything.
