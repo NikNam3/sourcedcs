@@ -179,7 +179,9 @@ function paint() {
   _lineEl.textContent = line.text;
   _lineEl.classList.toggle('radio-problem', line.problem);
   const target = _set.radios.find(r => r.id === _target);
-  _pttBtn.textContent = target ? `PTT ${target.label}` : 'PTT';
+  // PTT is per group: the button names the group it keys, or the radio when that radio is unlinked.
+  const group = target && target.groupId ? _set.groups.find(g => g.id === target.groupId) : null;
+  _pttBtn.textContent = group ? `PTT ${group.name}` : target ? `PTT ${target.label}` : 'PTT';
   _pttBtn.disabled = !target;
   _pttBtn.classList.toggle('radio-ptt-tx', !!(_engineState && (_engineState.txRadioIds || []).length));
 }
@@ -187,7 +189,7 @@ function paint() {
 function buildHeader(ptt) {
   const head = el('div', 'radio-head');
   _lineEl = el('span', 'radio-engine-line');
-  _pttBtn = el('button', 'radio-ptt', 'PTT', { type: 'button', title: 'Hold to transmit on the selected radio\'s group' });
+  _pttBtn = el('button', 'radio-ptt', 'PTT', { type: 'button', title: 'Hold to transmit on the selected group' });
   const down = (e) => { e.preventDefault(); ptt.down(); };
   const up = (e) => { e.preventDefault(); ptt.up(); };
   _pttBtn.addEventListener('mousedown', down);

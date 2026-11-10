@@ -84,7 +84,10 @@ button.radio-mod { font-family: inherit; background: transparent; border: 1px so
 .radio-row-tx .radio-tx { color: #8fd17a; }
 .radio-row-tx { background: rgba(100,160,80,0.10); }
 .radio-row-rxonly .radio-tx { visibility: hidden; }
-.radio-vol, .radio-pan, .radio-gain { height: 4px; cursor: pointer; min-width: 0; width: 100%; box-sizing: border-box; margin: 0; }
+/* settings-panel.css sets every input[type="range"] to 120px; inside the grid the slider fills its own column only */
+#radio-panel input[type="range"].radio-vol, #radio-panel input[type="range"].radio-pan {
+  height: 4px; cursor: pointer; min-width: 0; width: 100%; box-sizing: border-box; margin: 0; padding: 0;
+}
 .radio-target-spacer { display: block; }
 .radio-vol-lbl { color: var(--efsp-muted, #8c9aa6); font-size: 10px; font-variant-numeric: tabular-nums; }
 .radio-mute { font-family: inherit; font-size: 10px; background: transparent; color: var(--efsp-muted, #8c9aa6); border: 1px solid var(--efsp-line, #2e3740); padding: 0 3px; cursor: pointer; }
