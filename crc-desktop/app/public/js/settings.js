@@ -35,6 +35,7 @@ const DEFAULTS = {
   aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisRwy:     {},    // per-airport saved ATIS runway, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisInfo:    {},    // per-airport saved ATIS info letter, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
+  radio:           null,  // the new radio panel's preferences (radio/radio-prefs.js, S-RADIO-1 RQ17); null until first changed
   bullseyeOverride: {     // manual bullseye position override, per coalition
     blue: { enabled: false, lat: null, lon: null },
     red:  { enabled: false, lat: null, lon: null },
