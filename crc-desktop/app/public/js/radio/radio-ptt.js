@@ -7,7 +7,8 @@
 // either way.
 
 import { createPttController, PTT_MAX_TX_DEFAULT_S } from '../ptt-controller.js';
-import { getRadioPrefs } from './radio-prefs.js';
+import { getRadioPrefs, globalPttEnabled, onRadioPrefsChanged, updateRadioPrefs, withGlobalPtt } from './radio-prefs.js';
+import { globalPttBridge } from './global-ptt-bridge.js';
 
 let _isClient = false;
 
@@ -21,12 +22,40 @@ function isTyping() {
 }
 
 /**
+ * Joins the main process's global input to the controller (docs/adr/0161 §3), and tells it what to listen for: nothing
+ * unless this panel is the radio client and Global PTT is on. A release always passes, whatever the panel's state.
+ * @returns the unsubscribe
+ */
+export function wireGlobalPtt(controller, bridge = globalPttBridge()) {
+  if (!bridge) return () => {};
+  const offEdge = bridge.onEdge((down) => {
+    if (!down) controller.globalUp();
+    else if (_isClient) controller.globalDown();
+  });
+  let sent = null;
+  const sync = (prefs) => {
+    const cfg = { enabled: _isClient && globalPttEnabled(prefs), binding: prefs.globalPtt.binding };
+    const key = JSON.stringify(cfg);
+    if (key === sent) return;
+    sent = key;
+    Promise.resolve(bridge.configure(cfg)).then((st) => {
+      // A desktop's portal can rename the input (the controller changed it in the desktop's settings).
+      const now = getRadioPrefs().globalPtt.binding;
+      if (st && st.binding && now && st.binding.name !== now.name) updateRadioPrefs(p => withGlobalPtt(p, { binding: st.binding }));
+    }).catch(() => {});
+  };
+  sync(getRadioPrefs());
+  const offPrefs = onRadioPrefsChanged(sync);
+  return () => { offEdge(); offPrefs(); };
+}
+
+/**
  * @param {object} o  engine (setPtt), getTarget() -> radioId | null, setActive(on)
- * @returns the controller (`down`, `up`, `isHeld`)
+ * @returns the controller (`down`, `up`, `globalDown`, `globalUp`, `isHeld`)
  */
 export function createRadioPtt({ engine, getTarget, setActive }) {
   let keyed = null; // the radio the current transmission was keyed on: a release goes to the same one
-  return createPttController({
+  const controller = createPttController({
     post: (path) => {
       if (path === '/ptt/start') {
         keyed = keyed || getTarget();
@@ -44,4 +73,6 @@ export function createRadioPtt({ engine, getTarget, setActive }) {
     getMaxTxSeconds: () => getRadioPrefs().maxTxS ?? PTT_MAX_TX_DEFAULT_S,
     log: (m) => console.warn('[radio-ptt] ' + m),
   });
+  wireGlobalPtt(controller);
+  return controller;
 }

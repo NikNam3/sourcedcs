@@ -4,7 +4,8 @@
 // frequency, so a retune keeps them) the volume, pan and mute; the link-group membership (an explicit null is
 // "unlinked") and the controller's groups; the manual radios; the devices `{ deviceId, label }` (RQ9); the PTT key, its
 // maximum transmit time and the PTT target; the audio options (gains, TX sound set, noise, RQ18); the intercom
-// `{ unitId }` or null for none (H183: unitId null is the shared, non-DCS intercom). A leaf: it imports
+// `{ unitId }` or null for none (H183: unitId null is the shared, non-DCS intercom); Global PTT (docs/adr/0161 §3:
+// `enabled`, null until the controller chooses, and the listener's own `binding`). A leaf: it imports
 // nothing. It persists through whatever `bindRadioPrefsStorage` gives it (the panel binds settings.js's one `radio`
 // object + `saveSettings`), so node:test drives it with a plain object.
 //
@@ -39,6 +40,20 @@ function normalizeDevice(d) {
   return isObj(d) && str(d.deviceId) ? { deviceId: d.deviceId, label: typeof d.label === 'string' ? d.label : '' } : null;
 }
 
+/** A binding as the listener that made it reported it (`crc-desktop/global-ptt/`), or null. */
+function normalizeGlobalBinding(b) {
+  if (!isObj(b) || !str(b.name)) return null;
+  if (b.type === 'key' && Number.isInteger(b.code)) return { type: 'key', code: b.code, name: b.name };
+  if (b.type === 'mouse' && Number.isInteger(b.button)) return { type: 'mouse', button: b.button, name: b.name };
+  if (b.type === 'portal' && str(b.id)) return { type: 'portal', id: b.id, name: b.name };
+  return null;
+}
+
+function normalizeGlobalPtt(g) {
+  const r = isObj(g) ? g : {};
+  return { enabled: typeof r.enabled === 'boolean' ? r.enabled : null, binding: normalizeGlobalBinding(r.binding) };
+}
+
 /** A whole, valid prefs object from whatever was stored (anything: null, an old shape, a hand edit). */
 export function normalizeRadioPrefs(raw) {
   const r = isObj(raw) ? raw : {};
@@ -60,6 +75,7 @@ export function normalizeRadioPrefs(raw) {
     pttKey: str(r.pttKey) || PTT_KEY_DEFAULT,
     maxTxS: Number.isFinite(r.maxTxS) ? r.maxTxS : null, // null: ptt-controller.js's default; clamped where used
     pttTarget: str(r.pttTarget),
+    globalPtt: normalizeGlobalPtt(r.globalPtt),
     soundSet: SOUND_SETS.includes(r.soundSet) ? r.soundSet : SOUND_SETS[0],
     noise: r.noise !== false,
     inputGain: clamp(r.inputGain, GAIN_MIN, GAIN_MAX, INPUT_GAIN_DEFAULT),
@@ -86,6 +102,13 @@ export function withDevices(prefs, patch) { return { ...prefs, devices: { ...pre
 export function withPttKey(prefs, code) { return { ...prefs, pttKey: str(code) || PTT_KEY_DEFAULT }; }
 export function withMaxTx(prefs, seconds) { return { ...prefs, maxTxS: Number.isFinite(seconds) ? seconds : null }; }
 export function withPttTarget(prefs, radioId) { return { ...prefs, pttTarget: str(radioId) }; }
+/** Some of Global PTT's `{ enabled, binding }`. */
+export function withGlobalPtt(prefs, patch) { return { ...prefs, globalPtt: normalizeGlobalPtt({ ...prefs.globalPtt, ...patch }) }; }
+/** Whether Global PTT is on: the controller's choice, else on in radio-only and off in the full app (/js/config.js). */
+export function globalPttEnabled(prefs) {
+  if (prefs.globalPtt.enabled !== null) return prefs.globalPtt.enabled;
+  return typeof RADIO_ONLY !== 'undefined' && !!RADIO_ONLY;
+}
 /** Some of `{ inputGain, outputGain, soundSet, noise }`. */
 export function withAudioOptions(prefs, patch) { return { ...prefs, ...patch }; }
 

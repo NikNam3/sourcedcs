@@ -6,6 +6,8 @@
 //  - losing the window (`blur`, `visibilitychange` to hidden) releases, because the keyup goes to another window;
 //  - a maximum key-down time releases a transmission anyway (the safety net), and the key must be lifted and
 //    pressed again to transmit afterwards.
+// A global input (docs/adr/0161 §3, `globalDown`/`globalUp`) is a second source: its release comes from outside the
+// window, so losing the window does not end it. The transmission lasts until every source is up; the fuse ends all.
 // lxsrs has no timeout of its own: it transmits for as long as `/ptt/start` keeps arriving every REPEAT_MS.
 
 export const PTT_REPEAT_MS = 400;
@@ -40,23 +42,49 @@ export function createPttController(o) {
   const maxMs = () => clampMaxTxSeconds(o.getMaxTxSeconds ? o.getMaxTxSeconds() : PTT_MAX_TX_DEFAULT_S) * 1000;
   let held = false, repeat = null, fuse = null;
   let keyDown = false; // the PTT key is physically down (set on keydown, cleared on keyup, blur)
+  let windowKeying = false; // the window's key or on-screen button is keying
+  let globalPressed = false; // the global input is physically down; survives the fuse, so a re-press is a real one
+  let globalKeying = false; // the global input is keying
 
-  function down() {
+  function engage() {
     if (held) return;
     held = true;
     o.post('/ptt/start');
     repeat = si(() => o.post('/ptt/start'), PTT_REPEAT_MS);
-    fuse = st(() => { log(`PTT released after the ${maxMs() / 1000} s maximum transmit time`); up(); }, maxMs());
+    fuse = st(() => {
+      log(`PTT released after the ${maxMs() / 1000} s maximum transmit time`);
+      windowKeying = false; globalKeying = false;
+      release();
+    }, maxMs());
     o.setActive(true);
   }
 
-  function up() {
+  function release() {
     if (!held) return;
     held = false;
     ci(repeat); repeat = null;
     ct(fuse); fuse = null;
     o.post('/ptt/stop');
     o.setActive(false);
+  }
+
+  const settle = () => { if (!windowKeying && !globalKeying) release(); };
+
+  function down() { windowKeying = true; engage(); }
+  function up() { windowKeying = false; settle(); }
+
+  /** The global input went down. Repeats are ignored: only a press after a release keys again. */
+  function globalDown() {
+    if (globalPressed) return;
+    globalPressed = true;
+    globalKeying = true;
+    engage();
+  }
+
+  function globalUp() {
+    globalPressed = false;
+    globalKeying = false;
+    settle();
   }
 
   function releaseAll() { keyDown = false; up(); }
@@ -72,5 +100,5 @@ export function createPttController(o) {
   o.win.addEventListener('blur', releaseAll);
   o.doc.addEventListener('visibilitychange', () => { if (o.doc.hidden) releaseAll(); });
 
-  return { down, up, isHeld: () => held, isKeyDown: () => keyDown };
+  return { down, up, globalDown, globalUp, isHeld: () => held, isKeyDown: () => keyDown };
 }

@@ -35,7 +35,7 @@ function createUiohookListener(o = {}) {
     try {
       uIOhook.start();
     } catch (err) {
-      hookOff();
+      removeHandlers();
       throw err;
     }
   }
