@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { figure as figureOf } from '../src/core/data/figure-set.ts';
 import { panel } from '../src/core/data/panel.ts';
 import type {
   CurveFamily,
@@ -13,12 +14,13 @@ import type {
 } from '../src/core/data/types.ts';
 import { curveFamily } from '../src/core/read/curve-family.ts';
 import { guidelinePanel } from '../src/core/read/guideline-panel.ts';
-import { drawnRange, EDGE_TOLERANCE, interp, interpWithin } from '../src/core/read/interp.ts';
+import { drawnRange, EDGE_TOLERANCE, interp, interpWithin, unionRange } from '../src/core/read/interp.ts';
 import { beyondLimit } from '../src/core/read/limit-line.ts';
 import { scalePair } from '../src/core/read/scale-pair.ts';
 import { singleCurve } from '../src/core/read/single-curve.ts';
 import { tableCell } from '../src/core/read/table.ts';
 import { outOfChart, type Read } from '../src/core/result.ts';
+import { loadFigure } from './helpers/data.ts';
 
 /** The value of an ok read; fails the test on an OutOfChart. */
 function valueOf<T>(read: Read<T>): T {
@@ -80,10 +82,20 @@ describe('interp', () => {
   });
 
   test('interpWithin clamps within the tolerance and refuses beyond it', () => {
-    assert.equal(interpWithin(points, 10.01, 0.02), 2.2);
-    assert.equal(interpWithin(points, -0.01, 0.02), 1);
-    assert.equal(interpWithin(points, 10.03, 0.02), undefined);
-    assert.equal(interpWithin(points, NaN, 0.02), undefined);
+    assert.equal(interpWithin(points, 10.01, 0.02, [0, 10]), 2.2);
+    assert.equal(interpWithin(points, -0.01, 0.02, [0, 10]), 1);
+    assert.equal(interpWithin(points, 10.03, 0.02, [0, 10]), undefined);
+    assert.equal(interpWithin(points, NaN, 0.02, [0, 10]), undefined);
+  });
+
+  test('interpWithin gives the tolerance only to an end within it of the same end of the span (ruling 4)', () => {
+    // The high end 10 is 0.01 inside the span's 10.01: it keeps the tolerance. The low end 0 is 1 inside -1: none.
+    assert.equal(interpWithin(points, 10.02, 0.02, [-1, 10.01]), 2.2);
+    assert.equal(interpWithin(points, -0.01, 0.02, [-1, 10.01]), undefined);
+    assert.equal(interpWithin(points, 0, 0.02, [-1, 10.01]), 1);
+    // The high end 10 is 1 inside the span's 11: none, though the point is a hair past it.
+    assert.equal(interpWithin(points, 10 + 1e-9, 0.02, [0, 11]), undefined);
+    assert.equal(interpWithin(points, -0.01, 0.02, [0, 11]), 1);
   });
 
   test('EDGE_TOLERANCE is 0.2 % of the drawn span (R1)', () => {
@@ -168,9 +180,13 @@ describe('curveFamily', () => {
     );
   });
 
-  test('the tolerance is taken from the union of all curves, not the bracketing pair', () => {
-    // The param 2 curve spans 0..5 alone; tolerance/2 of the union span (0.01) beyond it reads.
-    near(valueOf(curveFamily(family, 'B2-1', 5.01, 2)), 35);
+  test('a curve end inside the family span gets no tolerance (ruling 4)', () => {
+    // The param 2 curve stops at 5, inside the family's 0..10: tolerance/2 (0.01) past it is OutOfChart.
+    near(valueOf(curveFamily(family, 'B2-1', 5, 2)), 35);
+    assert.deepEqual(curveFamily(family, 'B2-1', 5.01, 2), outOfChart('B2-1', 'temperature', 5.01, [0, 5]));
+    assert.deepEqual(curveFamily(family, 'B2-1', 5.01, 3), outOfChart('B2-1', 'temperature', 5.01, [0, 5]));
+    // Its start, at the family's 0, keeps it.
+    near(valueOf(curveFamily(family, 'B2-1', -0.01, 2)), 30);
   });
 
   test('a NaN param or input gives OutOfChart', () => {
@@ -303,7 +319,7 @@ describe('guidelinePanel', () => {
     );
   });
 
-  test('a line drawn a hair short of the baseline is usable within the tolerance (R1)', () => {
+  test('a line drawn a hair short of the baseline at its family start is usable within the tolerance (R1)', () => {
     const short: GuidelinePanel = {
       ...cg,
       families: {
@@ -312,11 +328,34 @@ describe('guidelinePanel', () => {
             [35.01, 1000],
             [40, 1100],
           ],
-          ...lines([1800, 2000, 2200]),
+          [
+            [35, 2000],
+            [40, 2200],
+          ],
         ],
+        other: lines([900, 1000, 1100]),
       },
     };
     near(valueOf(guidelinePanel(short, 'B2-3', 'all', 1500, 40)), 1650);
+  });
+
+  test('a line starting a hair past the baseline inside its family span is not usable (ruling 4)', () => {
+    const short: GuidelinePanel = {
+      ...cg,
+      families: {
+        all: [
+          [
+            [35.01, 1000],
+            [40, 1100],
+          ],
+          ...lines([1800, 2000, 2200], [2700, 3000, 3300]),
+        ],
+      },
+    };
+    assert.deepEqual(
+      guidelinePanel(short, 'B2-3', 'all', 1500, 40),
+      outOfChart('B2-3', 'distance', 1500, [2000, 3000]),
+    );
   });
 
   test('only the lines that cover the target are used; their range is the drawn range', () => {
@@ -586,6 +625,66 @@ describe('beyondLimit', () => {
   test('beyond: below exceeds the limit under the line', () => {
     assert.equal(beyondLimit(line('below'), 5, 14), true);
     assert.equal(beyondLimit(line('below'), 5, 16), false);
+  });
+});
+
+describe('edge tolerance on input-axis ends only (ruling 4), on the extracted charts', () => {
+  const b21 = loadFigure('B2-1');
+  const b23 = loadFigure('B2-3');
+  const b263 = loadFigure('B2-6.sh3');
+
+  test('an output-edge end gets no tolerance: B2-3 GW 48 past its last drawn takeoff factor', () => {
+    const gw = panel(b23, 'gw', 'curve_family');
+    const curve = gw.curves.find((c) => c.param === 48);
+    assert.ok(curve !== undefined);
+    const last = curve.points[curve.points.length - 1];
+    assert.ok(last !== undefined);
+    const [start, end] = unionRange(gw.curves.map((c) => drawnRange(c.points)));
+    const past = last[0] + 0.001 * (end - start);
+    assert.deepEqual(
+      curveFamily(gw, 'B2-3', past, 48),
+      outOfChart('B2-3', 'takeoff_factor', past, drawnRange(curve.points)),
+    );
+    // At its last drawn input it reads its last point, the 12,000 ft output edge.
+    near(valueOf(curveFamily(gw, 'B2-3', last[0], 48)), last[1]);
+    assert.ok(Math.abs(last[1] - 12) < 0.01, String(last[1]));
+  });
+
+  test('an input-axis end keeps the tolerance: B2-1 at -40 C, a B2-3 tailwind line at 20 kt', () => {
+    const pa = panel(b21, 'pa', 'curve_family');
+    assert.equal(pa.curves[0]?.points[0]?.[0], -39.9996);
+    near(valueOf(curveFamily(pa, 'B2-1', -40, 0)), valueOf(curveFamily(pa, 'B2-1', -39.9996, 0)));
+    const wind = panel(b23, 'wind', 'guideline_panel');
+    const line = wind.families.tailwind?.[0];
+    assert.ok(line !== undefined);
+    assert.equal(line.at(-1)?.[0], 19.9891);
+    const entry = line[0]?.[1] ?? NaN;
+    near(valueOf(guidelinePanel(wind, 'B2-3', 'tailwind', entry, 20)), line.at(-1)?.[1] ?? NaN);
+  });
+
+  test("a short line inside its family gets no tolerance: B2-6 sheet 3's tailwind line from 60 KIAS", () => {
+    const wind = panel(b263, 'wind', 'guideline_panel');
+    const line = wind.families.tailwind?.[0];
+    assert.ok(line !== undefined);
+    assert.equal(line.at(-1)?.[0], 18.7529);
+    const entry = line[0]?.[1] ?? NaN;
+    near(entry, 60.0003);
+    valueOf(guidelinePanel(wind, 'B2-6.sh3', 'tailwind', entry, 18.75));
+    assert.equal(guidelinePanel(wind, 'B2-6.sh3', 'tailwind', entry, 18.76).ok, false);
+  });
+});
+
+describe('figure set', () => {
+  const b21 = loadFigure('B2-1');
+  const set = { 'B2-1': b21 };
+
+  test('finds a figure by id', () => {
+    assert.equal(figureOf(set, 'B2-1'), b21);
+  });
+
+  test('a missing id is a data defect', () => {
+    assert.throws(() => figureOf(set, 'B2-3'), /B2-3/);
+    assert.throws(() => figureOf(set, 'toString'), /toString/);
   });
 });
 

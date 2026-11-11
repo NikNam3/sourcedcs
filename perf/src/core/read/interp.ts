@@ -8,7 +8,9 @@ type Points = readonly (readonly [number, number])[];
 /**
  * Extracted curves stop a hair inside the frame (B2-1 starts at -39.9996 C, tailwind lines end at
  * 19.989 kt). An input this fraction of the panel's drawn input span beyond a drawn end reads the
- * end value; further out is OutOfChart (ruling R1).
+ * end value; further out is OutOfChart (ruling R1). Only an end on the input axis's frame gets it:
+ * a curve that stops inside its family's input span ends on the output edge (B2-3 GW 38 to 48 at
+ * 12,000 ft), and past it is OutOfChart (ruling 4 of TOLD 1.7).
  */
 export const EDGE_TOLERANCE = 0.002;
 
@@ -51,8 +53,21 @@ export function clampWithin(range: readonly [number, number], x: number, toleran
   return Math.min(Math.max(x, range[0]), range[1]);
 }
 
-/** interp, reading the end value for an x within `tolerance` beyond a drawn end. */
-export function interpWithin(points: Points, x: number, tolerance: number): number | undefined {
-  const clamped = clampWithin(drawnRange(points), x, tolerance);
-  return clamped === undefined ? undefined : interp(points, clamped);
+/**
+ * interp, reading the end value for an x within `tolerance` beyond a drawn end, where that end is an
+ * input-axis end: within `tolerance` of the same end of `span`, the drawn input span of the line's
+ * family (all its curves, or the guideline family's lines), which holds the line. Beyond any other
+ * end the line is not drawn: undefined.
+ */
+export function interpWithin(
+  points: Points,
+  x: number,
+  tolerance: number,
+  span: readonly [number, number],
+): number | undefined {
+  const [lo, hi] = drawnRange(points);
+  const below = lo - span[0] <= tolerance ? tolerance : 0;
+  const above = span[1] - hi <= tolerance ? tolerance : 0;
+  if (!(x >= lo - below && x <= hi + above)) return undefined;
+  return interp(points, Math.min(Math.max(x, lo), hi));
 }

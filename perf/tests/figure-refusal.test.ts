@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { evaluate, runExact } from '../src/core/ctx.ts';
+import { evaluate } from '../src/core/ctx.ts';
 import { refusalNonAbDry, refusalNonAbSnowIcy, refusalNonAbWet } from '../src/core/figures/b2-5.ts';
 import { refusalAbDry, refusalAbSnowIcy, refusalAbWet } from '../src/core/figures/b2-6.ts';
 import type { RefusalInputs } from '../src/core/figures/refusal-speed.ts';
@@ -15,6 +15,7 @@ import { curveFamily } from '../src/core/read/curve-family.ts';
 import { panel } from '../src/core/data/panel.ts';
 import type { Read } from '../src/core/result.ts';
 
+import { exactOf, plain } from './helpers/chain.ts';
 import { loadFigure } from './helpers/data.ts';
 
 const sh1 = loadFigure('B2-5.sh1');
@@ -39,9 +40,9 @@ function assertOutOfChart(read: Read<number>, figure: string, input: string): re
 const BASE: RefusalInputs = { takeoffFactor: 4, grossWeightLb: 32000, runwayFt: 8000, headwindKt: 0, slopePct: 0 };
 const at = (change: Partial<RefusalInputs>): RefusalInputs => ({ ...BASE, ...change });
 
-const dry = (i: RefusalInputs) => runExact((ctx) => refusalNonAbDry(ctx, sh1, i));
-const wet = (i: RefusalInputs) => runExact((ctx) => refusalNonAbWet(ctx, sh2, i));
-const snowIcy = (i: RefusalInputs) => runExact((ctx) => refusalNonAbSnowIcy(ctx, sh3, i));
+const dry = (i: RefusalInputs) => exactOf((ctx) => refusalNonAbDry(ctx, sh1, i));
+const wet = (i: RefusalInputs) => exactOf((ctx) => refusalNonAbWet(ctx, sh2, i));
+const snowIcy = (i: RefusalInputs) => exactOf((ctx) => refusalNonAbSnowIcy(ctx, sh3, i));
 
 /**
  * Each sheet's first output (the one the chart draws), for the tests that hold on every sheet. `midTof` enters the
@@ -246,7 +247,7 @@ describe('B2-5 sheet 3 icy: the 18/20 and 48 GW curves (Review Focus 2, rulings 
 
 test('B2-5 conservative refusal speed is never above the exact one', () => {
   const evaluation = evaluate(
-    (ctx) => refusalNonAbDry(ctx, sh1, at({ takeoffFactor: 3.37, headwindKt: 7, slopePct: 0.6 })),
+    plain((ctx) => refusalNonAbDry(ctx, sh1, at({ takeoffFactor: 3.37, headwindKt: 7, slopePct: 0.6 }))),
     {
       rcr23Kias: 'refusalSpeed',
       rcr16Kias: 'refusalSpeed',
@@ -266,9 +267,9 @@ const ab3 = loadFigure('B2-6.sh3');
 const AB_BASE: RefusalInputs = { takeoffFactor: 2.5, grossWeightLb: 32000, runwayFt: 8000, headwindKt: 0, slopePct: 0 };
 const abAt = (change: Partial<RefusalInputs>): RefusalInputs => ({ ...AB_BASE, ...change });
 
-const abDry = (i: RefusalInputs) => runExact((ctx) => refusalAbDry(ctx, ab1, i));
-const abWet = (i: RefusalInputs) => runExact((ctx) => refusalAbWet(ctx, ab2, i));
-const abSnowIcy = (i: RefusalInputs) => runExact((ctx) => refusalAbSnowIcy(ctx, ab3, i));
+const abDry = (i: RefusalInputs) => exactOf((ctx) => refusalAbDry(ctx, ab1, i));
+const abWet = (i: RefusalInputs) => exactOf((ctx) => refusalAbWet(ctx, ab2, i));
+const abSnowIcy = (i: RefusalInputs) => exactOf((ctx) => refusalAbSnowIcy(ctx, ab3, i));
 
 /**
  * Each B2-6 chart's first output. `midTof` enters the wind panel (runway 8,000 ft, GW 32,000 lb) where both wind
@@ -492,7 +493,7 @@ describe('B2-6 sheet 3: GW curves that cross and reverse (Review Focus 2, ruling
 
 test('B2-6 conservative refusal speed is never above the exact one', () => {
   const evaluation = evaluate(
-    (ctx) => refusalAbDry(ctx, ab1, abAt({ takeoffFactor: 2.37, headwindKt: 7, slopePct: 0.6 })),
+    plain((ctx) => refusalAbDry(ctx, ab1, abAt({ takeoffFactor: 2.37, headwindKt: 7, slopePct: 0.6 }))),
     {
       rcr23Kias: 'refusalSpeed',
       rcr16Kias: 'refusalSpeed',
