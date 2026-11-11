@@ -4,7 +4,7 @@ The F-16 performance calculator of the SOURCE tool suite. Step 1 is TOLD: takeof
 
 perf is a static app: all calculation runs in the browser, the server only serves files. It is public, without login. The plan is `docs/wip/TOLD.md`; the decisions are ADRs 0148 to 0153 in `docs/adr/`.
 
-Status: step 0 (foundations) is done. Step 1 (TOLD) is cut into four plans (`docs/wip/TOLD.md` 1.6); plan 1, the data and one figure function per chart for B2-4, B2-5, B2-6, B7-1 and B7-2 sheets 1 and 2, is done. Plan 2 (the chains, rules, drag index builder and input parsing) is next. There is no UI yet.
+Status: step 0 (foundations) is done. Step 1 (TOLD) is cut into four plans (`docs/wip/TOLD.md` 1.6); plan 1, the data and one figure function per chart for B2-4, B2-5, B2-6, B7-1 and B7-2 sheets 1 and 2, is done. Plan 2, the core (`computeTold`: the chains, runway rules, drag index builder and input parsing; `docs/wip/TOLD.md` 1.7), is done. Plan 3 (UI and state) is next. There is no UI yet.
 
 ## Data flow
 
@@ -21,6 +21,11 @@ manual PDF -> extraction/ -> data/f16c-f110-129/ -> src/core/ -> src/web/
 - `schema/charts.schema.json` is the contract between extraction and core. `src/core/data/types.ts` is generated from it.
 - `src/core/` has no DOM, no `fetch`, no `node:` imports and no I/O. Chart data is passed in. Building blocks in `src/core/read/` never extrapolate and never throw for an input outside a chart: they return `OutOfChart`. Every chart read goes through `ctx.read(id, value, step)` (`src/core/ctx.ts`), which gives the exact and the conservative value (ADR 0149).
 - `src/core/figures/` has one file per figure (`b2-1.ts` to `b7-2.ts`; `refusal-speed.ts` is the reader B2-5 and B2-6 share). Each function reads its panels in the manual's order, with its rounding point ids pinned by a test. A line carried from one panel into the next is passed on as is, never through `ctx.read`. `groundRollUncorrected` (B7-2 sheet 1) also returns the limit-line verdicts for its run: `true`, `false`, or `null` where the line is not drawn.
+- `src/core/ctx.ts` runs a chain once exact and in the conservative runs (`evaluate`). A chain returns its outputs and per-run side data; each cell keeps the side data of the run that decided it. `ctx.input` takes an input with an exact and a conservative value (the drag index).
+- `src/core/data/figure-set.ts`: `FigureSet`, the figure files a computation reads, keyed by figure id (`B2-3`, `B2-5.sh1`), and `figure()`, which throws on a missing id. The app loads the set; core never does.
+- `src/core/inputs/`: `inputs.ts` (the `Inputs` type, every field as typed, and the defaults), `parse.ts` (numbers and the `ddd/ssGgg` wind), `derive.ts` (pressure altitude from the near-end threshold and the altimeter, slope, wind components, the physical limits). A derived value that does not compute names the fields that did not parse.
+- `src/core/dragindex/`: the drag index builder on Fig. B1-1. `catalogue.ts` (stores and suspensions from the data), `racks.ts` (which suspension carries which rack string, and its capacity), `tip.ts` and `tank.ts` (the tip rules and the tank variants), `check.ts` (`checkLoadout`), `loadout-row.ts` (the `Loadout` type), `loadout.ts` (`dragIndex`, exact and conservative; an invalid loadout gives its problems, never a throw).
+- `src/core/told/`: one chain per TOLD column, `takeoff.ts` (MIL, MAX AB) and `landing.ts` (normal weight and heavyweight, dry and wet); `rcr.ts` (refusal speed at the column's RCR); `rules.ts` (the runway rules with their paragraphs); `column.ts` (a column's cells, marks, reasons and exact trace); `told.ts` (`computeTold(figures, inputs, loadout)`, the one object plan 3's page renders).
 - `src/web/` is the only code that fetches the data files. `tsc` emits it to `web/js/` (gitignored).
 
 ## npm scripts

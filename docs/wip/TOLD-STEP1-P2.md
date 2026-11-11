@@ -1,5 +1,11 @@
 # TOLD Step 1, Plan 2: Core — Implementation Plan
 
+**Status: done (12 Nov 2026).** Merged into `perf-told` off 2aaa187f: Task 3 1f8b9924, Task 1 06fa9be2, Task 2
+5115c9ad, Task 6 08b19945, Task 4 333b4e5f, Task 5 4d7ee3bb, Task 7 5a737d0f; supervisor fixes c7115e30 (timing
+bound) and ebce45e0 (catalogue coverage). Gates on the tip: `npm test` 450/450 with 100 % lines on `src/core/`,
+typecheck, lint, format:check, types:check, data:check (0 problems) and build pass; a full re-extraction is unchanged
+(`dataVersion` 8); a trial merge into `main` is clean. TOLD.md 1.7 is brought in line with the build.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** `computeTold(figures, inputs)` in `src/core/` gives every MDC TOLD cell of the approved mockup (takeoff MIL
@@ -185,6 +191,14 @@ Pillow from `flake.nix` for Task 1's re-extraction).
 - **B1-1 sheet 1's drag index columns** are `drag_index_f16c` and `drag_index_f16d` (Task 1: the weight tables keep
   `f16c`/`f16d` in lb). Task 4 reads these names. `wind` stays in `kt` (a wind speed, not an airspeed).
 - Every questioner ruling and extra is taken as written above.
+- **An odd count on a pair inboard of a wing tank** (3 stores on 3/7) gives the MULTIPLE variant on both wing tanks
+  (Task 4): the safer value, the mockup's rule.
+- **An invalid loadout never throws** (Task 4 review): `checkLoadout`, and `dragIndex` returns `{ ok: false,
+  problems }`. Plan 3 restores loadouts from the URL and localStorage.
+- **An invalid loadout or an unparsed additional drag index makes both takeoff columns unparsed** (Task 7), on
+  `'loadout'` or `'additionalDragIndex'`; landing is unaffected.
+- **The `ctx` timing test bound is 200 ms, not 20** (close-out): it failed once under the full suite with coverage,
+  very likely the plan 1 flake.
 
 ---
 
