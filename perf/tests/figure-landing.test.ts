@@ -270,6 +270,27 @@ describe('B7-2 sheet 2 corrected ground roll', () => {
     }
   });
 
+  test('a roll above 11,000 ft enters outside the tailwind and the downhill lines: OutOfChart on that output', () => {
+    const high = { ...SH2_SAMPLE, uncorrectedFt: 11500, rcr: 23 };
+    const cases: [Partial<CorrectedInputs>, string[], [number, number]][] = [
+      [{ headwindKt: -10, slopePct: 0 }, ['b7-2.sh2.rcr'], [0.9998, 9.9991]],
+      [{ headwindKt: 0, slopePct: -1 }, ['b7-2.sh2.rcr', 'b7-2.sh2.wind'], [0.9999, 11.0013]],
+    ];
+    for (const [change, ids, range] of cases) {
+      const { outputs, trace } = corrected({ ...high, ...change });
+      assertOutOfChart(outputs.rollFt, 'B7-2.sh2', 'ground_roll');
+      assert.ok(!outputs.rollFt.ok);
+      const drawn = outputs.rollFt.error.drawnRange;
+      assert.ok(drawn !== null && Math.abs(drawn[0] - range[0]) < 1e-3 && Math.abs(drawn[1] - range[1]) < 1e-3);
+      assert.deepEqual(
+        trace.map((t) => t.id),
+        ids,
+      );
+    }
+    valueOf(corrected({ ...high, headwindKt: 10, slopePct: 0 }).outputs.rollFt);
+    valueOf(corrected({ ...high, headwindKt: 0, slopePct: 1 }).outputs.rollFt);
+  });
+
   test('40 kt either way and 3 % either way read', () => {
     for (const change of [{ headwindKt: 40 }, { headwindKt: -40 }, { slopePct: 3 }, { slopePct: -3 }]) {
       valueOf(corrected({ ...SH2_SAMPLE, ...change }).outputs.rollFt);
