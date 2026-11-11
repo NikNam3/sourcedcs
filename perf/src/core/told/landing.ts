@@ -52,7 +52,16 @@ export const LANDING_FIELDS: Readonly<Record<'normal' | 'heavy', Readonly<Record
   });
 
 /**
- * Reads `input.pa`, `input.temp`, `input.gw`, `input.rcr`, `input.wind`, `input.slope`, then B7-1, B7-2 sheet 1 and
+ * Sheet 1 draws pressure altitude from 0 ft. Below sea level the exact cell is the honest OutOfChart and the
+ * conservative runs read 0 ft (supervisor ruling; the roll grows with altitude, so 0 ft is no shorter).
+ */
+const conservativePa = (paFt: number): { exact: number; conservative: number } => ({
+  exact: paFt,
+  conservative: Math.max(paFt, 0),
+});
+
+/**
+ * Reads `input.pa` (exact and conservative, see `conservativePa`), `input.temp`, `input.gw`, `input.rcr`, `input.wind`, `input.slope`, then B7-1, B7-2 sheet 1 and
  * sheet 2 (`wet` when `surface` is wet). An uncorrected roll out of chart is the distance's OutOfChart and sheet 2
  * reads nothing. A figure missing from `figures` throws here, before any run.
  */
@@ -65,7 +74,7 @@ export function landingChain(
   const sheet1 = figure(figures, 'B7-2.sh1');
   const sheet2 = figure(figures, 'B7-2.sh2');
   return (ctx) => {
-    const paFt = ctx.read('input.pa', v.paFt, STEPS.pressureAltitudeFt);
+    const paFt = ctx.input('input.pa', conservativePa(v.paFt), STEPS.pressureAltitudeFt);
     const tempC = ctx.read('input.temp', v.tempC, STEPS.temperatureC);
     const grossWeightLb = ctx.read('input.gw', v.grossWeightLb, STEPS.grossWeightLb);
     const rcr = ctx.read('input.rcr', v.rcr, STEPS.rcr);

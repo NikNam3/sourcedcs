@@ -127,6 +127,48 @@ describe('computeTold', () => {
     }
   });
 
+  test('user input never throws: takeoff GW of 400 nines → the chains needing takeoffGwLb unparsed', () => {
+    const told = computeTold(FIGURES, { ...FIELD, takeoffGwLb: '9'.repeat(400) }, WORKED_EXAMPLE);
+    for (const [name, column] of columns(told)) {
+      if (name.startsWith('takeoff') || name.startsWith('landing.heavy')) assertUnparsed(name, column, ['takeoffGwLb']);
+      else assertComputed(name, column);
+    }
+  });
+
+  test('PA below sea level (30 ft, 30.15 inHg, PA ≈ −181): every landing distance exact "—", conservative computed', () => {
+    const told = computeTold(
+      FIGURES,
+      { ...FIELD, nearElevFt: '30', farElevFt: '77', altimeterInHg: '30.15' },
+      WORKED_EXAMPLE,
+    );
+    for (const [name, column] of columns(told)) {
+      if (!name.startsWith('landing')) continue;
+      const distance = column.cells.distance;
+      assert.equal(distance?.kind, 'computed', name);
+      if (distance?.kind !== 'computed') continue;
+      const { exact, conservative } = distance.cell;
+      assert.ok(!exact.ok, `${name}: exact OutOfChart`);
+      assert.equal(exact.error.figure, 'B7-2.sh1');
+      assert.equal(exact.error.input, 'pressure_altitude');
+      assert.ok(conservative.ok && conservative.value > 0, `${name}: conservative computed`);
+      assert.ok(column.reasons.some((r) => r.cell === 'exact' && r.error.input === 'pressure_altitude'));
+      assert.ok(!column.reasons.some((r) => r.cell === 'conservative'), `${name}: no conservative reason`);
+    }
+  });
+
+  test('PA ≈ −6 ft (30 ft, 29.96 inHg): every landing distance conservative computed', () => {
+    const told = computeTold(
+      FIGURES,
+      { ...FIELD, nearElevFt: '30', farElevFt: '77', altimeterInHg: '29.96' },
+      WORKED_EXAMPLE,
+    );
+    for (const [name, column] of columns(told)) {
+      if (!name.startsWith('landing')) continue;
+      const distance = column.cells.distance;
+      assert.ok(distance?.kind === 'computed' && distance.cell.conservative.ok, `${name}: conservative computed`);
+    }
+  });
+
   test('Review Focus 4: a derived input names every field it lacks, once (near elevation: pa and slope)', () => {
     const told = computeTold(FIGURES, { ...FIELD, nearElevFt: 'x' }, WORKED_EXAMPLE);
     for (const [name, column] of columns(told)) assertUnparsed(name, column, ['nearElevFt']);

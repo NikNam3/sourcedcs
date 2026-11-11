@@ -45,6 +45,12 @@ test('parseNumber refuses empty text, words, two decimal points and units', () =
   }
 });
 
+test('parseNumber refuses a number too large to be finite (400 nines), either sign', () => {
+  assert.deepEqual(parseNumber('9'.repeat(400)), { ok: false });
+  assert.deepEqual(parseNumber(`-${'9'.repeat(400)}`), { ok: false });
+  assert.deepEqual(parseNumber('1' + '0'.repeat(300)), { ok: true, value: 1e300 });
+});
+
 test('parseWind reads ddd/ss with an optional gust, spaces allowed', () => {
   assert.deepEqual(parseWind('230/08'), { ok: true, value: { directionDeg: 230, speedKt: 8, gustKt: null } });
   assert.deepEqual(parseWind('230 / 08 G15'), { ok: true, value: { directionDeg: 230, speedKt: 8, gustKt: 15 } });
@@ -56,6 +62,22 @@ test('parseWind refuses a gust below the steady wind, a direction outside 1 to 3
   for (const text of ['230/15G08', '000/05', '361/05', '230', '230/', '', '230/08G']) {
     assert.deepEqual(parseWind(text), { ok: false }, JSON.stringify(text));
   }
+});
+
+test('parseWind: calm is 000/00; 000 with any speed or gust stays refused', () => {
+  assert.deepEqual(parseWind('000/00'), { ok: true, value: { directionDeg: 0, speedKt: 0, gustKt: null } });
+  assert.deepEqual(parseWind(' 000 / 0 '), { ok: true, value: { directionDeg: 0, speedKt: 0, gustKt: null } });
+  for (const text of ['000/01', '000/00G00', '000/00G05', '000/05G10']) {
+    assert.deepEqual(parseWind(text), { ok: false }, JSON.stringify(text));
+  }
+});
+
+test('deriveInputs: calm 000/00 gives zero headwind and crosswind', () => {
+  const d = deriveInputs({ ...valid, wind: '000/00' });
+  assert.ok(d.headwindKt.ok && d.crosswindKt.ok);
+  assert.equal(Math.abs(d.headwindKt.value), 0);
+  assert.equal(Math.abs(d.crosswindKt.value), 0);
+  assert.deepEqual(d.gustKt, { ok: true, value: null });
 });
 
 test('pressureAltitudeFt: standard setting gives field elevation; hand-worked high and low settings', () => {
@@ -140,6 +162,21 @@ test('deriveInputs applies the physical limits: length > 0, heading 1 to 360, al
   assert.deepEqual(deriveInputs({ ...valid, headingDeg: '0' }).headwindKt, { ok: false, fields: ['headingDeg'] });
   assert.deepEqual(deriveInputs({ ...valid, headingDeg: '361' }).crosswindKt, { ok: false, fields: ['headingDeg'] });
   assert.deepEqual(deriveInputs({ ...valid, altimeterInHg: '0' }).paFt, { ok: false, fields: ['altimeterInHg'] });
+});
+
+test('deriveInputs: a derived value that overflows (slope from two huge elevations) names all its fields', () => {
+  const huge = '1' + '0'.repeat(308);
+  const d = deriveInputs({ ...valid, nearElevFt: `-${huge}`, farElevFt: huge });
+  assert.deepEqual(d.slopePct, { ok: false, fields: ['nearElevFt', 'farElevFt', 'lengthFt'] });
+  assert.ok(d.paFt.ok, 'pressure altitude from the near elevation alone stays finite');
+  assert.ok(Number.isFinite(d.paFt.value));
+});
+
+test('deriveInputs: 400 nines of takeoff weight fail takeoffGwLb, naming it', () => {
+  assert.deepEqual(deriveInputs({ ...valid, takeoffGwLb: '9'.repeat(400) }).takeoffGwLb, {
+    ok: false,
+    fields: ['takeoffGwLb'],
+  });
 });
 
 test('deriveInputs names every failing field a derived value needs', () => {
