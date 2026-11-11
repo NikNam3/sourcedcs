@@ -5,20 +5,15 @@
  */
 import type { Ctx } from '../ctx.ts';
 import type { FigureFile } from '../data/types.ts';
-import { ok } from '../result.ts';
 import type { Read } from '../result.ts';
 
-import { refusalSpeed } from './refusal-speed.ts';
+import { decreased, refusalSpeed } from './refusal-speed.ts';
 import type { RefusalInputs } from './refusal-speed.ts';
 
 /** "FOR RCR=16 (DRY) DECREASE REFUSAL SPEED BY 5 KIAS FOR ALL GW'S." (sheet 1). */
 const RCR16_DECREMENT_KT = 5;
 /** "FOR RCR=12 (WET) DECREASE REFUSAL SPEED BY 10 KIAS FOR ALL GW'S." (sheet 2). */
 const RCR12_DECREMENT_KT = 10;
-
-function decreased(read: Read<number>, kt: number): Read<number> {
-  return read.ok ? ok(read.value - kt) : read;
-}
 
 /** Sheet 1 (`B2-6.sh1`): ids `b2-6.sh1.runway`, `.wind`, `.slope`; RCR 16 is RCR 23 - 5 KIAS. */
 export function refusalAbDry(
