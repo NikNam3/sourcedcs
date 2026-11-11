@@ -136,3 +136,36 @@ for (const mode of ['mil', 'ab'] as const) {
     });
   });
 }
+
+describe('refusal speed by RCR, a sheet out of chart', () => {
+  const sheet = (id: string) => figures[id] ?? assert.fail(`no ${id}`);
+  // MAX AB, runway 9,000 ft: sheet 1's speed leaves the top of its wind panel (186 KIAS); sheet 2 is in chart.
+  const long: RefusalInputs = { ...SAMPLE_AB, runwayFt: 9000 };
+  // MAX AB, takeoff factor 4.5: past every sheet's GW curves.
+  const hot: RefusalInputs = { ...SAMPLE_AB, takeoffFactor: 4.5 };
+  const read = (surface: 'dry' | 'wet', rcr: number, i: RefusalInputs) =>
+    exactOf((ctx) => ({ kias: refusalByRcr(ctx, figures, 'ab', surface, rcr, i) }));
+
+  test("a printed RCR returns its sheet's OutOfChart, and the result id is not read", () => {
+    const sh1 = exactOf((ctx) => refusalAbDry(ctx, sheet('B2-6.sh1'), long));
+    const dry16 = read('dry', 16, long);
+    assert.ok(!sh1.outputs.rcr16Kias.ok);
+    assert.deepEqual(dry16.outputs.kias, sh1.outputs.rcr16Kias);
+    assert.deepEqual(dry16.trace, sh1.trace);
+    assert.ok(!dry16.trace.some((t) => t.id === 'b2-6.dry'));
+
+    const sh2 = exactOf((ctx) => refusalAbWet(ctx, sheet('B2-6.sh2'), hot));
+    const wet12 = read('wet', 12, hot);
+    assert.ok(!sh2.outputs.rcr12Kias.ok);
+    assert.deepEqual(wet12.outputs.kias, sh2.outputs.rcr12Kias);
+    assert.deepEqual(wet12.trace, []);
+  });
+
+  test('in a bracket, the higher sheet out of chart stops the read: no sheet 3 id, no result id', () => {
+    const sh1 = exactOf((ctx) => refusalAbDry(ctx, sheet('B2-6.sh1'), long));
+    const dry12 = read('dry', 12, long);
+    assert.deepEqual(dry12.outputs.kias, sh1.outputs.rcr16Kias);
+    assert.deepEqual(dry12.trace, sh1.trace);
+    assert.ok(!dry12.trace.some((t) => t.id.includes('.sh3.') || t.id === 'b2-6.dry'));
+  });
+});
