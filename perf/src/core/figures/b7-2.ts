@@ -35,7 +35,7 @@ const LIMIT_PANELS: Readonly<Record<keyof LimitVerdicts, string>> = Object.freez
  * temperature panel to the gross weight panel as is, never through `ctx.read`: a pilot does not read or round a line
  * carried across.
  *
- * - An altitude or temperature the temperature lines do not draw: OutOfChart on `altitude` or `temperature`.
+ * - An altitude or temperature the temperature lines do not draw: OutOfChart on `pressure_altitude` or `temperature`.
  * - A gross weight outside the curves: OutOfChart on `gross_weight`.
  * - A carried position the gross weight curves do not reach (hot and high: 8,000 ft at 50 C): OutOfChart on
  *   `temperature` with no drawn range, since the pilot's inputs have no single range there; never on the unscaled

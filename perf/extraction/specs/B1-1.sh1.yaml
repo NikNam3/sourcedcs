@@ -3,6 +3,8 @@
 # rules (read from the page drawings with a scratch script, not kept).
 # The expendables table is split in two: its JP-8 brace label sits in the fuel rows at x 208-227,
 # where the gun ammo rows have text (AMMO/CASINGS), so the fuel part gets a `note` column.
+# The weight tables' columns are f16c and f16d in lb; the drag index table's are drag_index_f16c and
+# drag_index_f16d, dimensionless, so one name keeps one unit across every figure (TOLD 1.7 ruling 3).
 id: B1-1.sh1
 figure: B1-1
 sheet: 1
@@ -34,8 +36,8 @@ panels:
     key: [item]
     columns:
       - {name: item, unit: "", x: [54.5, 402.7]}
-      - {name: f16c, unit: "", x: [403.4, 480.6], pattern: '^\d+(/\d+)?\*{0,2}$'}
-      - {name: f16d, unit: "", x: [481.3, 558.5], pattern: '^\d+(/\d+)?\*{0,2}$'}
+      - {name: drag_index_f16c, unit: "", x: [403.4, 480.6], pattern: '^\d+(/\d+)?\*{0,2}$'}
+      - {name: drag_index_f16d, unit: "", x: [481.3, 558.5], pattern: '^\d+(/\d+)?\*{0,2}$'}
   - id: fuel
     type: table
     clip: [53.8, 350.8, 559.2, 465.0]
