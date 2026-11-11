@@ -5,6 +5,10 @@
 // this client transmits on a radio, packets for that radio are not played (a set that is transmitting does not
 // receive); the other radios keep playing. A sender silent for RX_TIMEOUT_MS has ended: its end tone plays and its
 // decoder is freed, as lxsrs_v2's _run_rx_monitor.
+//
+// A sender is the speaker, `originalGuid`, not the client that forwarded the packet: crc-sync's relay re-sends a pilot
+// under its own `guid` with the pilot's `originalGuid` and packet numbers, and the local server's dedupe passes whichever
+// copy came first. Keyed by the forwarder, one late direct packet started a second sender and its end tone 450 ms later.
 
 import { RX_TIMEOUT_MS, SAMPLE_RATE } from './radio-audio-constants.js';
 import { createPlayoutSchedule } from './playout-schedule.js';
@@ -41,13 +45,14 @@ export function createRxPath(o) {
   }
 
   return {
-    /** @param {{radioIds:string[], guid:string, packetNumber:number}} header @param {Uint8Array} opus */
+    /** @param {{radioIds:string[], guid:string, originalGuid?:string, packetNumber:number}} header @param {Uint8Array} opus */
     receive(header, opus) {
+      const speaker = header.originalGuid || header.guid;
       const ids = header.radioIds || [];
       activity.heard(ids, nowMs());
       const tx = o.txRadioIds();
       if (ids.some(id => tx.has(id))) return;
-      let s = senders.get(header.guid);
+      let s = senders.get(speaker);
       if (!s) {
         const radioId = o.mixer.pick(ids);
         if (!radioId) return;
@@ -57,7 +62,7 @@ export function createRxPath(o) {
           const at = schedule.place(n, pcm.length / SAMPLE_RATE, o.ctx.currentTime);
           if (at !== null) o.mixer.play(s.radioId, pcm, at);
         });
-        senders.set(header.guid, s);
+        senders.set(speaker, s);
         o.effects.tone(o.mixer.input(radioId), o.options().soundSet, 'start');
         updateNoise();
       }

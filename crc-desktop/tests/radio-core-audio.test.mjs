@@ -152,6 +152,32 @@ test('RX: lamps for every matched radio, played once through the loudest unmuted
   assert.ok(rx.rxRadioIds().includes('C'));
 });
 
+test('RX: a pilot heard direct and through crc-sync\'s relay is one transmission (one decoder, no mid-call end tone)', () => {
+  // The local server's dedupe passes the first copy of each (originalGuid, packetNumber): mostly the pilot's own
+  // packet, now and then the relay's (guid = the relay) when the direct one is late or lost. Keyed by the forwarder,
+  // that one relay packet started a second sender, whose end tone played 450 ms later while the pilot kept talking.
+  const fx = fakeEffects();
+  const mixer = { pick: (ids) => ids[0], input: (id) => `in:${id}`, play() {} };
+  let now = 0;
+  const decoders = [];
+  const rx = createRxPath({
+    ctx: { currentTime: 10 }, mixer, effects: fx, options: () => ({ soundSet: 'S', noise: true }), modulationOf: () => 'AM',
+    txRadioIds: () => new Set(), nowMs: () => now,
+    createDecoder: (onPcm) => { const d = { closed: false, numbers: [], decode: (opus, n) => d.numbers.push(n), close() { d.closed = true; } }; decoders.push(d); return d; },
+  });
+  for (let n = 1; n <= 40; n++) {
+    now = n * 40;
+    const viaRelay = n === 10;
+    rx.receive({ radioIds: [viaRelay ? 'B' : 'A'], guid: viaRelay ? 'RELAY' : 'PILOT', originalGuid: 'PILOT', packetNumber: n }, new Uint8Array([1]));
+    rx.tick();
+  }
+  assert.equal(decoders.length, 1, 'one decoder for the pilot');
+  assert.deepEqual(decoders[0].numbers, Array.from({ length: 40 }, (_, i) => i + 1), 'every packet in one stream');
+  assert.deepEqual(fx.calls.filter(c => c[0] === 'tone').map(c => c[3]), ['start'], 'no end tone while the pilot talks');
+  now = 40 * 40 + 500; rx.tick();
+  assert.deepEqual(fx.calls.filter(c => c[0] === 'tone').map(c => c[3]), ['start', 'end']);
+});
+
 test('the /srs socket parses text and frames, says hello on every open, and reconnects', () => {
   const made = [], waits = [];
   class WS { constructor(url) { this.url = url; this.readyState = 0; this.out = []; made.push(this); } send(d) { this.out.push(d); } close() { this.readyState = 3; this.onclose(); } }

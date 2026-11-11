@@ -18,6 +18,14 @@
    frame header), or end a sender only after the queued frames are handled; check with a long-task trace first.
    Still seen after the volume and layout fixes (the human, 2026-11-10 evening: "incoming audio still sometimes cuts
    off"), so it is not caused by the band-pass or the mixer.
+   **2026-11-11: one cause found and fixed, not yet field-checked.** `rx-path.js` keyed a sender by the packet's
+   `guid`, the client that forwarded it. crc-sync's relay re-sends a pilot under its own `guid` with the pilot's
+   `originalGuid` and packet number, and the local server's dedupe (`srs/rx-dedupe.js`) passes the first copy. So when
+   one direct packet was late or lost, the relay's copy got through, started a second sender (start tone, its own
+   decoder) and ended it 450 ms later with the end tone and its noise off, while the pilot kept talking. Senders are
+   now keyed by `originalGuid` (test: "a pilot heard direct and through crc-sync's relay is one transmission").
+   This only happens with the relay, on a controller tuned to two frequencies of one network. If the cut-off is still
+   heard **without** the relay, the main-thread stall hypothesis above is still open: take a long-task trace then.
 2. **The controller cuts out for pilots now and then** (TX). Suspect the same main-thread stalls bunching the frames
    sent; measure the send spacing at the local server before changing anything.
 3. **A pilot tuned to two frequencies of one network hears themselves, and everyone else double.** Read in the SRS source
