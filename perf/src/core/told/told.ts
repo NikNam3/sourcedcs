@@ -65,6 +65,7 @@ function takeoffColumn(
   mode: Mode,
 ): ToldColumn<TakeoffKey, TakeoffSide> {
   const fields = [...missingFields(derived, TAKEOFF_FIELDS), ...extra];
+  // A drag index that is not ok is already in `fields` as 'loadout'; `!drag.ok` is kept to narrow its type.
   if (fields.length > 0 || !drag.ok) return unparsedColumn(TAKEOFF_KINDS, fields);
   const runwayFt = valueOf(derived.runwayFt);
   const values = {

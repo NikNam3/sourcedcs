@@ -199,6 +199,14 @@ Pillow from `flake.nix` for Task 1's re-extraction).
   `'loadout'` or `'additionalDragIndex'`; landing is unaffected.
 - **The `ctx` timing test bound is 200 ms, not 20** (close-out): it failed once under the full suite with coverage,
   very likely the plan 1 flake.
+- **Landing PA below sea level** (final review): B7-2 sheet 1 draws PA from 0 ft, so PA is an `input` with the
+  conservative value `max(pa, 0)`: the exact cell stays the honest OutOfChart, the conservative one is not lost to a
+  field a few feet below sea level.
+- **Calm wind `000/00` parses** (final review): it is how calm is written; 000 with any speed or gust stays refused.
+- **A default suspension tie takes the highest drag index, then sheet 2 order** (final review, replaces "first in
+  sheet 2 order"): an untouched choice should not understate the drag (tip AIM-9: LAU-129/A, DI 1).
+- **A multiple-carriage rack (capacity over 1) at 3/7 gives the MULTIPLE wing tank variant** (final review): the
+  printed "SINGLE RACKS OR STORES" names single racks, so a TER or LAU-88 with one store is not single.
 
 ---
 

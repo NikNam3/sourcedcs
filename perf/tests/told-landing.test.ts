@@ -115,6 +115,29 @@ describe('landing chain', () => {
     valueOf(cells.touchdown.conservative);
   });
 
+  test('PA below sea level: exact OutOfChart on sheet 1 pressure_altitude, conservative read at 0 ft', () => {
+    for (const surface of ['dry', 'wet'] as const) {
+      const values = { ...SAMPLE, paFt: -181, rcr: surface === 'dry' ? 16 : 12 };
+      const chain = landingChain(FIGURES, values, surface);
+      const { cells, roundingPoints } = evaluate(chain, LANDING_KINDS);
+      const exact = cells.distance.exact;
+      assert.ok(!exact.ok, surface);
+      assert.equal(exact.error.figure, 'B7-2.sh1');
+      assert.equal(exact.error.input, 'pressure_altitude');
+      const atZero = evaluate(landingChain(FIGURES, { ...values, paFt: 0 }, surface), LANDING_KINDS).cells;
+      assert.equal(valueOf(cells.distance.conservative), valueOf(atZero.distance.conservative), surface);
+      assert.ok(roundingPoints.includes('input.pa'));
+      valueOf(cells.finalApproach.exact);
+    }
+  });
+
+  test('PA just below sea level (−6 ft): conservative computed, not rounded down to −100', () => {
+    const { cells } = evaluate(landingChain(FIGURES, { ...SAMPLE, paFt: -6 }, 'dry'), LANDING_KINDS);
+    // −6 ft is within sheet 1's edge tolerance, so the exact cell computes; before the ruling the conservative run
+    // rounded it down to −100 ft and gave "—".
+    assert.ok(valueOf(cells.distance.conservative) >= valueOf(cells.distance.exact));
+  });
+
   test('an uncorrected roll out of chart stops the distance and gives no limits', () => {
     const { cells } = evaluate(landingChain(FIGURES, { ...SAMPLE, paFt: 8000, tempC: 50 }, 'dry'), LANDING_KINDS);
     assert.ok(!cells.distance.exact.ok);

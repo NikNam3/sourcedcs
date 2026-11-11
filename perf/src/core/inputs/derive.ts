@@ -71,6 +71,14 @@ function single<T>(part: Parsed<T>): Derived<T> {
   return part.parsed.ok ? part.parsed : notOk(part);
 }
 
+/**
+ * A value computed from parsed parts. One that is not finite (finite inputs can still overflow, a slope from two
+ * huge elevations) does not compute either: it names every one of `parts`, since each parsed.
+ */
+function computed(value: number, ...parts: readonly Parsed<unknown>[]): Derived<number> {
+  return Number.isFinite(value) ? { ok: true, value } : { ok: false, fields: parts.map((part) => part.field) };
+}
+
 export function deriveInputs(inputs: Inputs): DerivedInputs {
   const length = numberField(inputs, 'lengthFt', (ft) => ft > 0);
   const heading = numberField(inputs, 'headingDeg', (deg) => deg >= 1 && deg <= 360);
@@ -88,17 +96,18 @@ export function deriveInputs(inputs: Inputs): DerivedInputs {
   const components = w.ok && h.ok ? windComponents(w.value, h.value) : null;
 
   return {
-    paFt: n.ok && a.ok ? { ok: true, value: pressureAltitudeFt(n.value, a.value) } : notOk(nearElev, altimeter),
+    paFt:
+      n.ok && a.ok ? computed(pressureAltitudeFt(n.value, a.value), nearElev, altimeter) : notOk(nearElev, altimeter),
     tempC: single(numberField(inputs, 'tempC')),
     takeoffGwLb: single(numberField(inputs, 'takeoffGwLb')),
     landingGwLb: single(numberField(inputs, 'landingGwLb')),
     cgPct: single(numberField(inputs, 'cgPct')),
-    headwindKt: components === null ? notOk(wind, heading) : { ok: true, value: components.headwindKt },
-    crosswindKt: components === null ? notOk(wind, heading) : { ok: true, value: components.crosswindKt },
+    headwindKt: components === null ? notOk(wind, heading) : computed(components.headwindKt, wind, heading),
+    crosswindKt: components === null ? notOk(wind, heading) : computed(components.crosswindKt, wind, heading),
     gustKt: w.ok ? { ok: true, value: w.value.gustKt } : notOk(wind),
     slopePct:
       n.ok && f.ok && l.ok
-        ? { ok: true, value: slopePercent(n.value, f.value, l.value) }
+        ? computed(slopePercent(n.value, f.value, l.value), nearElev, farElev, length)
         : notOk(nearElev, farElev, length),
     runwayFt: single(length),
     rcrDry: single(numberField(inputs, 'rcrDry')),

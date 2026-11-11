@@ -165,7 +165,8 @@ export function panelQuantities(panel: Panel): Quantity[] {
 
 /**
  * One name, one unit across every figure of a dataset (TOLD 1.7 ruling 3): one problem per name with more than one
- * unit, listing each unit with the figures that use it.
+ * unit, listing each unit with the figures that use it. It runs per dataset, one aircraft folder at a time: two
+ * datasets may use one name in different units.
  */
 function quantityUnitProblems(figures: readonly FigureFile[]): string[] {
   const units = new Map<string, Map<string, Set<string>>>();

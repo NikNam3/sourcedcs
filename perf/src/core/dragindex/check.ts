@@ -9,7 +9,8 @@ export interface LoadoutProblem {
   /** The row's index in the loadout. */
   readonly row: number;
   readonly code:
-    | 'stationTwice' // a station already in an earlier row
+    | 'noStations' // the row names no station
+    | 'stationTwice' // a station already in an earlier row, or twice in this one
     | 'badCount' // not a whole number from 1
     | 'unknownStore' // no Fig. B1-1 store has this key
     | 'storeOffStations' // the store is not allowed on every one of the row's stations
@@ -40,8 +41,16 @@ export function checkLoadout(cat: Catalogue, loadout: Loadout): readonly Loadout
   const problems: LoadoutProblem[] = [];
   const seen = new Set<Station>();
   loadout.forEach((row, index) => {
-    if (row.stations.some((s) => seen.has(s))) problems.push({ row: index, code: 'stationTwice' });
-    for (const s of row.stations) seen.add(s);
+    if (row.stations.length === 0) {
+      problems.push({ row: index, code: 'noStations' });
+      return;
+    }
+    let twice = false;
+    for (const s of row.stations) {
+      if (seen.has(s)) twice = true;
+      seen.add(s);
+    }
+    if (twice) problems.push({ row: index, code: 'stationTwice' });
     if (row.storeKey === null) return;
     const code = rowProblem(cat, row);
     if (code !== null) problems.push({ row: index, code });

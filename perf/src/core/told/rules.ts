@@ -14,6 +14,10 @@ import type { TakeoffSide } from './takeoff.ts';
 
 export type RuleId = 'mil-roll-50' | 'takeoff-roll-80' | 'landing-roll-80' | 'landing-rcr-10' | 'b7-2-limit';
 
+/**
+ * A rule hit on a cell. A `Told.rcrMarks` entry marks an input, not a cell: there `cell: 'exact'` only fills the
+ * field and `field` names the input.
+ */
 export interface RuleMark {
   readonly rule: RuleId;
   readonly paragraph: string;

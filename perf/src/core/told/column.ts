@@ -24,7 +24,10 @@ export interface Reason {
 export interface ToldColumn<K extends string, S> {
   readonly cells: Readonly<Record<K, ToldCell<S>>>;
   readonly trace: Evaluation<K, S>['trace'];
-  /** One per distinct (figure, input, value, drawn range, cell), in cell order, exact before conservative. */
+  /**
+   * One per distinct (figure, input, value, drawn range, cell), in cell order, exact before conservative. A cell
+   * rejected outright (its conservative value is the exact error itself) gives only its exact reason.
+   */
   readonly reasons: readonly Reason[];
 }
 
@@ -43,6 +46,8 @@ export function reasonsOf<K extends string, S>(cells: Readonly<Record<K, Cell<S>
     for (const which of ['exact', 'conservative'] as const) {
       const read = cells[k][which];
       if (read.ok) continue;
+      // A cell rejected outright carries the exact error as its conservative value (`cellOf`): one reason, exact.
+      if (which === 'conservative' && read === cells[k].exact) continue;
       const reason = { cell: which, error: read.error };
       const key = reasonKey(reason);
       if (seen.has(key)) continue;

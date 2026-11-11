@@ -53,7 +53,11 @@ interface Resolved {
   readonly notes: readonly string[];
 }
 
-/** The suspension untouched: the smallest that carries the count; with none big enough, the biggest. */
+/**
+ * The suspension untouched: the smallest that carries the count; with none big enough, the biggest. On a capacity
+ * tie, the highest drag index, then the first in sheet 2 order (supervisor ruling: an untouched choice never
+ * understates the drag; a tip AIM-9 defaults to the LAU-129/A, DI 1, not the AIM-9 LAUNCHER (16S210), DI 0).
+ */
 function defaultSuspension(
   candidates: readonly SuspensionRow[],
   count: number,
@@ -63,8 +67,9 @@ function defaultSuspension(
   const pool = carrying.length > 0 ? carrying : candidates;
   const sizes = pool.map((c) => capacity(c.name));
   const size = carrying.length > 0 ? Math.min(...sizes) : Math.max(...sizes);
-  // On a tie, the first in sheet 2 order (questioner Q3).
-  return pool.find((c) => capacity(c.name) === size) ?? null;
+  const tied = pool.filter((c) => capacity(c.name) === size);
+  const highest = Math.max(...tied.map((c) => c.drag.subsonic));
+  return tied.find((c) => c.drag.subsonic === highest) ?? null;
 }
 
 function resolve(cat: Catalogue, row: LoadoutRow): Resolved {
@@ -101,22 +106,24 @@ function neighbours(resolved: readonly Resolved[]): Map<Station, Neighbour> {
   for (const r of resolved) {
     const perStation = Math.ceil(r.count / r.row.stations.length);
     const aim9 = r.store !== null && isAim9(r.store);
-    for (const s of r.loaded) map.set(s, { loaded: true, aim9, perStation });
+    const multipleRack = r.suspension !== null && capacity(r.suspension.name) > 1;
+    for (const s of r.loaded) map.set(s, { loaded: true, aim9, perStation, multipleRack });
   }
   return map;
 }
 
-const NOTHING: Neighbour = { loaded: false, aim9: false, perStation: 0 };
-const INBOARD: Partial<Record<Station, Station>> = { '4': '3', '6': '7' };
+const NOTHING: Neighbour = { loaded: false, aim9: false, perStation: 0, multipleRack: false };
+/** The station a wing tank's variant looks at: the printed "AT 3 OR 7" (3 and 7 are outboard of 4 and 6). */
+const TANK_NEIGHBOUR: Partial<Record<Station, Station>> = { '4': '3', '6': '7' };
 
 function tankConditionAt(
   station: Station,
   at: Map<Station, Neighbour>,
 ): { condition: TankCondition; note: string | null } {
   if (station === '5') return centrelineCondition(at.get('4') ?? NOTHING, at.get('6') ?? NOTHING);
-  const inboard = INBOARD[station];
-  if (inboard === undefined) throw new Error(`a tank at station ${station} has no printed variant`);
-  return { condition: wingCondition(at.get(inboard) ?? NOTHING), note: null };
+  const neighbour = TANK_NEIGHBOUR[station];
+  if (neighbour === undefined) throw new Error(`a tank at station ${station} has no printed variant`);
+  return { condition: wingCondition(at.get(neighbour) ?? NOTHING), note: null };
 }
 
 function line(

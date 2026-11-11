@@ -677,7 +677,7 @@ heavyweight takeoff GW.
 - `inputs.ts`: the `Inputs` type (every field as typed, the additional drag index among them) and the defaults (CG
   35 % MAC, RCR dry 23, RCR wet 18). The loadout is not in `Inputs`; it is passed beside them.
 - `parse.ts`: each field to a number or "does not parse" (`parseNumber`, `parseWind`). Only syntax and physical
-  limits: wind `ddd/ss` with optional `Gss`, direction 1 to 360 (calm is typed `360/00`), gust not below the steady
+  limits: wind `ddd/ss` with optional `Gss`, direction 1 to 360 (calm is `000/00` or `360/00`; 000 only as calm), gust not below the steady
   wind. The other physical limits (length above 0, heading 1 to 360, altimeter above 0) are applied in
   `deriveInputs`. Every other range is the charts'. Each chain declares the fields it needs; a field that does not
   parse marks that chain's cells as unparsed (plan 3: "—" and the dotted underline), and the other chains still
@@ -709,7 +709,7 @@ check the exact and the conservative cell separately; "over" is strictly greater
 tagged `exact` or `conservative`; `computeTold` keeps one per distinct reason per table, and plan 3 formats the
 sentence from the panel's quantity name and unit (ruling 3).
 
-**`told/told.ts`.** `computeTold(figures, inputs, loadout)` parses and derives the inputs, builds the drag index,
+**`told/told.ts`.** `computeTold(figures, inputs, loadout)` (the loadout passed beside the inputs) parses and derives the inputs, builds the drag index,
 runs the six evaluations and the rules, and returns a `Told`: the drag index, per column (`told/column.ts`) its cells
 (with side data and rule marks), reasons and the exact trace (for plan 3's figure view), and `rcrMarks`. Figure data
 is passed in as a `FigureSet` keyed by figure id (`data/figure-set.ts`); `src/web/` stays the only code that fetches.
@@ -729,9 +729,9 @@ on `'loadout'` or `'additionalDragIndex'`; landing is unaffected.
   item the table names is a sheet 2 row; a new store with a new rack fails loudly.
 - `loadout.ts`: a loadout (one row per station pair or split station: store, suspension, count; plus the additional
   drag index) to `{ exact, conservative }`. Basic aircraft; tip AIM-9 0 (note *), tip pod 2 less than the missile
-  (note **), no tip missile −4 exact and 0 conservative; tank variant from the store inboard (none, AIM-9s, single
-  or multiple at 3/7; the centreline tank from 4 and 6); the suspension defaults to the smallest that carries the
-  count, and the count is capped by capacity. Golden test: the Part 1 worked example gives 146.
+  (note **), no tip missile −4 exact and 0 conservative; tank variant from the store at 3/7 (none, AIM-9s, single
+  or multiple; a TER or LAU-88 there is multiple; the centreline tank from 4 and 6); the suspension defaults to the
+  smallest that carries the count (a tie: the highest drag index, then sheet 2 order), and the count is capped by capacity. Golden test: the Part 1 worked example gives 146.
 - As built: `dragIndex(cat, loadout, additional)` returns `{ ok: true, exact, conservative, lines }` or
   `{ ok: false, problems }` from `checkLoadout` (`check.ts`); it never throws for a loadout, which is user input that
   plan 3 restores from the URL and localStorage (a throw is a data defect). The tip rules are in `tip.ts` (Extra 1:
@@ -805,23 +805,26 @@ Notes carried from plan 2 (12 Nov 2026). For the Limitations page:
   cells are computed at the conservative drag index (never below 0).
 - **300-gallon tank with only one of 4 and 6 loaded** uses the "STORES AT 4 AND 6" value, 18 (Extra 2; printed
   nowhere, the safer value).
-- **An odd count on a pair inboard of a wing tank** (3 stores on 3/7) gives the MULTIPLE variant on both tanks: the
+- **An odd count on the pair beside a wing tank** (3 stores on 3/7) gives the MULTIPLE variant on both tanks: the
   row does not say which side carries the extra store.
-- **CATM-9 and the other training rounds count as single stores inboard**, not as AIM-9s (the higher tank value).
+- **CATM-9 and the other training rounds count as single stores at 3/7**, not as AIM-9s (the higher tank value).
 - **The acceleration check distance is per cell:** the exact and the conservative cell can use 1,000 and 2,000 ft,
   with a large speed jump between them (106 against 147 KIAS at 33,700 lb in a Task 5 test). Each cell shows its own.
+- **PA below sea level** (supervisor ruling): B7-2 sheet 1 draws pressure altitude from 0 ft, so the exact landing
+  distance shows "—" and the conservative one is read at 0 ft.
+- **Calm wind `000/00` is accepted** (ruling): direction 000 parses only with speed 0 and no gust.
+- **A default suspension tie takes the highest drag index**, then sheet 2 order (ruling): tip AIM-9s untouched sit on
+  the LAU-129/A, DI 1, not the AIM-9 LAUNCHER (16S210), DI 0.
+- **A multiple-carriage rack at 3/7 gives the MULTIPLE wing tank variant** (ruling): a TER or LAU-88 there counts as
+  multiple even with one store per station.
 
 For plan 3 (UI and state), from the deferred minors:
 
-- Calm wind is typed `360/00`; `000/00` does not parse. The field needs a hint or placeholder.
 - The physical limits (length, heading, altimeter) live in `deriveInputs`, so the UI must not validate a field with
   `parseNumber` alone.
 - `Told.dragIndex` leaves out an additional drag index that does not parse; do not show its total as the aircraft's
   then.
 - `landing-rcr-10` is in `rcrMarks` and on the landing distance cells; show it once.
-- A cell rejected outright gives two identical reasons (tagged `exact` and `conservative`); show one.
-- `checkLoadout` does not catch a loadout row with no stations or a station repeated in one row (`['3', '3']`); a
-  loadout restored from the URL or localStorage could hold one.
 - A limit verdict `true` marks a landing distance cell even when that cell shows "—" (sheet 1 judged, sheet 2 out
   of chart).
 

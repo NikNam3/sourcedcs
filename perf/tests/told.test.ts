@@ -12,6 +12,11 @@ import type { StoreRow } from '../src/core/dragindex/catalogue.ts';
 import type { Loadout, LoadoutRow } from '../src/core/dragindex/loadout.ts';
 import { DEFAULT_INPUTS } from '../src/core/inputs/inputs.ts';
 import type { Inputs } from '../src/core/inputs/inputs.ts';
+import type { Cell } from '../src/core/ctx.ts';
+import { outOfChart } from '../src/core/result.ts';
+import type { Read } from '../src/core/result.ts';
+import { reasonsOf } from '../src/core/told/column.ts';
+import type { LandingKey, LandingSide } from '../src/core/told/landing.ts';
 import { computeTold } from '../src/core/told/told.ts';
 import type { Told, ToldColumn, ToldCell } from '../src/core/told/told.ts';
 
@@ -73,6 +78,15 @@ function columns(told: Told): [string, AnyColumn][] {
   ];
 }
 
+function landingColumns(told: Told): [string, ToldColumn<LandingKey, LandingSide>][] {
+  return [
+    ['landing.normal.dry', told.landing.normal.dry],
+    ['landing.normal.wet', told.landing.normal.wet],
+    ['landing.heavy.dry', told.landing.heavy.dry],
+    ['landing.heavy.wet', told.landing.heavy.wet],
+  ];
+}
+
 const cellsOf = (column: AnyColumn): ToldCell<unknown>[] => Object.values(column.cells);
 
 function assertComputed(name: string, column: AnyColumn): void {
@@ -124,6 +138,45 @@ describe('computeTold', () => {
     for (const [name, column] of columns(told)) {
       if (name.startsWith('landing.normal')) assertUnparsed(name, column, ['landingGwLb']);
       else assertComputed(name, column);
+    }
+  });
+
+  test('user input never throws: takeoff GW of 400 nines → the chains needing takeoffGwLb unparsed', () => {
+    const told = computeTold(FIGURES, { ...FIELD, takeoffGwLb: '9'.repeat(400) }, WORKED_EXAMPLE);
+    for (const [name, column] of columns(told)) {
+      if (name.startsWith('takeoff') || name.startsWith('landing.heavy')) assertUnparsed(name, column, ['takeoffGwLb']);
+      else assertComputed(name, column);
+    }
+  });
+
+  test('PA below sea level (30 ft, 30.15 inHg, PA ≈ −181): every landing distance exact "—", conservative computed', () => {
+    const told = computeTold(
+      FIGURES,
+      { ...FIELD, nearElevFt: '30', farElevFt: '77', altimeterInHg: '30.15' },
+      WORKED_EXAMPLE,
+    );
+    for (const [name, column] of landingColumns(told)) {
+      const distance = column.cells.distance;
+      assert.ok(distance.kind === 'computed', name);
+      const { exact, conservative } = distance.cell;
+      assert.ok(!exact.ok, `${name}: exact OutOfChart`);
+      assert.equal(exact.error.figure, 'B7-2.sh1');
+      assert.equal(exact.error.input, 'pressure_altitude');
+      assert.ok(conservative.ok && conservative.value > 0, `${name}: conservative computed`);
+      assert.ok(column.reasons.some((r) => r.cell === 'exact' && r.error.input === 'pressure_altitude'));
+      assert.ok(!column.reasons.some((r) => r.cell === 'conservative'), `${name}: no conservative reason`);
+    }
+  });
+
+  test('PA ≈ −6 ft (30 ft, 29.96 inHg): every landing distance conservative computed', () => {
+    const told = computeTold(
+      FIGURES,
+      { ...FIELD, nearElevFt: '30', farElevFt: '77', altimeterInHg: '29.96' },
+      WORKED_EXAMPLE,
+    );
+    for (const [name, column] of landingColumns(told)) {
+      const distance = column.cells.distance;
+      assert.ok(distance.kind === 'computed' && distance.cell.conservative.ok, `${name}: conservative computed`);
     }
   });
 
@@ -198,9 +251,34 @@ describe('computeTold', () => {
     assert.equal(new Set(keys).size, keys.length, 'no duplicate reason');
     assert.deepEqual(
       mil.reasons.map((r) => [r.cell, r.error.figure, r.error.input]),
+      [['exact', 'B2-1', 'temperature']],
+      'a cell rejected outright gives its exact reason only',
+    );
+  });
+
+  test('reasonsOf: a conservative error of its own gives a conservative reason; the exact error itself does not', () => {
+    const exactError = outOfChart('B2-1', 'temperature', 70, [-30, 60]);
+    const ownError = outOfChart('B2-1', 'temperature', 61, [-30, 60]);
+    const cell = (exact: Read<number>, conservative: Read<number>): Cell => ({
+      exact,
+      conservative,
+      exactSide: null,
+      conservativeSide: null,
+    });
+    const reasons = reasonsOf(
+      {
+        rejected: cell(exactError, exactError),
+        stepOut: cell({ ok: true, value: 1000 }, ownError),
+        sameText: cell(exactError, structuredClone(exactError)),
+      },
+      ['rejected', 'stepOut', 'sameText'],
+    );
+    assert.deepEqual(
+      reasons.map((r) => [r.cell, r.error.value]),
       [
-        ['exact', 'B2-1', 'temperature'],
-        ['conservative', 'B2-1', 'temperature'],
+        ['exact', 70],
+        ['conservative', 61],
+        ['conservative', 70],
       ],
     );
   });
