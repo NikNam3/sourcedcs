@@ -81,6 +81,111 @@ Pillow from `flake.nix` for Task 1's re-extraction).
 - **Q4: the worked example's lines.** Read p254–255 and give the per-station drag index lines that sum to 142, so
   Task 4's golden test checks each line, not only the total.
 
+## Questioner rulings (2026-11-11)
+
+- **Q1, negative exact drag index: take the default, implemented in `ctx.ts`, not in the chain.** The rule is
+  general: *an exact error rejects the whole cell only when the baseline run (every `input` at its conservative
+  value, nothing rounded) errors too; when the baseline is in chart, the exact cell is the exact `OutOfChart` and the
+  conservative cell is searched and decided as usual.* With single-valued inputs the baseline is the exact pass, so
+  this changes nothing else. A negative exact drag index comes only from removed tip missiles (−4 each exact, 0
+  conservative), so the conservative drag index is never below 0 (lowest: two tip pods on 16S210, 4 − 2 − 2 = 0).
+  Only `distance` and `accelCheck` are affected (B2-3 and B2-4 `di`); rotation, takeoff speed and both refusal speeds
+  do not read the drag index and stay computed. The reason line is the exact pass's `OutOfChart` on `drag_index`
+  (value −4, the panel's drawn range), tagged `exact`. This is an exception to 5.2's "if the exact value itself is
+  out of chart, the whole cell is rejected": Task 8 adds it to 5.2 and to the Limitations page. Task 5 may change
+  `cellOf` in `ctx.ts`, and pins the rule there with a synthetic two-valued chain as well as with the takeoff chain
+  (Review Focus 3: clean, no tip missiles, exact `OutOfChart` on `drag_index` at −4, conservative computed at DI 4).
+  Do not read a negative drag index at 0 in the exact cell: that would be a reading at a drag index the aircraft
+  does not have, labelled exact.
+- **Q2, input-axis ends: take the default, plus one amendment: the baseline.** In a guideline panel an end within
+  the tolerance of the panel's **baseline** also keeps the tolerance. Without it the default drops two lines that
+  their own data draws to the baseline, both read by the manual's own samples: B2-3 `cg` line 11 starts at 35.003
+  (baseline 35, distance 12.0 there) and B2-4 `gw` line 0 ends at 42.9999 (baseline 43, 40 KIAS there). The samples
+  still pass without them, but B2-3 entries between 11.0 and 12.0 (×1000 ft) at any CG other than 35, and B2-4
+  entries between 40 and 50 KIAS at any GW other than 43, would become `OutOfChart` on the output. The existing
+  test "a line drawn a hair short of the baseline is usable within the tolerance (R1)" stays as it is. The existing
+  test "the tolerance is taken from the union of all curves, not the bracketing pair" (the param 2 curve stopping at
+  5 inside a 0 to 10 span, read at 5.01) *must* flip to `OutOfChart`: that is ruling 4 working, not a regression.
+  The guideline span is per family (as the default says), which replaces R1's "all families together": with all
+  families, the B2-3 tailwind ends at 19.989 kt would count as inside the 0 to 40 kt span and lose the tolerance.
+  Every other end the default strips is an output-edge end (see Evidence), and no sample or checkpoint reads past
+  one. One end keeps a tolerance it should not have: B7-2 sheet 2 `rcr_wet`, RCR 18 ends at 6.9066 on the 12.0 top
+  edge, and that end *is* the wet family's span end, because every wet curve leaves through the top. Accept it: it
+  covers 0.0135 (13.5 ft of uncorrected roll) at a 12,000 ft roll, and no data says where the frame is. Put it in
+  the Task 8 Limitations note on ruling 4. Ruling 4's named case should read "B2-3 GW **36** to 48": GW 36 also ends
+  on the 12.0 edge, at TOF 6.636.
+- **Q3, racks: take the default capacities and the table below. The mockup's `suspensionsFor` maps every rack string
+  correctly** (each of the 11 strings run at each of its stations). The explicit table lists the items; the station
+  filter in `suspensionsFor` does the rest. `PYLON` names three items, one per station class, and at **5L it leaves
+  none**: the LANTIRN navigation pod's `32*` is "*WITH PYLON" (sheet 4), so it carries no suspension line. The
+  table must keep sheet 7's `A(V)1A` string as its own key (the manual's misprint, TOLD.md 1.2). When two items tie
+  on capacity, the default is the first in sheet 2 order (tip: AIM-9 LAUNCHER (16S210), DI 0, the basic aircraft's
+  own; LAU-88: LAU-88/A). ADAPTER (16S301) alone is carried by no rack string, which is right: the both-ways test
+  only checks that the names in the table are sheet 2 rows.
+
+  | Rack string (sheets 3 to 7) | Sheet 2 items | Capacity |
+  | --- | --- | --- |
+  | `LAUNCHER` | AIM-9 LAUNCHER (16S210); LAU-129/A LAUNCHER | 1, 1 |
+  | `LAUNCHER + ADAPTER` | AIM-9 LAUNCHER (16S210) + ADAPTER (16S301); LAU-129/A LAUNCHER + ADAPTER (16S301) | 1, 1 |
+  | `PYLON` | WEAPON PYLON* (16S1700) (3, 4, 6, 7); CENTERLINE PYLON* (16S951) (5); LANTIRN TARGETING POD PYLON (16S1150) (5R); none at 5L | 1 each |
+  | `PYLON/TER` | WEAPON PYLON* (16S1700); CENTERLINE PYLON* (16S951) (only the travel pod at 5); TER (16S1750) + WEAPON PYLON*; TER (66J45517) + WEAPON PYLON* | 1, 1, 3, 3 |
+  | `TER` | TER (16S1750) + WEAPON PYLON*; TER (66J45517) + WEAPON PYLON* | 3, 3 |
+  | `LAU-88/A, A/A, -117/A, A(V)1/A, A(V)3/A` | LAU-88/A + WEAPON PYLON*; LAU-88 A/A + WEAPON PYLON*; LAU-117/A, A(V)1/A, A(V)3/A + WEAPON PYLON* | 3, 3, 1 |
+  | `LAU-88/A, A/A, -117/A, A(V)1A, A(V)3/A` (sheet 7, TGM-65) | the same three | 3, 3, 1 |
+  | `LAU-117/A, A(V)1/A, A(V)3/A` | LAU-117/A, A(V)1/A, A(V)3/A + WEAPON PYLON* | 1 |
+  | `LAU-118(V)4/A` | LAU-118(V)4/A + WEAPON PYLON* | 1 |
+  | `PYLON (NJETT)` | NONJETTISON (NJETT) FUEL PYLON* | 1 |
+  | `NONE` | (none) | — |
+
+- **Q4, worked example (printed p. B1-2/B1-3, PDF index 254 to 255): take the four station lines below.** The
+  golden test checks each station's total and its store/suspension split, exact and conservative alike (no tip
+  rule differs here), then 142 and 146.
+
+  | Stations | Store, count, each | Suspension, count, each | Line DI |
+  | --- | --- | --- | --- |
+  | 1/9 | AIM-9L, M, S (`4*`, in the basic aircraft): 2 × 0 = 0 | LAU-129/A LAUNCHER: 2 × 1 = 2 | **2** |
+  | 2/8 | AIM-9L, M, S: 2 × 5 = 10 | LAU-129/A LAUNCHER + ADAPTER (16S301): 2 × 6 = 12 | **22** |
+  | 3/7 | MK 84 LDGP: 2 × 9 = 18 | WEAPON PYLON* (16S1700): 2 × 15 = 30 | **48** |
+  | 4/6 | 370-GALLON TANK, "SINGLE RACKS OR STORES AT 3 OR 7": 2 × 35 = 70 | none (rack `NONE`) | **70** |
+  | | | Store loading | **142** |
+  | | | + basic aircraft (sheet 1, F-16C `4/2`, subsonic) | 4 |
+  | | | Total | **146** |
+
+  The manual states the 1/9 line as one number ("the drag index is 1 for a tip missile on a LAU-129/A missile
+  launcher"); the builder's 0 + 1 split gives the same 2. Configuration weight (not built in plan 2) is 390 + 616 +
+  4,518 + 6,012 = 11,536 lb; the page also cites 142 and 11,520 lb from T.O. GR1F16CJ-12 for the same loading.
+
+- **Extra 1 (Task 4): the `*` marker is not one rule.** `4*` on sheet 3 means "in the basic aircraft" only on the tip
+  rows (stations `1 OR 9`); `32*` (LANTIRN NAVIGATION, 5L, sheet 4) means "*WITH PYLON" and adds 32. Key the tip rules
+  on a sheet 3 row whose stations are `1 OR 9`, not on `DragValue.note` alone: `*` adds 0, `**` adds value − 4, with
+  the 4 taken from the tip AIM-9 row (`4*`), not a literal. Pin it: LANTIRN NAVIGATION at 5L adds 32 and has no
+  suspension line.
+- **Extra 2 (Task 4): 300-gallon tank with only one of 4 and 6 loaded.** The manual prints "NO STORES AT 4 OR 6" (15)
+  and "STORES AT 4 AND 6" (18); one side only is printed nowhere, and the mockup's 15 there is the less safe value.
+  Ruling: one side loaded gives 18, exact and conservative, with a builder note. Change the Task 4 test to "15 with
+  neither, 18 with one or both".
+- **Extra 3 (Tasks 3 and 7): the additional drag index has no unparsed path.** `DerivedInputs` (Task 3 as built) has no
+  drag index field, so `TAKEOFF_FIELDS` cannot name `additionalDragIndex`, and "a field that does not parse marks that
+  chain's cells" fails for it. Ruling: Task 7 parses it (`parseNumber`, any sign) beside the loadout; it does not
+  parse → both takeoff columns `unparsed` with `fields: ['additionalDragIndex']`, landing unaffected. Add that case to
+  the Review Focus 4 test.
+- **Extra 4 (Task 4): `StoreRow.key` for a tank.** A tank group is one store, but the key formula uses `name`, which
+  for a tank row is a variant. Ruling: a tank store's key is `` `${sheet}|${group}||${stations text}` `` (empty name),
+  and the variant is not part of a `Loadout`.
+- **Extra 5 (Task 2, in flight): the GW 48 test's expected value.** B2-3 GW 48 ends at (3.5762, 12.0016), not 12.0:
+  "reads 12.0 within 1e-9" fails. Expect the drawn end's value, 12.0016 (×1000 ft), within 1e-9.
+
+## Supervisor rulings during execution
+
+- **Q1 lands in Task 2, not Task 5.** Task 2 still owned `ctx.ts` when the ruling came in, so the `cellOf` exception
+  (an exact error rejects the whole cell only when the baseline run errors too) is built and pinned there; Task 5
+  pins it through the takeoff chain only.
+- **Q2's baseline amendment** was reached independently by Task 2's implementer and taken before the questioner
+  reported; the two agree.
+- **B1-1 sheet 1's drag index columns** are `drag_index_f16c` and `drag_index_f16d` (Task 1: the weight tables keep
+  `f16c`/`f16d` in lb). Task 4 reads these names. `wind` stays in `kt` (a wind speed, not an airspeed).
+- Every questioner ruling and extra is taken as written above.
+
 ---
 
 ### Task 1: Quantity names and units aligned (ruling 3)
