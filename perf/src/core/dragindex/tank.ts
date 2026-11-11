@@ -1,6 +1,6 @@
 /**
  * Fig. B1-1 sheet 7's tank variants: a tank's drag index depends on what is loaded next to it. A wing tank looks
- * at the store inboard of it (4 at 3, 6 at 7), the centreline tank at 4 and 6.
+ * at the station outboard of it, as printed "AT 3 OR 7" (4 at 3, 6 at 7), the centreline tank at 4 and 6.
  */
 
 /** What a variant row's printed text asks of the neighbouring stations. */
@@ -31,13 +31,18 @@ export interface Neighbour {
   readonly loaded: boolean;
   readonly aim9: boolean;
   readonly perStation: number;
+  /** On a multiple-carriage rack (capacity over 1: the TERs and LAU-88s), however many stores it holds. */
+  readonly multipleRack: boolean;
 }
 
-/** The wing tank's condition from the station inboard of it. */
-export function wingCondition(inboard: Neighbour): TankCondition {
-  if (!inboard.loaded) return 'none';
-  if (inboard.aim9) return 'aim9';
-  return inboard.perStation > 1 ? 'multiple' : 'single';
+/**
+ * The wing tank's condition from the station at 3 or 7. A multiple-carriage rack there is MULTIPLE even with one
+ * store on it (supervisor ruling: "SINGLE RACKS OR STORES" names single racks).
+ */
+export function wingCondition(neighbour: Neighbour): TankCondition {
+  if (!neighbour.loaded) return 'none';
+  if (neighbour.aim9) return 'aim9';
+  return neighbour.perStation > 1 || neighbour.multipleRack ? 'multiple' : 'single';
 }
 
 /**

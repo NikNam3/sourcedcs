@@ -180,10 +180,13 @@ test('worked example (p. B1-2/B1-3): each line as Q4, 142 for the stores, 146 in
   assert.equal(result.conservative, 146);
 });
 
-test('the default suspension at the tips is the AIM-9 LAUNCHER (16S210), DI 0', () => {
+test('the default suspension on a capacity tie takes the highest drag index: the tips get LAU-129/A, DI 1', () => {
   const [line] = computed([row(['1', '9'], store('AIM-9L, M, S', '1 OR 9').key)], 0).lines;
-  assert.equal(line?.suspension?.name, 'AIM-9 LAUNCHER (16S210)');
-  assert.equal(line.exact, 0);
+  assert.equal(line?.suspension?.name, 'LAU-129/A LAUNCHER');
+  assert.equal(line.suspension.drag.subsonic, 1);
+  assert.equal(line.exact, 2);
+  // The worked example names its suspensions: still 146.
+  assert.equal(computed(WORKED_EXAMPLE, 0).exact, 146);
 });
 
 test('no tip missile: exact −4 each (4 − 8), conservative 0 (4)', () => {
@@ -201,8 +204,11 @@ test('a tip pod (**) is its value less the tip AIM-9 (4): 2 − 4 = −2 each', 
   const result = computed([row(['1', '9'], pod.key)], 0);
   assert.equal(result.lines[0]?.eachExact, -2);
   assert.equal(result.lines[0].eachConservative, -2);
-  // Two pods on the AIM-9 launchers: the lowest conservative drag index, 4 − 2 − 2 = 0.
-  assert.equal(result.conservative, 0);
+  // Two pods on the default LAU-129/A launchers (DI 1 each, the capacity tie's highest): 4 − 2 − 2 + 2 = 2.
+  assert.equal(result.lines[0].suspension?.name, 'LAU-129/A LAUNCHER');
+  assert.equal(result.conservative, 2);
+  // On the AIM-9 launchers (DI 0): the lowest conservative drag index, 4 − 2 − 2 = 0.
+  assert.equal(computed([row(['1', '9'], pod.key, 2, 'AIM-9 LAUNCHER (16S210)')], 0).conservative, 0);
 });
 
 test('the * marker is not one rule: LANTIRN NAVIGATION (32*, with pylon) at 5L adds 32, no suspension line', () => {
@@ -219,9 +225,9 @@ test('two printed values: the subsonic one, with a note', () => {
   assert.ok(line.notes.some((n) => /subsonic/.test(n)));
 });
 
-test('tank variants follow the store inboard (4 from 3, 6 from 7; 5 from 4 and 6)', () => {
-  const at46 = (inboard: LoadoutRow | null): number[] => {
-    const rows = [row(['4', '6'], tank(370, '4 OR 6').key), ...(inboard === null ? [] : [inboard])];
+test('tank variants follow the store at 3 or 7 (4 from 3, 6 from 7; 5 from 4 and 6)', () => {
+  const at46 = (neighbour: LoadoutRow | null): number[] => {
+    const rows = [row(['4', '6'], tank(370, '4 OR 6').key), ...(neighbour === null ? [] : [neighbour])];
     return computed(rows, 0)
       .lines.filter((l) => l.row.stations.includes('4'))
       .map((l) => l.eachExact);
@@ -230,17 +236,22 @@ test('tank variants follow the store inboard (4 from 3, 6 from 7; 5 from 4 and 6
   assert.deepEqual(at46(row(['3', '7'], store('AIM-9L, M, S', '2,3,7, OR 8').key)), [27]);
   assert.deepEqual(at46(row(['3', '7'], store('MK 84 LDGP', '3,4,6, OR 7').key)), [35]);
   assert.deepEqual(at46(row(['3', '7'], store('MK 82 LDGP', '3,4,6, OR 7').key, 6)), [39]);
+  // A multiple-carriage rack at 3/7 is MULTIPLE even with one store per station; one MK 84 on a weapon pylon stays
+  // SINGLE.
+  const ter = 'TER (16S1750) + WEAPON PYLON*';
+  assert.deepEqual(at46(row(['3', '7'], store('MK 82 LDGP', '3,4,6, OR 7').key, 2, ter)), [39]);
+  assert.deepEqual(at46(row(['3', '7'], store('MK 84 LDGP', '3,4,6, OR 7').key, 2, 'WEAPON PYLON* (16S1700)')), [35]);
   // An odd count on the pair: which side carries the extra store is not said, so both tanks take MULTIPLE.
-  const oddInboard = row(['3', '7'], store('MK 82 LDGP', '3,4,6, OR 7').key, 3);
-  assert.deepEqual(at46(oddInboard), [39]);
+  const oddNeighbour = row(['3', '7'], store('MK 82 LDGP', '3,4,6, OR 7').key, 3);
+  assert.deepEqual(at46(oddNeighbour), [39]);
   assert.deepEqual(
-    computed([row(['4', '6'], tank(370, '4 OR 6').key), oddInboard], 0)
+    computed([row(['4', '6'], tank(370, '4 OR 6').key), oddNeighbour], 0)
       .lines.filter((l) => l.variant !== null)
       .map((l) => [l.count, l.eachExact]),
     [[2, 39]],
   );
 
-  // Only 3 loaded (count 1 on the pair): 4 is single, 6 has nothing inboard: two lines.
+  // Only 3 loaded (count 1 on the pair): 4 is single, 6 has nothing at 7: two lines.
   const split = computed(
     [row(['4', '6'], tank(370, '4 OR 6').key), row(['3', '7'], store('MK 84 LDGP', '3,4,6, OR 7').key, 1)],
     0,
@@ -302,6 +313,10 @@ test('a loadout the catalogue does not allow gives its problems, never a throw',
   assert.deepEqual(problems([row(['3', '7'], mk84, 0)]), [{ row: 0, code: 'badCount' }]);
   assert.deepEqual(problems([row(['3', '7'], mk84, 1.5)]), [{ row: 0, code: 'badCount' }]);
   assert.deepEqual(problems([row(['3', '7'], mk84), row(['3'], null)]), [{ row: 1, code: 'stationTwice' }]);
+  assert.deepEqual(problems([row(['3', '3'], mk84)]), [{ row: 0, code: 'stationTwice' }]);
+  assert.deepEqual(problems([row(['3', '3'], null)]), [{ row: 0, code: 'stationTwice' }]);
+  assert.deepEqual(problems([row([], mk84, 1)]), [{ row: 0, code: 'noStations' }]);
+  assert.deepEqual(problems([row([], null, 0)]), [{ row: 0, code: 'noStations' }]);
   assert.deepEqual(checkLoadout(cat, WORKED_EXAMPLE), []);
   assert.deepEqual(checkLoadout(cat, DEFAULT_LOADOUT), []);
   const worked = dragIndex(cat, WORKED_EXAMPLE, 0);
