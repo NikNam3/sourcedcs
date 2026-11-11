@@ -68,6 +68,8 @@ export function interpWithin(
   anchors: readonly number[] = [],
 ): number | undefined {
   const [lo, hi] = drawnRange(points);
+  // An end at an anchor keeps the tolerance for every x read on the line: a guideline panel's target read as well as
+  // its baseline read.
   const anchored = (end: number): boolean => anchors.some((anchor) => Math.abs(end - anchor) <= tolerance);
   const below = lo - span[0] <= tolerance || anchored(lo) ? tolerance : 0;
   const above = span[1] - hi <= tolerance || anchored(hi) ? tolerance : 0;

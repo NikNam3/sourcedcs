@@ -6,6 +6,7 @@
 
 import { roundTo, runExact, WORSE } from '../../src/core/ctx.ts';
 import type { Cell, Chain, ChainRun, Ctx, Evaluation, OutputKind } from '../../src/core/ctx.ts';
+import { planCtx } from './bound.ts';
 
 type Direction = 'down' | 'up';
 
@@ -48,12 +49,16 @@ export function evaluateExhaustive<K extends string, S>(
     }
   }
 
+  // The baseline: every input at its conservative value, nothing rounded.
+  const baseline = chain(planCtx(new Map()));
+
   const cells = {} as Record<K, Cell<S>>;
   for (const k of keys) {
     const worse = WORSE[kinds[k]];
     const exactRead = exact.run.outputs[k];
     const exactSide = exact.run.side;
-    if (!exactRead.ok) {
+    // An exact error rejects the whole cell only when the baseline errors too (Q1, as `evaluate`).
+    if (!exactRead.ok && !baseline.outputs[k].ok) {
       cells[k] = { exact: exactRead, conservative: exactRead, exactSide, conservativeSide: exactSide };
       continue;
     }

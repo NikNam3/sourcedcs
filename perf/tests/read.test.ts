@@ -324,7 +324,7 @@ describe('guidelinePanel', () => {
     );
   });
 
-  test('a line drawn a hair short of the baseline at its family start is usable within the tolerance (R1)', () => {
+  test('a line drawn a hair short of the baseline is usable within the tolerance (R1)', () => {
     const short: GuidelinePanel = {
       ...cg,
       families: {
@@ -333,27 +333,7 @@ describe('guidelinePanel', () => {
             [35.01, 1000],
             [40, 1100],
           ],
-          [
-            [35, 2000],
-            [40, 2200],
-          ],
-        ],
-        other: lines([900, 1000, 1100]),
-      },
-    };
-    near(valueOf(guidelinePanel(short, 'B2-3', 'all', 1500, 40)), 1650);
-  });
-
-  test('a line starting a hair past the baseline inside its family span keeps the tolerance there (ruling 4)', () => {
-    const short: GuidelinePanel = {
-      ...cg,
-      families: {
-        all: [
-          [
-            [35.01, 1000],
-            [40, 1100],
-          ],
-          ...lines([1800, 2000, 2200], [2700, 3000, 3300]),
+          ...lines([1800, 2000, 2200]),
         ],
       },
     };

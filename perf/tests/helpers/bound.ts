@@ -25,7 +25,8 @@ export function planCtx(plan: ReadonlyMap<string, 'down' | 'up'>): Ctx {
 
 /**
  * The sum over `ids` (the exact pass's rounding points) of |o(p up) - o(p down)| for output `key`, every other point
- * unrounded. Fails the test when a single-point run of `key` is out of chart.
+ * unrounded. Fails the test when a single-point run of `key` is out of chart. `evaluate` takes its single-point ids
+ * from the baseline run instead; with single-valued inputs, as in every chain this bound is used on, the two agree.
  */
 export function singlePointBound<K extends string, S>(chain: Chain<K, S>, key: K, ids: readonly string[]): number {
   let bound = 0;

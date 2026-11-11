@@ -505,6 +505,29 @@ describe('side data, two-valued inputs and the baseline run', () => {
     const fast = evaluate(chain, { distance: 'distance' });
     assert.deepEqual(fast.cells.distance.conservativeSide, { di: 4 });
   });
+
+  test('Q1 in the oracle: an exact error with an ok baseline keeps the conservative value, as in evaluate', () => {
+    const chain: Chain<'distance', { d: number }> = (ctx) => {
+      const d = ctx.input('di', { exact: -4, conservative: 3.4 }, 1);
+      return {
+        outputs: { distance: d < 0 ? outOfChart('B2-3', 'drag_index', d, [0, 300]) : ok(100 + d) },
+        side: { d },
+      };
+    };
+    const kinds = { distance: 'distance' } as const;
+    const fast = evaluate(chain, kinds);
+    const oracle = evaluateExhaustive(chain, kinds);
+    assert.deepEqual(oracle.cells.distance.exact, outOfChart('B2-3', 'drag_index', -4, [0, 300]));
+    assert.deepEqual(oracle.cells.distance.exact, fast.cells.distance.exact);
+    close(valueOf(oracle.cells.distance.conservative), 104);
+    close(valueOf(oracle.cells.distance.conservative), valueOf(fast.cells.distance.conservative));
+    assert.deepEqual(oracle.cells.distance.conservativeSide, fast.cells.distance.conservativeSide);
+    // Both errored: the whole cell is the exact error in both searches.
+    const both = plain((ctx) => ({
+      distance: outOfChart('B2-3', 'drag_index', ctx.input('di', { exact: -4, conservative: -2 }, 1), [0, 300]),
+    }));
+    assert.deepEqual(evaluateExhaustive(both, kinds).cells.distance, evaluate(both, kinds).cells.distance);
+  });
 });
 
 /** mulberry32: a small seeded PRNG, so the random chains are the same on every run. */
