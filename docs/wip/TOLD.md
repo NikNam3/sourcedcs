@@ -411,7 +411,7 @@ Notes carried from plan 1 (30 Oct 2026). For the Limitations page, in addition t
 - **B7-1's CG note**: the page says the actual approach speed may differ by ±5 kt with CG; it is not a correction
   rule and is not applied.
 
-For plan 2 (core):
+For plan 2 (core); decided in 1.7, which wins where they differ:
 
 - **`wet` flag** (P2): `groundRollCorrected(ctx, fig, {uncorrectedFt, rcr, wet, headwindKt, slopePct})`. `wet` picks
   the RCR family: dry 4, 8, 16, 23 or wet 10, 12, 18. An RCR outside the chosen family's curves is `OutOfChart` on
@@ -587,6 +587,173 @@ extraction rewrites `manifest.json`, which is never edited by hand: a conflict t
 pre-merge manifest, the merge is committed first, then the extractor is re-run on the clean merged tree and the
 manifest committed separately (the plan's "Supervisor rulings during execution": re-running before the merge commit
 stamps `-dirty`). Plan 1 lands on `perf-told` as a PR into `main` with a merge commit.
+
+### 1.7 Plan 2: core (design of 11 Nov 2026)
+
+This section is plan 2's spec: the chains, the runway rules, the drag index builder and the inputs, in
+`src/core/`. It takes over the "For plan 2" notes under 1.2 and decides them; where the two differ, this section
+wins. Plan 3 (UI and state) renders what `computeTold` returns; plan 2 has no DOM and no page.
+
+**Rulings of 11 Nov 2026 (the human).**
+
+1. **RCR, strict.** Refusal speed interpolates only as Part 2 writes it: dry between 23, 16, 8 and 4 (sheets 1 and
+   3), wet between 18 and 12 (sheet 2). A wet RCR outside 12 to 18 (wet 10, 11, 19) and a dry RCR outside 4 to 23
+   give `OutOfChart` on `rcr`; the wet refusal cell shows "—" with a reason line and a Limitations note. A wet runway
+   never borrows the dry family's sheet 3. A wet RCR below 10 is also the 3.18 rule at the landing field.
+2. **Conservative side data: option A.** A cell keeps the side data of the run that decided it (below, `ctx.ts`).
+   The conservative landing distance is judged against the B7-2 limit lines on the same rounded run that produced
+   it.
+3. **Quantity names and units are aligned at the source.** Spec edits and a re-extraction, not a mapping in code:
+   `pressure_altitude` (B7-2 sheet 1's `altitude`), `°C` (B2-1's `deg C`) and `KIAS` for every speed (B2-5 and B2-6
+   `refusal_speed` in `kt`). `dataVersion` goes to 8. A `data:check` test then requires one name to have one unit
+   across every figure, so a later figure cannot drift.
+4. **Edge tolerance on input-axis ends only.** `EDGE_TOLERANCE` (0.002 of the drawn span, R1) still clamps a value
+   just past an end on the input axis (float noise from the previous read). A curve end on the frame's output edge
+   gets no tolerance: past its last drawn point the reading is `OutOfChart`. B2-3 GW 38 to 48 past 12,000 ft is the
+   named case. This closes the step 0 note on the output-edge end.
+
+**Chains: one per TOLD column.** Six chains, each evaluated on its own: takeoff MIL and MAX AB
+(`takeoffChain(figures, derived, 'mil' | 'ab')`), and landing for normal weight and heavyweight, each dry and wet
+(`landingChain(figures, derived, 'normal' | 'heavy', 'dry' | 'wet')`). Normal landing reads landing GW, heavyweight
+takeoff GW.
+
+- **A chain calls each figure at most once.** If it would call one twice, it is split. This replaces the planned
+  `withPrefix` wrapper, which is not built; `ctx` keeps throwing on a repeated id, which enforces the rule. The ids
+  stay the figures' own (`b2-3.gw`) plus `input.*`.
+- **Takeoff:** B2-1 (factor), B2-2 (rotation and takeoff speed), B2-3 (distance), B2-4 (acceleration check at
+  2,000 ft, or 1,000 ft when this chain's takeoff distance is under 2,500 ft: a branch the conservative pass
+  re-tests), refusal speed dry and wet (`told/rcr.ts`; MIL on B2-5, MAX AB on B2-6). Outputs: `rotation`, `takeoff`
+  (speed), `distance`, `accelCheck`, `refusalDry`, `refusalWet`. The check distance is side data.
+- **Landing:** B7-1 (final approach and touchdown), B7-2 sheet 1 (uncorrected roll and `limits`), B7-2 sheet 2
+  (corrected roll; `wet` picks the family, the column's RCR). Outputs: `finalApproach`, `touchdown`, `distance`.
+  `limits` is side data. The speeds are the same dry and wet; each chain computes them anyway.
+- **Refusal speed by RCR (`told/rcr.ts`):** linear in RCR between the two printed RCRs that bracket the column's
+  RCR (dry input for the dry row, wet input for the wet row). Dry 16 to 23 reads sheet 1 only, dry 8 to 16 sheet 1's
+  RCR 16 and sheet 3's snow RCR 8, dry 4 to 8 sheet 3; wet 12 to 18 sheet 2. An RCR on a printed value reads that
+  value. Ruling 1 for the rest. The duplicated `decreased()` of `b2-5.ts` and `b2-6.ts` moves into one place here.
+- 8° pitch is not an input in step 1; every chain passes `pitch8: false`.
+
+**`ctx.ts`.**
+
+- **Side data.** A chain returns `{ outputs, side }`; `side` is any per-run record (landing `limits`, takeoff check
+  distance). Each `Cell` gains `exactSide` and `conservativeSide`, the side record of the run that decided it: the
+  exact pass, and the run `cellOf` picks (the worst run, or the first that errored). So a conservative check
+  distance or a conservative limit verdict can differ from the exact one, and the UI shows each with its own cell.
+- **Two-valued inputs.** `ctx.input(id, { exact, conservative }, step)` returns `exact` in the exact pass and starts
+  from `conservative` in every conservative run, rounded like any other point. It is how the drag index enters
+  (5.2): no tip missile is −4 per missile exact and 0 conservative. `ctx.read` stays as it is for every other point;
+  an `input` id counts as a rounding point like a `read` id and is pinned with them.
+- **Baseline run.** The conservative cell starts from one run on the conservative values with nothing rounded,
+  instead of falling back to the exact pass when no point is off its step. With single-valued inputs the baseline
+  equals the exact pass.
+
+**Inputs (`inputs/`).**
+
+- `inputs.ts`: the `Inputs` type (every field as typed, the station picks, the additional drag index) and the
+  defaults (CG 35 % MAC, RCR dry 23, RCR wet 18).
+- `parse.ts`: each field to a number or "does not parse". Only syntax and physical limits: length above 0, heading
+  1 to 360, altimeter above 0, wind `ddd/ss` with optional `Gss`, direction 1 to 360, gust not below the steady
+  wind. Every other range is the charts'. Each chain declares the fields it needs; a field that does not parse
+  marks that chain's cells as unparsed (plan 3: "—" and the dotted underline), and the other chains still compute.
+- **CG range.** B2-2's CG correction has no drawn range of its own, so a CG outside B2-3's drawn CG range (30 to
+  40 % MAC) is `OutOfChart` on B2-2 `cg` with that range. The other CG readers check their own.
+- `derive.ts` (5.3): pressure altitude from the near-end threshold elevation (where the roll starts) and the
+  altimeter, inHg in one function; slope = (far − near) / length × 100, uphill positive; headwind from the steady
+  wind, crosswind from the gust, both against the magnetic runway heading. Crosswind is shown only (B2-11 is
+  deferred).
+- Rounding points: `input.pa`, `input.temp`, `input.gw`, `input.cg`, `input.di` (two-valued), `input.wind`
+  (headwind), `input.slope`, `input.rcr`. Runway length is not rounded.
+
+**Rules (`told/rules.ts`).** One entry per rule, `{ id, paragraph, check }`, checked on the exact and on the
+conservative cell separately; "over" is strictly greater. Runway used % = distance / length × 100, from each cell,
+not a rounding point.
+
+| Rule | Check | Marks |
+| --- | --- | --- |
+| 3.6.6 | MIL takeoff distance over 50 % of the runway (afterburner required) | MIL distance and runway used |
+| 3.6.3 | Any takeoff distance over 80 % | That column's distance and runway used |
+| 3.18 | Landing distance over 80 % | That landing column's distance and runway used |
+| 3.18 | RCR below 10 at the landing field (the RCR the column uses) | The RCR input |
+| Fig. B7-2 sh. 1 | A limit line's verdict `true` in the cell's side data (brake energy, MLG tire 225 kt, NLG tire 217 kt, no wind) | That landing distance |
+
+`null` (not judged, P7) marks nothing and never reads as within the limit. A rejected cell carries its `OutOfChart`
+tagged `exact` or `conservative`; `computeTold` keeps one per distinct reason per table, and plan 3 formats the
+sentence from the panel's quantity name and unit (ruling 3).
+
+**`told/told.ts`.** `computeTold(figures, inputs)` parses and derives the inputs, builds the drag index, runs the six
+evaluations and the rules, and returns per table its cells (with side data), rule marks, reasons and the exact
+traces (one per chain, for plan 3's figure view). Figure data is passed in as a set keyed by figure id; `src/web/`
+stays the only code that fetches.
+
+**Drag index builder (`dragindex/`)**, on B1-1 and the decisions of 29 Oct 2026.
+
+- `catalogue.ts`: sheets 2 to 7 to stores and suspension items. Station strings to sets (`2,3,7, OR 8`); a drag
+  index cell is a number, `a/b` (subsonic `a`, II.3) or a footnote marker (`4*`, `2**`); an unknown format throws (a
+  data defect), and a test parses every row. Queries for plan 3's menus: stores allowed on a station group,
+  suspensions that carry a store.
+- `racks.ts`: which sheet 2 items carry which B1-1 rack string, and each item's capacity (three on a TER or LAU-88,
+  one otherwise, II.4). An explicit table, not the mockup's regular expressions. Fig. B1-1 prints neither, so both are
+  the project's own (Limitations II.4). A test checks both ways: every rack string in B1-1 has an entry, and every
+  item the table names is a sheet 2 row; a new store with a new rack fails loudly.
+- `loadout.ts`: a loadout (one row per station pair or split station: store, suspension, count; plus the additional
+  drag index) to `{ exact, conservative }`. Basic aircraft; tip AIM-9 0 (note *), tip pod 2 less than the missile
+  (note **), no tip missile −4 exact and 0 conservative; tank variant from the store inboard (none, AIM-9s, single
+  or multiple at 3/7; the centreline tank from 4 and 6); the suspension defaults to the smallest that carries the
+  count, and the count is capped by capacity. Golden test: the Part 1 worked example gives 146.
+
+**Module layout.** One job per file, each well under 300 lines. Dependencies run one way: `inputs/` and
+`dragindex/` to `told/` to `figures/` to `read/`.
+
+```
+src/core/
+  ctx.ts            side data, ctx.input, baseline run
+  read/             edge tolerance on input-axis ends only
+  inputs/           inputs.ts, parse.ts, derive.ts
+  told/             takeoff.ts, landing.ts, rcr.ts, rules.ts, told.ts
+  dragindex/        catalogue.ts, racks.ts, loadout.ts
+```
+
+**Validation.** The coverage stays at 100 % lines on `src/core/` (floor 90 %).
+
+1. `ctx`: synthetic chains with side data, where a branch flip in a conservative run changes `conservativeSide` and
+   not `exactSide`; `ctx.input`'s two values; the baseline run.
+2. `read/`: per reader, past an output-edge end is `OutOfChart`, within the tolerance of an input-axis end is on the
+   curve; B2-3 GW 38 to 48 past 12,000 ft.
+3. Data: the one-name-one-unit test; a full re-extraction changes only the renamed names and units (compared
+   against the old files with those fields ignored); every sample and checkpoint still passes.
+4. Inputs: parse tables (bad wind strings, a gust below the steady wind); pressure altitude against hand-worked
+   values; the parity test pinning `ISA_P0` and `ISA_INV` against `crc-sync/src/altimetry.js`; wind components at
+   0°, 90° and 180°.
+5. RCR: each printed RCR gives the sheet's value; between them interpolates; dry 12 reads sheet 1's RCR 16 and sheet
+   3's RCR 8; wet 11, wet 19 and dry 24 are `OutOfChart` on `rcr`.
+6. Chains: rounding point ids pinned per chain; the manual's samples through a chain where their inputs fit one;
+   the acceleration check branch (a roll near 2,500 ft whose conservative side reads 1,000 ft where the exact reads
+   2,000); landing against the exhaustive oracle; takeoff by the 5.2 criterion (no better than exact, within the
+   sum of each point's one-step effect of the exhaustive value).
+7. Rules: exactly 50.0 % and 80.0 % are not red, just over is; exact and conservative marked independently; a
+   `null` verdict marks nothing.
+8. Drag index: the golden 146; each tip rule and tank variant; the racks table both ways; every B1-1 row parses.
+9. Deferred minors folded in: `decreased()` in one place (Task 5), a B7-2 sheet 2 entry outside its wind or slope
+   lines (Task 6), B2-4's out-of-chart loop adding 0 ft (Task 5).
+
+**Process.** As plan 1 ran: one lane worktree per task (`../sourcedcs-told-p2-t<N>` on `lane/told-p2-t<N>` off
+`perf-told`), at most 4 agents at once including a questioner, all on Opus, a task review after each lane, lanes run
+only their own test files, the supervisor runs the gates (`nice -n 19`) and merges. Task 1 re-extracts on this
+machine (`PERF_PDF`, `nix develop`); the manifest conflict procedure of 1.6 applies.
+
+| Task | Content | After |
+| --- | --- | --- |
+| 1 | Data alignment (ruling 3): spec edits, re-extraction, the quantity test | — |
+| 2 | `ctx.ts` side data, `ctx.input`, baseline run; `read/` edge tolerance (ruling 4) | — |
+| 3 | `inputs/`, with the pressure altitude parity test | — |
+| 4 | `dragindex/` | questioner |
+| 5 | `told/rcr.ts`, `told/takeoff.ts` | 1, 2, 3 |
+| 6 | `told/landing.ts` | 1, 2, 3 |
+| 7 | `told/rules.ts`, `told/told.ts` | 4, 5, 6 |
+| 8 | Close-out: full re-extraction, all gates, 1.1 and 1.5, `perf/README.md`, handoff | 7 |
+
+Wave 1: Tasks 1, 2 and 3 with the questioner, who rules on what this section leaves open before Task 4 starts. Wave
+2: Tasks 4, 5 and 6. Then 7 and 8. The plan, with the questioner's rulings, is `docs/wip/TOLD-STEP1-P2.md`.
 
 ## Step 2: Performance
 
