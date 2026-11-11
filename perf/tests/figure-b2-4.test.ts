@@ -5,10 +5,10 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { runExact } from '../src/core/ctx.ts';
 import { accelCheckSpeed } from '../src/core/figures/b2-4.ts';
 import type { Read } from '../src/core/result.ts';
 
+import { exactOf } from './helpers/chain.ts';
 import { loadFigure } from './helpers/data.ts';
 
 const b24 = loadFigure('B2-4');
@@ -46,7 +46,7 @@ const SAMPLE: AccelInputs = {
 };
 const TRACE_IDS = ['b2-4.distance', 'b2-4.gw', 'b2-4.di', 'b2-4.wind', 'b2-4.slope'];
 
-const accel = (i: AccelInputs) => runExact((ctx) => accelCheckSpeed(ctx, b24, i));
+const accel = (i: AccelInputs) => exactOf((ctx) => accelCheckSpeed(ctx, b24, i));
 const kias = (i: AccelInputs): number => valueOf(accel(i).outputs.accelCheckKias);
 
 describe('B2-4 acceleration check speed', () => {

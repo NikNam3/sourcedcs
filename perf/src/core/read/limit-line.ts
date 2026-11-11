@@ -6,7 +6,8 @@ import { drawnRange, edgeTolerance, interpWithin } from './interp.ts';
  * beyond it. An input outside the line's drawn range (with the edge tolerance), or no number, is not judged: null.
  */
 export function beyondLimit(p: LimitLine, input: number, output: number): boolean | null {
-  const line = interpWithin(p.points, input, edgeTolerance(drawnRange(p.points)));
+  const range = drawnRange(p.points);
+  const line = interpWithin(p.points, input, edgeTolerance(range), range);
   if (line === undefined || Number.isNaN(output)) return null;
   return p.beyond === 'above' ? output > line : output < line;
 }

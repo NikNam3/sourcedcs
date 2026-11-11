@@ -6,13 +6,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { runExact } from '../src/core/ctx.ts';
 import type { Ctx } from '../src/core/ctx.ts';
 import { panel } from '../src/core/data/panel.ts';
 import { landingSpeed } from '../src/core/figures/b7-1.ts';
 import { groundRollCorrected, groundRollUncorrected } from '../src/core/figures/b7-2.ts';
 import type { Read } from '../src/core/result.ts';
 
+import { exactOf } from './helpers/chain.ts';
 import { loadFigure } from './helpers/data.ts';
 
 const b71 = loadFigure('B7-1');
@@ -33,7 +33,7 @@ function assertOutOfChart(read: Read<number>, figure: string, input: string): vo
 }
 
 describe('B7-1 landing speed', () => {
-  const speeds = (grossWeightLb: number) => runExact((ctx) => landingSpeed(ctx, b71, { grossWeightLb }));
+  const speeds = (grossWeightLb: number) => exactOf((ctx) => landingSpeed(ctx, b71, { grossWeightLb }));
 
   test('reads b7-1.final then b7-1.touchdown', () => {
     const { outputs, trace } = speeds(20000);
@@ -79,11 +79,11 @@ interface UncorrectedInputs {
 const SH1_SAMPLE: UncorrectedInputs = { paFt: 2000, tempC: 40, grossWeightLb: 28000 };
 
 /** The exact pass: every read exact. */
-const exactCtx: Ctx = { read: (_id, value) => value };
+const exactCtx: Ctx = { read: (_id, value) => value, input: (_id, value) => value.exact };
 
 /** The roll in runExact (its trace) and the exact pass's limit verdicts. */
 const uncorrected = (i: UncorrectedInputs) => ({
-  ...runExact((ctx) => ({ rollFt: groundRollUncorrected(ctx, b72s1, i).rollFt })),
+  ...exactOf((ctx) => ({ rollFt: groundRollUncorrected(ctx, b72s1, i).rollFt })),
   limits: groundRollUncorrected(exactCtx, b72s1, i).limits,
 });
 
@@ -114,7 +114,7 @@ describe('B7-2 sheet 1 uncorrected ground roll', () => {
   });
 
   test('the limits judge the roll the run reports, after ctx.read', () => {
-    const fixed = (ft: number): Ctx => ({ read: () => ft });
+    const fixed = (ft: number): Ctx => ({ read: () => ft, input: () => ft });
     assert.equal(groundRollUncorrected(fixed(20000), b72s1, SH1_SAMPLE).limits?.brakeEnergy, true);
     assert.equal(groundRollUncorrected(fixed(1000), b72s1, SH1_SAMPLE).limits?.brakeEnergy, false);
   });
@@ -164,7 +164,7 @@ interface CorrectedInputs {
 const SH2_SAMPLE: CorrectedInputs = { uncorrectedFt: 3902, rcr: 16, wet: false, headwindKt: 10, slopePct: 1 };
 const CALM_LEVEL = { headwindKt: 0, slopePct: 0 };
 
-const corrected = (i: CorrectedInputs) => runExact((ctx) => groundRollCorrected(ctx, b72s2, i));
+const corrected = (i: CorrectedInputs) => exactOf((ctx) => groundRollCorrected(ctx, b72s2, i));
 const correctedFt = (i: CorrectedInputs): number => valueOf(corrected(i).outputs.rollFt);
 
 describe('B7-2 sheet 2 corrected ground roll', () => {

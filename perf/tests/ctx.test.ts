@@ -7,6 +7,7 @@ import type { Chain, Ctx, Evaluation, OutputKind } from '../src/core/ctx.ts';
 import { ok, outOfChart } from '../src/core/result.ts';
 import type { Read } from '../src/core/result.ts';
 import { singlePointBound } from './helpers/bound.ts';
+import { plain } from './helpers/chain.ts';
 import { evaluateExhaustive } from './helpers/exhaustive.ts';
 
 function valueOf(read: Read<number> | undefined): number {
@@ -19,17 +20,18 @@ function close(actual: number, expected: number, message?: string): void {
 }
 
 /** A ctx-wrapping chain that records every value the chain was handed back, per id. */
-function spied<K extends string>(chain: Chain<K>): { chain: Chain<K>; seen: Map<string, number[]> } {
+function spied<K extends string, S>(chain: Chain<K, S>): { chain: Chain<K, S>; seen: Map<string, number[]> } {
   const seen = new Map<string, number[]>();
+  const record = (id: string, got: number): number => {
+    seen.set(id, [...(seen.get(id) ?? []), got]);
+    return got;
+  };
   return {
     seen,
     chain: (ctx) =>
       chain({
-        read(id, value, step) {
-          const got = ctx.read(id, value, step);
-          seen.set(id, [...(seen.get(id) ?? []), got]);
-          return got;
-        },
+        read: (id, value, step) => record(id, ctx.read(id, value, step)),
+        input: (id, value, step) => record(id, ctx.input(id, value, step)),
       }),
   };
 }
@@ -73,13 +75,13 @@ describe('roundTo', () => {
 
 describe('runExact', () => {
   test('returns the unrounded values and the trace in read order', () => {
-    const chain: Chain<'d'> = (ctx) => {
+    const chain: Chain<'d'> = plain((ctx) => {
       const a = ctx.read('a', 1.234, 0.1);
       const b = ctx.read('b', a * 10.07, 10);
       return { d: ok(a + b) };
-    };
-    const { outputs, trace } = runExact(chain);
-    close(valueOf(outputs.d), 1.234 + 1.234 * 10.07);
+    });
+    const { run, trace } = runExact(chain);
+    close(valueOf(run.outputs.d), 1.234 + 1.234 * 10.07);
     assert.deepEqual(trace, [
       { id: 'a', value: 1.234 },
       { id: 'b', value: 1.234 * 10.07 },
@@ -88,7 +90,7 @@ describe('runExact', () => {
 });
 
 describe('evaluate', () => {
-  const double: Chain<'d'> = (ctx) => ({ d: ok(2 * ctx.read('a', 1.23, 0.1)) });
+  const double: Chain<'d'> = plain((ctx) => ({ d: ok(2 * ctx.read('a', 1.23, 0.1)) }));
 
   test('a distance is rounded up', () => {
     const e = evaluate(double, { d: 'distance' });
@@ -103,11 +105,11 @@ describe('evaluate', () => {
   });
 
   test('a branch the exact pass never took is tested in the final run, and matches the exhaustive search', () => {
-    const branch: Chain<'check'> = (ctx) => {
+    const branch: Chain<'check'> = plain((ctx) => {
       const r = ctx.read('roll', 2495, 10);
       const check = r < 2500 ? ctx.read('check1000', 120.4 + (r - 2495) / 100, 1) : ctx.read('check2000', 130.6, 1);
       return { check: ok(check) };
-    };
+    });
     const { chain, seen } = spied(branch);
     const e = evaluate(chain, { check: 'accelCheckSpeed' });
     assert.deepEqual(e.roundingPoints, ['roll', 'check1000']);
@@ -115,43 +117,43 @@ describe('evaluate', () => {
     // check2000 got its own test: read rounded down and up.
     const check2000 = seen.get('check2000') ?? [];
     assert.ok(check2000.includes(130) && check2000.includes(131), String(check2000));
-    // 4 single-point runs, final run, 2 tests of check2000, final run again.
-    assert.equal(e.runs, 8);
+    // Baseline, 4 single-point runs, final run, 2 tests of check2000, final run again.
+    assert.equal(e.runs, 9);
     close(valueOf(e.cells.check.conservative), 131);
     const oracle = evaluateExhaustive(branch, { check: 'accelCheckSpeed' });
     close(valueOf(e.cells.check.conservative), valueOf(oracle.cells.check.conservative));
   });
 
   test('two outputs sharing one read each take their own worst direction', () => {
-    const shared: Chain<'distance' | 'refusal'> = (ctx) => {
+    const shared: Chain<'distance' | 'refusal'> = plain((ctx) => {
       const tof = ctx.read('tof', 1.234, 0.01);
       return { distance: ok(1000 * tof), refusal: ok(100 * tof) };
-    };
+    });
     const e = evaluate(shared, { distance: 'distance', refusal: 'refusalSpeed' });
     close(valueOf(e.cells.distance.conservative), 1240);
     close(valueOf(e.cells.refusal.conservative), 123);
   });
 
   test('out of chart only when one point is rounded up: exact ok, conservative the error', () => {
-    const edge: Chain<'d'> = (ctx) => {
+    const edge: Chain<'d'> = plain((ctx) => {
       const w = ctx.read('weight', 47950, 100);
       return { d: w > 47950 ? outOfChart('B2-3', 'gross_weight', w, [20000, 47950]) : ok(w * 0.1) };
-    };
+    });
     const e = evaluate(edge, { d: 'distance' });
     close(valueOf(e.cells.d.exact), 4795);
     assert.deepEqual(e.cells.d.conservative, outOfChart('B2-3', 'gross_weight', 48000, [20000, 47950]));
   });
 
   test('only the up side errors: the direction is up, and the conservative value is that error', () => {
-    const edge: Chain<'d'> = (ctx) => {
+    const edge: Chain<'d'> = plain((ctx) => {
       const t = ctx.read('temp', 20.4, 1);
       const w = ctx.read('weight', 47950, 100);
       return { d: w > 47950 ? outOfChart('B2-3', 'gross_weight', w, [20000, 47950]) : ok(w * 0.1 + t) };
-    };
+    });
     const { chain, seen } = spied(edge);
     const e = evaluate(chain, { d: 'distance' });
-    // Runs: exact, temp down, temp up, weight down, weight up, final. The final run reads weight rounded up.
-    assert.equal(e.runs, 5);
+    // Runs: exact, baseline, temp down, temp up, weight down, weight up, final. The final run reads weight rounded up.
+    assert.equal(e.runs, 6);
     assert.equal(seen.get('weight')?.at(-1), 48000);
     assert.equal(seen.get('temp')?.at(-1), 21);
     close(valueOf(e.cells.d.exact), 4815.4);
@@ -159,30 +161,30 @@ describe('evaluate', () => {
   });
 
   test('the first error is by run order: single-point runs in exact-pass read order, down before up', () => {
-    const twoEdges: Chain<'d'> = (ctx) => {
+    const twoEdges: Chain<'d'> = plain((ctx) => {
       const a = ctx.read('a', 9.5, 1);
       const b = ctx.read('b', 4.5, 1);
       if (b > 4.5) return { d: outOfChart('F-B', 'b', b, [0, 4.5]) };
       if (a > 9.5) return { d: outOfChart('F-A', 'a', a, [0, 9.5]) };
       return { d: ok(a + b) };
-    };
+    });
     const e = evaluate(twoEdges, { d: 'distance' });
     // a up errors before b up does (a is read first); the final run (both up) would give F-B.
     assert.deepEqual(e.cells.d.conservative, outOfChart('F-A', 'a', 10, [0, 9.5]));
   });
 
   test('a second read of the same id in one run is a chain defect and throws', () => {
-    const twice: Chain<'d'> = (ctx) => ({ d: ok(ctx.read('a', 1.25, 0.1) + ctx.read('a', 2.5, 0.1)) });
+    const twice: Chain<'d'> = plain((ctx) => ({ d: ok(ctx.read('a', 1.25, 0.1) + ctx.read('a', 2.5, 0.1)) }));
     assert.throws(() => runExact(twice), { name: 'Error', message: /'a' read twice/ });
     assert.throws(() => evaluate(twice, { d: 'distance' }), { name: 'Error', message: /'a' read twice/ });
     assert.throws(() => evaluateExhaustive(twice, { d: 'distance' }), { name: 'Error', message: /'a' read twice/ });
   });
 
   test('an exact error rejects the whole cell', () => {
-    const off: Chain<'d'> = (ctx) => {
+    const off: Chain<'d'> = plain((ctx) => {
       const w = ctx.read('weight', 52050, 100);
       return { d: outOfChart('B2-3', 'gross_weight', w, [20000, 48000]) };
-    };
+    });
     const e = evaluate(off, { d: 'distance' });
     const error = outOfChart('B2-3', 'gross_weight', 52050, [20000, 48000]);
     assert.deepEqual(e.cells.d.exact, error);
@@ -197,20 +199,23 @@ describe('evaluate', () => {
     };
   }
 
-  test('10 reads off their step, one output: 21 runs', () => {
+  test('10 reads off their step, one output: 22 runs', () => {
     const sum = independent(10, 0.37);
-    const e = evaluate((ctx) => ({ d: ok(sum(ctx)) }), { d: 'distance' });
-    assert.equal(e.runs, 21);
+    const e = evaluate(
+      plain((ctx) => ({ d: ok(sum(ctx)) })),
+      { d: 'distance' },
+    );
+    assert.equal(e.runs, 22);
     assert.equal(e.roundingPoints.length, 10);
     close(valueOf(e.cells.d.conservative), 55);
   });
 
-  test('45 reads, three outputs: 93 runs, in under 20 ms', () => {
+  test('45 reads, three outputs: 94 runs, in under 20 ms', () => {
     const sum = independent(45, 0.37);
-    const chain: Chain<'a' | 'b' | 'c'> = (ctx) => {
+    const chain: Chain<'a' | 'b' | 'c'> = plain((ctx) => {
       const s = sum(ctx);
       return { a: ok(s), b: ok(2 * s), c: ok(s + 1) };
-    };
+    });
     const kinds = { a: 'distance', b: 'refusalSpeed', c: 'speed' } as const;
     // The fastest of three, so one slow moment on a loaded machine does not fail it.
     const times: number[] = [];
@@ -220,15 +225,18 @@ describe('evaluate', () => {
       e = evaluate(chain, kinds);
       times.push(performance.now() - start);
     }
-    assert.equal(e.runs, 93);
+    assert.equal(e.runs, 94);
     assert.ok(Math.min(...times) < 20, `${times.map(String).join(', ')} ms`);
     close(valueOf(e.cells.a.conservative), 1035);
     close(valueOf(e.cells.b.conservative), 1980);
   });
 
-  test('10 reads already on their step: 1 run', () => {
+  test('10 reads already on their step: 1 run (the baseline, which is also the final run)', () => {
     const sum = independent(10, 0);
-    const e = evaluate((ctx) => ({ d: ok(sum(ctx)) }), { d: 'distance' });
+    const e = evaluate(
+      plain((ctx) => ({ d: ok(sum(ctx)) })),
+      { d: 'distance' },
+    );
     assert.equal(e.runs, 1);
     close(valueOf(e.cells.d.conservative), 45);
   });
@@ -236,7 +244,7 @@ describe('evaluate', () => {
 
 describe('direction tests', () => {
   test('a distance that falls as a headwind read rises rounds the headwind down', () => {
-    const { chain, seen } = spied<'d'>((ctx) => ({ d: ok(3000 - 20 * ctx.read('headwind', 12.4, 1)) }));
+    const { chain, seen } = spied(plain((ctx) => ({ d: ok(3000 - 20 * ctx.read('headwind', 12.4, 1)) })));
     const e = evaluate(chain, { d: 'distance' });
     close(valueOf(e.cells.d.conservative), 2760);
     // The final run (the last run) rounds the headwind down; the cell's worst alone would hide a wrong direction.
@@ -244,21 +252,21 @@ describe('direction tests', () => {
   });
 
   test('a refusal speed that rises with a weight read rounds the weight down', () => {
-    const { chain, seen } = spied<'v'>((ctx) => ({ v: ok(100 + 0.002 * ctx.read('weight', 30050, 100)) }));
+    const { chain, seen } = spied(plain((ctx) => ({ v: ok(100 + 0.002 * ctx.read('weight', 30050, 100)) })));
     const e = evaluate(chain, { v: 'refusalSpeed' });
     close(valueOf(e.cells.v.conservative), 160);
     assert.equal(seen.get('weight')?.at(-1), 30000);
   });
 
   test('a refusal speed that falls with a weight read rounds the weight up', () => {
-    const { chain, seen } = spied<'v'>((ctx) => ({ v: ok(200 - 0.002 * ctx.read('weight', 30050, 100)) }));
+    const { chain, seen } = spied(plain((ctx) => ({ v: ok(200 - 0.002 * ctx.read('weight', 30050, 100)) })));
     const e = evaluate(chain, { v: 'refusalSpeed' });
     close(valueOf(e.cells.v.conservative), 139.8);
     assert.equal(seen.get('weight')?.at(-1), 30100);
   });
 
   test('one output with one read raising it and another lowering it: each read in its own direction', () => {
-    const mixed: Chain<'d'> = (ctx) => ({ d: ok(10 * ctx.read('a', 1.25, 0.1) - 5 * ctx.read('b', 2.25, 0.1)) });
+    const mixed: Chain<'d'> = plain((ctx) => ({ d: ok(10 * ctx.read('a', 1.25, 0.1) - 5 * ctx.read('b', 2.25, 0.1)) }));
     const { chain, seen } = spied(mixed);
     const e = evaluate(chain, { d: 'distance' });
     close(valueOf(e.cells.d.conservative), 2);
@@ -272,7 +280,7 @@ describe('guards and error order', () => {
   test("an output's re-tests come before its next final run in the error order", () => {
     // The exact pass and roll down take the short branch; roll up reads x and y, both fresh in the final run.
     // Re-tests: x up errors (F-X), then y up errors (F-Y). The repeated final run, both up, reports F-Y first.
-    const branch: Chain<'d'> = (ctx) => {
+    const branch: Chain<'d'> = plain((ctx) => {
       const r = ctx.read('roll', 2495, 10);
       if (r < 2500) return { d: ok(r) };
       const x = ctx.read('x', 5.5, 1);
@@ -280,10 +288,10 @@ describe('guards and error order', () => {
       if (y > 7.5) return { d: outOfChart('F-Y', 'y', y, [0, 7.5]) };
       if (x > 5.5) return { d: outOfChart('F-X', 'x', x, [0, 5.5]) };
       return { d: ok(r + x + y) };
-    };
+    });
     const e = evaluate(branch, { d: 'distance' });
-    // 2 single-point runs, final, 4 re-tests, final.
-    assert.equal(e.runs, 8);
+    // Baseline, 2 single-point runs, final, 4 re-tests, final.
+    assert.equal(e.runs, 9);
     assert.deepEqual(e.cells.d.conservative, outOfChart('F-X', 'x', 6, [0, 5.5]));
   });
 
@@ -295,7 +303,7 @@ describe('guards and error order', () => {
     ['an infinite value', Number.NEGATIVE_INFINITY, 0.1],
   ] as const) {
     test(`ctx.read throws an Error for ${label}`, () => {
-      const bad: Chain<'d'> = (ctx) => ({ d: ok(ctx.read('a', value, step)) });
+      const bad: Chain<'d'> = plain((ctx) => ({ d: ok(ctx.read('a', value, step)) }));
       assert.throws(() => runExact(bad), { name: 'Error', message: /chain defect: rounding point 'a'/ });
       assert.throws(() => evaluate(bad, { d: 'distance' }), { name: 'Error', message: /chain defect/ });
     });
@@ -303,7 +311,7 @@ describe('guards and error order', () => {
 
   test('branches nested three deep, a sound chain: the loop ends and equals the exhaustive search', () => {
     // roll, then x only when roll is rounded up, y only when x is, z only when y is: three re-test rounds.
-    const nested: Chain<'d'> = (ctx) => {
+    const nested: Chain<'d'> = plain((ctx) => {
       const r = ctx.read('roll', 2495, 10);
       if (r < 2500) return { d: ok(r) };
       const x = ctx.read('x', 5.5, 1);
@@ -312,7 +320,7 @@ describe('guards and error order', () => {
       if (y < 8) return { d: ok(r + x + y) };
       const z = ctx.read('z', 1.5, 1);
       return { d: ok(r + x + y + z) };
-    };
+    });
     const e = evaluate(nested, { d: 'distance' });
     const oracle = evaluateExhaustive(nested, { d: 'distance' });
     close(valueOf(e.cells.d.conservative), 2516);
@@ -322,13 +330,203 @@ describe('guards and error order', () => {
   test(`the final-run loop throws an Error after ${String(MAX_FINAL_ROUNDS)} rounds when its ids keep changing`, () => {
     // A chain defect: every run reads a new id, so every final run has a fresh point and the loop would never end.
     let counter = 0;
-    const drifting: Chain<'d'> = (ctx) => ({ d: ok(ctx.read(`n${String(counter++)}`, 1.25, 0.1)) });
+    const drifting: Chain<'d'> = plain((ctx) => ({ d: ok(ctx.read(`n${String(counter++)}`, 1.25, 0.1)) }));
     assert.throws(() => evaluate(drifting, { d: 'distance' }), {
       name: 'Error',
       message: new RegExp(`final-run loop for 'd' passed ${String(MAX_FINAL_ROUNDS)} rounds`),
     });
-    // The exact pass, 2 single-point runs, then per round a final run and 2 re-tests, then the last final run.
-    assert.equal(counter, 1 + 2 + 3 * MAX_FINAL_ROUNDS + 1);
+    // The exact pass, the baseline, 2 single-point runs, then per round a final run and 2 re-tests, then the last
+    // final run.
+    assert.equal(counter, 1 + 1 + 2 + 3 * MAX_FINAL_ROUNDS + 1);
+  });
+});
+
+describe('side data, two-valued inputs and the baseline run', () => {
+  test('side data follows the deciding run', () => {
+    const branchy: Chain<'distance', { branch: 'low' | 'high' }> = (ctx) => {
+      const x = ctx.read('x', 2.46, 0.1);
+      return { outputs: { distance: ok(x * 1000) }, side: { branch: x < 2.5 ? 'low' : 'high' } };
+    };
+    const e = evaluate(branchy, { distance: 'distance' });
+    close(valueOf(e.cells.distance.exact), 2460);
+    close(valueOf(e.cells.distance.conservative), 2500);
+    assert.equal(e.cells.distance.exactSide.branch, 'low');
+    assert.equal(e.cells.distance.conservativeSide.branch, 'high');
+  });
+
+  test('side of an errored conservative run: the run that errored is the side returned', () => {
+    // Runs: baseline (a 9.5, b 4.5), a down, a up (errors: F-A), b down, b up (errors: F-B), final (errors: F-B).
+    const edges: Chain<'d', { a: number; b: number }> = (ctx) => {
+      const a = ctx.read('a', 9.5, 1);
+      const b = ctx.read('b', 4.5, 1);
+      const side = { a, b };
+      if (b > 4.5) return { outputs: { d: outOfChart('F-B', 'b', b, [0, 4.5]) }, side };
+      if (a > 9.5) return { outputs: { d: outOfChart('F-A', 'a', a, [0, 9.5]) }, side };
+      return { outputs: { d: ok(a + b) }, side };
+    };
+    const e = evaluate(edges, { d: 'distance' });
+    assert.deepEqual(e.cells.d.conservative, outOfChart('F-A', 'a', 10, [0, 9.5]));
+    assert.deepEqual(e.cells.d.conservativeSide, { a: 10, b: 4.5 });
+    assert.deepEqual(e.cells.d.exactSide, { a: 9.5, b: 4.5 });
+  });
+
+  test('an exact error rejects the cell, and both sides are the exact side', () => {
+    const off: Chain<'d', string> = (ctx) => {
+      const w = ctx.read('weight', 52050, 100);
+      return { outputs: { d: outOfChart('B2-3', 'gross_weight', w, [20000, 48000]) }, side: `w ${String(w)}` };
+    };
+    const e = evaluate(off, { d: 'distance' });
+    assert.equal(e.cells.d.exactSide, 'w 52050');
+    assert.equal(e.cells.d.conservativeSide, 'w 52050');
+  });
+
+  test('an exact error with an ok baseline keeps the conservative value (Q1)', () => {
+    const chain: Chain<'distance', { d: number }> = (ctx) => {
+      const d = ctx.input('di', { exact: -4, conservative: 4 }, 1);
+      return {
+        outputs: { distance: d < 0 ? outOfChart('B2-3', 'drag_index', d, [0, 300]) : ok(100 + d) },
+        side: { d },
+      };
+    };
+    const e = evaluate(chain, { distance: 'distance' });
+    assert.deepEqual(e.cells.distance.exact, outOfChart('B2-3', 'drag_index', -4, [0, 300]));
+    close(valueOf(e.cells.distance.conservative), 104);
+    assert.deepEqual(e.cells.distance.exactSide, { d: -4 });
+    assert.deepEqual(e.cells.distance.conservativeSide, { d: 4 });
+  });
+
+  test('an exact error with an errored baseline rejects the whole cell', () => {
+    const e = evaluate(
+      plain((ctx) => {
+        const d = ctx.input('di', { exact: -4, conservative: -2 }, 1);
+        return { distance: outOfChart('B2-3', 'drag_index', d, [0, 300]) };
+      }),
+      { distance: 'distance' },
+    );
+    const error = outOfChart('B2-3', 'drag_index', -4, [0, 300]);
+    assert.deepEqual(e.cells.distance.exact, error);
+    assert.deepEqual(e.cells.distance.conservative, error);
+  });
+
+  test('input reads exact in the exact pass and conservative in every other', () => {
+    const { chain, seen } = spied(
+      plain((ctx) => {
+        const t = ctx.read('t', 20.4, 1);
+        const d = ctx.input('di', { exact: -4, conservative: 4 }, 1);
+        return { distance: ok(100 + d + t - t) };
+      }),
+    );
+    const e = evaluate(chain, { distance: 'distance' });
+    close(valueOf(e.cells.distance.exact), 96);
+    close(valueOf(e.cells.distance.conservative), 104);
+    assert.deepEqual(e.roundingPoints, ['t', 'di']);
+    assert.deepEqual(e.trace, [
+      { id: 't', value: 20.4 },
+      { id: 'di', value: -4 },
+    ]);
+    // The exact pass reads -4; the baseline, both runs of t and the final run read 4.
+    assert.deepEqual(seen.get('di'), [-4, 4, 4, 4, 4]);
+  });
+
+  test('an off-step conservative input is rounded like any other point', () => {
+    const e = evaluate(
+      plain((ctx) => ({ distance: ok(100 + ctx.input('di', { exact: -4, conservative: 3.4 }, 1)) })),
+      { distance: 'distance' },
+    );
+    close(valueOf(e.cells.distance.exact), 96);
+    close(valueOf(e.cells.distance.conservative), 104);
+    // Baseline, di down, di up, final.
+    assert.equal(e.runs, 4);
+  });
+
+  test('baseline run without off-step points: one run, the conservative value from it', () => {
+    const e = evaluate(
+      plain((ctx) => ({ distance: ok(100 + ctx.input('di', { exact: -4, conservative: 4 }, 1)) })),
+      { distance: 'distance' },
+    );
+    assert.equal(e.runs, 1);
+    close(valueOf(e.cells.distance.exact), 96);
+    close(valueOf(e.cells.distance.conservative), 104);
+  });
+
+  test('the off-step ids come from the baseline: an exact value on its step is still tested when its baseline is not', () => {
+    const e = evaluate(
+      plain((ctx) => ({ distance: ok(100 + ctx.input('di', { exact: -4, conservative: 3.5 }, 1)) })),
+      { distance: 'distance' },
+    );
+    close(valueOf(e.cells.distance.conservative), 104);
+  });
+
+  test('a conservative input out of chart in the baseline: the conservative value is that error', () => {
+    const e = evaluate(
+      plain((ctx) => {
+        const di = ctx.input('di', { exact: 290, conservative: 310 }, 1);
+        return { distance: di > 300 ? outOfChart('B2-3', 'drag_index', di, [0, 300]) : ok(di) };
+      }),
+      { distance: 'distance' },
+    );
+    close(valueOf(e.cells.distance.exact), 290);
+    assert.deepEqual(e.cells.distance.conservative, outOfChart('B2-3', 'drag_index', 310, [0, 300]));
+  });
+
+  test('input twice in one run throws, as does an input and a read of the same id', () => {
+    const twice = plain((ctx) => ({
+      d: ok(ctx.input('di', { exact: 1, conservative: 1 }, 1) + ctx.input('di', { exact: 2, conservative: 2 }, 1)),
+    }));
+    assert.throws(() => runExact(twice), { name: 'Error', message: /'di' read twice/ });
+    assert.throws(() => evaluate(twice, { d: 'distance' }), { name: 'Error', message: /'di' read twice/ });
+    assert.throws(() => evaluateExhaustive(twice, { d: 'distance' }), { name: 'Error', message: /'di' read twice/ });
+    const mixed = plain((ctx) => ({ d: ok(ctx.read('di', 1, 1) + ctx.input('di', { exact: 2, conservative: 2 }, 1)) }));
+    assert.throws(() => runExact(mixed), { name: 'Error', message: /'di' read twice/ });
+  });
+
+  for (const [label, value, step] of [
+    ['a zero step', { exact: 1, conservative: 1 }, 0],
+    ['a NaN exact value', { exact: Number.NaN, conservative: 1 }, 1],
+    ['an infinite conservative value', { exact: 1, conservative: Number.POSITIVE_INFINITY }, 1],
+  ] as const) {
+    test(`ctx.input throws an Error for ${label}`, () => {
+      const bad = plain((ctx) => ({ d: ok(ctx.input('di', value, step)) }));
+      assert.throws(() => runExact(bad), { name: 'Error', message: /chain defect: rounding point 'di'/ });
+      assert.throws(() => evaluate(bad, { d: 'distance' }), { name: 'Error', message: /chain defect/ });
+    });
+  }
+
+  test('the exhaustive oracle starts every combination from the conservative input and keeps the deciding side', () => {
+    const chain: Chain<'distance', { di: number }> = (ctx) => {
+      const di = ctx.input('di', { exact: -4.2, conservative: 3.4 }, 1);
+      return { outputs: { distance: ok(100 + di) }, side: { di } };
+    };
+    const oracle = evaluateExhaustive(chain, { distance: 'distance' });
+    close(valueOf(oracle.cells.distance.exact), 95.8);
+    close(valueOf(oracle.cells.distance.conservative), 104);
+    assert.deepEqual(oracle.cells.distance.exactSide, { di: -4.2 });
+    assert.deepEqual(oracle.cells.distance.conservativeSide, { di: 4 });
+    const fast = evaluate(chain, { distance: 'distance' });
+    assert.deepEqual(fast.cells.distance.conservativeSide, { di: 4 });
+  });
+
+  test('Q1 in the oracle: an exact error with an ok baseline keeps the conservative value, as in evaluate', () => {
+    const chain: Chain<'distance', { d: number }> = (ctx) => {
+      const d = ctx.input('di', { exact: -4, conservative: 3.4 }, 1);
+      return {
+        outputs: { distance: d < 0 ? outOfChart('B2-3', 'drag_index', d, [0, 300]) : ok(100 + d) },
+        side: { d },
+      };
+    };
+    const kinds = { distance: 'distance' } as const;
+    const fast = evaluate(chain, kinds);
+    const oracle = evaluateExhaustive(chain, kinds);
+    assert.deepEqual(oracle.cells.distance.exact, outOfChart('B2-3', 'drag_index', -4, [0, 300]));
+    assert.deepEqual(oracle.cells.distance.exact, fast.cells.distance.exact);
+    close(valueOf(oracle.cells.distance.conservative), 104);
+    close(valueOf(oracle.cells.distance.conservative), valueOf(fast.cells.distance.conservative));
+    assert.deepEqual(oracle.cells.distance.conservativeSide, fast.cells.distance.conservativeSide);
+    // Both errored: the whole cell is the exact error in both searches.
+    const both = plain((ctx) => ({
+      distance: outOfChart('B2-3', 'drag_index', ctx.input('di', { exact: -4, conservative: -2 }, 1), [0, 300]),
+    }));
+    assert.deepEqual(evaluateExhaustive(both, kinds).cells.distance, evaluate(both, kinds).cells.distance);
   });
 });
 
@@ -426,8 +624,8 @@ function randomChain(rng: () => number): RandomChain {
   };
 
   // Put the threshold inside the selector's rounding interval, so rounding it switches the branch.
-  const plain: Ctx = { read: (_id, value) => value };
-  const v = reads(plain)[selector] ?? 0;
+  const exactCtx: Ctx = { read: (_id, value) => value, input: (_id, value) => value.exact };
+  const v = reads(exactCtx)[selector] ?? 0;
   const step = specs[selector]?.step ?? 1;
   const lo = roundTo(v, step, 'down');
   const hi = roundTo(v, step, 'up');
@@ -444,7 +642,7 @@ function randomChain(rng: () => number): RandomChain {
     outputs.push({ name, uses });
   }
 
-  const chain: Chain<string> = (ctx) => {
+  const chain: Chain<string> = plain((ctx) => {
     const values = reads(ctx);
     const result: Record<string, Read<number>> = {};
     for (const { name, uses } of outputs) {
@@ -456,7 +654,7 @@ function randomChain(rng: () => number): RandomChain {
       result[name] = ok(sum);
     }
     return result;
-  };
+  });
   return { chain, kinds };
 }
 
@@ -484,7 +682,7 @@ function independentSignedChain(rng: () => number): RandomChain {
     name,
     uses: specs.map(() => ({ w: sign(rng) * (0.1 + rng()), root: rng() < 0.3 })),
   }));
-  const chain: Chain<string> = (ctx) => {
+  const chain: Chain<string> = plain((ctx) => {
     const values = specs.map((spec, i) => ctx.read(`r${String(i)}`, spec.value, spec.step));
     const result: Record<string, Read<number>> = {};
     for (const { name, uses } of outputs) {
@@ -496,7 +694,7 @@ function independentSignedChain(rng: () => number): RandomChain {
       result[name] = ok(sum);
     }
     return result;
-  };
+  });
   return { chain, kinds };
 }
 
@@ -533,7 +731,7 @@ function signedFeedingChain(rng: () => number): RandomChain {
     });
     return values;
   };
-  const v = reads({ read: (_id, value) => value })[selector] ?? 0;
+  const v = reads({ read: (_id, value) => value, input: (_id, value) => value.exact })[selector] ?? 0;
   const step = specs[selector]?.step ?? 1;
   const lo = roundTo(v, step, 'down');
   const hi = roundTo(v, step, 'up');
@@ -541,12 +739,12 @@ function signedFeedingChain(rng: () => number): RandomChain {
 
   const kinds = twoKinds(rng);
   const outputs = Object.keys(kinds).map((name) => ({ name, w: specs.map(() => sign(rng) * (0.1 + rng())) }));
-  const chain: Chain<string> = (ctx) => {
+  const chain: Chain<string> = plain((ctx) => {
     const values = reads(ctx);
     const result: Record<string, Read<number>> = {};
     for (const { name, w } of outputs) result[name] = ok(values.reduce((sum, x, i) => sum + (w[i] ?? 0) * x, 0));
     return result;
-  };
+  });
   return { chain, kinds };
 }
 
@@ -566,8 +764,9 @@ function assertAgreement(make: (rng: () => number) => RandomChain, seed: number)
         `chain ${String(n)} output ${k}:`,
       );
     }
-    // The final run read a point the exact pass did not: 2 single-point runs per point do not explain the count.
-    if (fast.runs !== 2 * fast.roundingPoints.length + Object.keys(kinds).length) branchesSwitched++;
+    // The final run read a point the exact pass did not: the baseline and 2 single-point runs per point do not
+    // explain the count.
+    if (fast.runs !== 1 + 2 * fast.roundingPoints.length + Object.keys(kinds).length) branchesSwitched++;
   }
   return branchesSwitched;
 }
