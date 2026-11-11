@@ -56,18 +56,21 @@ export function clampWithin(range: readonly [number, number], x: number, toleran
 /**
  * interp, reading the end value for an x within `tolerance` beyond a drawn end, where that end is an
  * input-axis end: within `tolerance` of the same end of `span`, the drawn input span of the line's
- * family (all its curves, or the guideline family's lines), which holds the line. Beyond any other
- * end the line is not drawn: undefined.
+ * family (all its curves, or the guideline family's lines), which holds the line, or within
+ * `tolerance` of one of `anchors` (a guideline panel's baseline, where its lines start or stop).
+ * Beyond any other end the line is not drawn: undefined.
  */
 export function interpWithin(
   points: Points,
   x: number,
   tolerance: number,
   span: readonly [number, number],
+  anchors: readonly number[] = [],
 ): number | undefined {
   const [lo, hi] = drawnRange(points);
-  const below = lo - span[0] <= tolerance ? tolerance : 0;
-  const above = span[1] - hi <= tolerance ? tolerance : 0;
+  const anchored = (end: number): boolean => anchors.some((anchor) => Math.abs(end - anchor) <= tolerance);
+  const below = lo - span[0] <= tolerance || anchored(lo) ? tolerance : 0;
+  const above = span[1] - hi <= tolerance || anchored(hi) ? tolerance : 0;
   if (!(x >= lo - below && x <= hi + above)) return undefined;
   return interp(points, Math.min(Math.max(x, lo), hi));
 }

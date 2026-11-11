@@ -380,6 +380,34 @@ describe('side data, two-valued inputs and the baseline run', () => {
     assert.equal(e.cells.d.conservativeSide, 'w 52050');
   });
 
+  test('an exact error with an ok baseline keeps the conservative value (Q1)', () => {
+    const chain: Chain<'distance', { d: number }> = (ctx) => {
+      const d = ctx.input('di', { exact: -4, conservative: 4 }, 1);
+      return {
+        outputs: { distance: d < 0 ? outOfChart('B2-3', 'drag_index', d, [0, 300]) : ok(100 + d) },
+        side: { d },
+      };
+    };
+    const e = evaluate(chain, { distance: 'distance' });
+    assert.deepEqual(e.cells.distance.exact, outOfChart('B2-3', 'drag_index', -4, [0, 300]));
+    close(valueOf(e.cells.distance.conservative), 104);
+    assert.deepEqual(e.cells.distance.exactSide, { d: -4 });
+    assert.deepEqual(e.cells.distance.conservativeSide, { d: 4 });
+  });
+
+  test('an exact error with an errored baseline rejects the whole cell', () => {
+    const e = evaluate(
+      plain((ctx) => {
+        const d = ctx.input('di', { exact: -4, conservative: -2 }, 1);
+        return { distance: outOfChart('B2-3', 'drag_index', d, [0, 300]) };
+      }),
+      { distance: 'distance' },
+    );
+    const error = outOfChart('B2-3', 'drag_index', -4, [0, 300]);
+    assert.deepEqual(e.cells.distance.exact, error);
+    assert.deepEqual(e.cells.distance.conservative, error);
+  });
+
   test('input reads exact in the exact pass and conservative in every other', () => {
     const { chain, seen } = spied(
       plain((ctx) => {

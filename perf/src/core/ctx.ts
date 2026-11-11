@@ -170,7 +170,13 @@ function decidingRun(reads: readonly Read<number>[], worse: 'higher' | 'lower'):
   return best;
 }
 
-/** The cell for one output. An exact error rejects the whole cell, and both sides are the exact pass's. */
+/**
+ * The cell for one output; `runs[0]` is the baseline. An exact error rejects the whole cell (the conservative value is
+ * the exact error, both sides the exact pass's) only when the baseline errors too. With single-valued inputs the
+ * baseline is the exact pass, so an exact error always rejects the cell. When the exact pass errors and the baseline
+ * does not (a two-valued input: the exact value leaves the chart, the conservative one does not), `exact` keeps the
+ * error and the conservative value is decided from the conservative runs as usual.
+ */
 function cellOf<K extends string, S>(
   k: K,
   exact: ChainRun<K, S>,
@@ -178,7 +184,7 @@ function cellOf<K extends string, S>(
   worse: 'higher' | 'lower',
 ): Cell<S> {
   const exactRead = exact.outputs[k];
-  if (!exactRead.ok)
+  if (!exactRead.ok && runs[0]?.outputs[k].ok !== true)
     return { exact: exactRead, conservative: exactRead, exactSide: exact.side, conservativeSide: exact.side };
   const decided =
     runs[
@@ -205,6 +211,10 @@ export function runExact<K extends string, S>(
 /** The most re-test rounds one output's final-run loop may take before the chain is called defective. */
 export const MAX_FINAL_ROUNDS = 64;
 
+/**
+ * The exact and conservative value of every output of `chain`, with the side data of the run that decided each.
+ * An exact error rejects a cell only when the baseline run errors too (see `cellOf`).
+ */
 export function evaluate<K extends string, S>(
   chain: Chain<K, S>,
   kinds: Readonly<Record<K, OutputKind>>,

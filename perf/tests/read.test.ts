@@ -98,6 +98,11 @@ describe('interp', () => {
     assert.equal(interpWithin(points, -0.01, 0.02, [0, 11]), 1);
   });
 
+  test('interpWithin gives the tolerance to an end within it of an anchor (a guideline baseline)', () => {
+    assert.equal(interpWithin(points, 10.01, 0.02, [0, 11], [10.01]), 2.2);
+    assert.equal(interpWithin(points, 10.01, 0.02, [0, 11], [5]), undefined);
+  });
+
   test('EDGE_TOLERANCE is 0.2 % of the drawn span (R1)', () => {
     assert.equal(EDGE_TOLERANCE, 0.002);
   });
@@ -339,7 +344,7 @@ describe('guidelinePanel', () => {
     near(valueOf(guidelinePanel(short, 'B2-3', 'all', 1500, 40)), 1650);
   });
 
-  test('a line starting a hair past the baseline inside its family span is not usable (ruling 4)', () => {
+  test('a line starting a hair past the baseline inside its family span keeps the tolerance there (ruling 4)', () => {
     const short: GuidelinePanel = {
       ...cg,
       families: {
@@ -352,9 +357,26 @@ describe('guidelinePanel', () => {
         ],
       },
     };
+    near(valueOf(guidelinePanel(short, 'B2-3', 'all', 1500, 40)), 1650);
+  });
+
+  test('a line ending inside its family span away from the baseline is not usable past it (ruling 4)', () => {
+    const short: GuidelinePanel = {
+      ...cg,
+      families: {
+        all: [
+          [
+            [30, 900],
+            [37.5, 1050],
+          ],
+          ...lines([1800, 2000, 2200], [2700, 3000, 3300]),
+        ],
+      },
+    };
+    near(valueOf(guidelinePanel(short, 'B2-3', 'all', 1000, 37.5)), 1050);
     assert.deepEqual(
-      guidelinePanel(short, 'B2-3', 'all', 1500, 40),
-      outOfChart('B2-3', 'distance', 1500, [2000, 3000]),
+      guidelinePanel(short, 'B2-3', 'all', 1000, 37.51),
+      outOfChart('B2-3', 'distance', 1000, [2000, 3000]),
     );
   });
 
@@ -660,6 +682,30 @@ describe('edge tolerance on input-axis ends only (ruling 4), on the extracted ch
     assert.equal(line.at(-1)?.[0], 19.9891);
     const entry = line[0]?.[1] ?? NaN;
     near(valueOf(guidelinePanel(wind, 'B2-3', 'tailwind', entry, 20)), line.at(-1)?.[1] ?? NaN);
+  });
+
+  test('a guideline end a hair short of the baseline keeps the tolerance: B2-4 gw from 40 KIAS', () => {
+    const gw = panel(loadFigure('B2-4'), 'gw', 'guideline_panel');
+    const line = gw.families.all?.[0];
+    assert.ok(line !== undefined);
+    assert.equal(gw.baseline, 43);
+    assert.equal(line.at(-1)?.[0], 42.9999);
+    // An entry between the 40 and 50 KIAS lines at the baseline reads at 30,000 lb.
+    const at = (target: number): number => valueOf(guidelinePanel(gw, 'B2-4', 'all', 45, target));
+    // A lighter aircraft reaches a higher speed: between the two lines' 30,000 lb values (about 47 and 62 KIAS).
+    assert.ok(at(30) > 47 && at(30) < 62, String(at(30)));
+    near(valueOf(guidelinePanel(gw, 'B2-4', 'all', line.at(-1)?.[1] ?? NaN, 43)), line.at(-1)?.[1] ?? NaN);
+  });
+
+  test('a guideline end a hair past the baseline keeps the tolerance: B2-3 cg 12,000 ft line', () => {
+    const cgPanel = panel(b23, 'cg', 'guideline_panel');
+    const line = cgPanel.families.all?.at(-1);
+    assert.ok(line !== undefined);
+    assert.equal(cgPanel.baseline, 35);
+    assert.equal(line[0]?.[0], 35.003);
+    // 11,500 ft at CG 35 moves to CG 38 between the 11,000 and 12,000 ft lines.
+    const read = valueOf(guidelinePanel(cgPanel, 'B2-3', 'all', 11.5, 38));
+    assert.ok(read > 10.5 && read < 12, String(read));
   });
 
   test("a short line inside its family gets no tolerance: B2-6 sheet 3's tailwind line from 60 KIAS", () => {
