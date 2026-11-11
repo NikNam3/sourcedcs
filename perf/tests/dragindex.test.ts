@@ -13,7 +13,15 @@ import {
   type Station,
   type StoreRow,
 } from '../src/core/dragindex/catalogue.ts';
-import { DEFAULT_LOADOUT, dragIndex, type LoadoutRow } from '../src/core/dragindex/loadout.ts';
+import {
+  checkLoadout,
+  DEFAULT_LOADOUT,
+  dragIndex,
+  type DragIndex,
+  type Loadout,
+  type LoadoutProblem,
+  type LoadoutRow,
+} from '../src/core/dragindex/loadout.ts';
 import { capacity, RACK_SUSPENSIONS } from '../src/core/dragindex/racks.ts';
 import { loadFigure } from './helpers/data.ts';
 
@@ -36,6 +44,13 @@ const row = (
   count = stations.length,
   suspension: string | null = null,
 ): LoadoutRow => ({ stations, storeKey, suspension, count });
+
+/** The drag index of a loadout the catalogue allows. */
+function computed(loadout: Loadout, additional: number): Extract<DragIndex, { ok: true }> {
+  const result = dragIndex(cat, loadout, additional);
+  if (!result.ok) throw new Error(`loadout problems: ${JSON.stringify(result.problems)}`);
+  return result;
+}
 
 test('every B1-1 row parses: stations and drag of every store and suspension row', () => {
   let stores = 0;
@@ -121,11 +136,11 @@ test('the default loadout: pairs 1/9, 2/8, 3/7, 4/6, then 5, 5L, 5R, all empty, 
     ['1/9', '2/8', '3/7', '4/6', '5', '5L', '5R'],
   );
   assert.ok(DEFAULT_LOADOUT.every((r) => r.storeKey === null));
-  const result = dragIndex(cat, DEFAULT_LOADOUT, 0);
+  const result = computed(DEFAULT_LOADOUT, 0);
   assert.equal(result.exact, 4);
   assert.equal(result.conservative, 4);
   assert.deepEqual(result.lines, []);
-  assert.equal(dragIndex(cat, DEFAULT_LOADOUT, 7).exact, 11);
+  assert.equal(computed(DEFAULT_LOADOUT, 7).exact, 11);
 });
 
 const WORKED_EXAMPLE: LoadoutRow[] = [
@@ -136,7 +151,7 @@ const WORKED_EXAMPLE: LoadoutRow[] = [
 ];
 
 test('worked example (p. B1-2/B1-3): each line as Q4, 142 for the stores, 146 in all', () => {
-  const result = dragIndex(cat, WORKED_EXAMPLE, 0);
+  const result = computed(WORKED_EXAMPLE, 0);
   const summary = result.lines.map((l) => [
     l.row.stations.join('/'),
     l.count,
@@ -166,24 +181,24 @@ test('worked example (p. B1-2/B1-3): each line as Q4, 142 for the stores, 146 in
 });
 
 test('the default suspension at the tips is the AIM-9 LAUNCHER (16S210), DI 0', () => {
-  const [line] = dragIndex(cat, [row(['1', '9'], store('AIM-9L, M, S', '1 OR 9').key)], 0).lines;
+  const [line] = computed([row(['1', '9'], store('AIM-9L, M, S', '1 OR 9').key)], 0).lines;
   assert.equal(line?.suspension?.name, 'AIM-9 LAUNCHER (16S210)');
   assert.equal(line.exact, 0);
 });
 
 test('no tip missile: exact −4 each (4 − 8), conservative 0 (4)', () => {
-  const result = dragIndex(cat, [row(['1', '9'], 'noTipMissile')], 0);
+  const result = computed([row(['1', '9'], 'noTipMissile')], 0);
   assert.equal(result.exact, -4);
   assert.equal(result.conservative, 4);
   assert.equal(result.lines[0]?.eachExact, -4);
   assert.equal(result.lines[0].eachConservative, 0);
   assert.equal(result.lines[0].suspension, null);
-  assert.throws(() => dragIndex(cat, [row(['3', '7'], 'noTipMissile')], 0));
+  assert.throws(() => computed([row(['3', '7'], 'noTipMissile')], 0));
 });
 
 test('a tip pod (**) is its value less the tip AIM-9 (4): 2 − 4 = −2 each', () => {
   const pod = store('-T-17 (P4A)', '1 OR 9', 'AN/ASQ:');
-  const result = dragIndex(cat, [row(['1', '9'], pod.key)], 0);
+  const result = computed([row(['1', '9'], pod.key)], 0);
   assert.equal(result.lines[0]?.eachExact, -2);
   assert.equal(result.lines[0].eachConservative, -2);
   // Two pods on the AIM-9 launchers: the lowest conservative drag index, 4 − 2 − 2 = 0.
@@ -191,7 +206,7 @@ test('a tip pod (**) is its value less the tip AIM-9 (4): 2 − 4 = −2 each', 
 });
 
 test('the * marker is not one rule: LANTIRN NAVIGATION (32*, with pylon) at 5L adds 32, no suspension line', () => {
-  const result = dragIndex(cat, [row(['5L'], store('NAVIGATION', '5L', 'LANTIRN POD:').key)], 0);
+  const result = computed([row(['5L'], store('NAVIGATION', '5L', 'LANTIRN POD:').key)], 0);
   assert.equal(result.lines[0]?.eachExact, 32);
   assert.equal(result.lines[0].suspension, null);
   assert.equal(result.exact, 36);
@@ -199,7 +214,7 @@ test('the * marker is not one rule: LANTIRN NAVIGATION (32*, with pylon) at 5L a
 
 test('two printed values: the subsonic one, with a note', () => {
   const mk82 = store('MK 82 LDGP', '3,4,6, OR 7');
-  const [line] = dragIndex(cat, [row(['3', '7'], mk82.key)], 0).lines;
+  const [line] = computed([row(['3', '7'], mk82.key)], 0).lines;
   assert.equal(line?.eachExact, 5);
   assert.ok(line.notes.some((n) => /subsonic/.test(n)));
 });
@@ -207,7 +222,7 @@ test('two printed values: the subsonic one, with a note', () => {
 test('tank variants follow the store inboard (4 from 3, 6 from 7; 5 from 4 and 6)', () => {
   const at46 = (inboard: LoadoutRow | null): number[] => {
     const rows = [row(['4', '6'], tank(370, '4 OR 6').key), ...(inboard === null ? [] : [inboard])];
-    return dragIndex(cat, rows, 0)
+    return computed(rows, 0)
       .lines.filter((l) => l.row.stations.includes('4'))
       .map((l) => l.eachExact);
   };
@@ -215,10 +230,18 @@ test('tank variants follow the store inboard (4 from 3, 6 from 7; 5 from 4 and 6
   assert.deepEqual(at46(row(['3', '7'], store('AIM-9L, M, S', '2,3,7, OR 8').key)), [27]);
   assert.deepEqual(at46(row(['3', '7'], store('MK 84 LDGP', '3,4,6, OR 7').key)), [35]);
   assert.deepEqual(at46(row(['3', '7'], store('MK 82 LDGP', '3,4,6, OR 7').key, 6)), [39]);
+  // An odd count on the pair: which side carries the extra store is not said, so both tanks take MULTIPLE.
+  const oddInboard = row(['3', '7'], store('MK 82 LDGP', '3,4,6, OR 7').key, 3);
+  assert.deepEqual(at46(oddInboard), [39]);
+  assert.deepEqual(
+    computed([row(['4', '6'], tank(370, '4 OR 6').key), oddInboard], 0)
+      .lines.filter((l) => l.variant !== null)
+      .map((l) => [l.count, l.eachExact]),
+    [[2, 39]],
+  );
 
   // Only 3 loaded (count 1 on the pair): 4 is single, 6 has nothing inboard: two lines.
-  const split = dragIndex(
-    cat,
+  const split = computed(
     [row(['4', '6'], tank(370, '4 OR 6').key), row(['3', '7'], store('MK 84 LDGP', '3,4,6, OR 7').key, 1)],
     0,
   ).lines.filter((l) => l.row.stations.includes('4'));
@@ -231,8 +254,7 @@ test('tank variants follow the store inboard (4 from 3, 6 from 7; 5 from 4 and 6
   );
 
   const at5 = (rows: LoadoutRow[]): number | undefined =>
-    dragIndex(cat, [row(['5'], tank(300, '5').key), ...rows], 0).lines.find((l) => l.row.stations[0] === '5')
-      ?.eachExact;
+    computed([row(['5'], tank(300, '5').key), ...rows], 0).lines.find((l) => l.row.stations[0] === '5')?.eachExact;
   const mk84 = store('MK 84 LDGP', '3,4,6, OR 7').key;
   assert.equal(at5([]), 15);
   assert.equal(at5([row(['4', '6'], mk84)]), 18);
@@ -240,31 +262,48 @@ test('tank variants follow the store inboard (4 from 3, 6 from 7; 5 from 4 and 6
   // One side only is printed nowhere: 18, the safer value, with a note (Extra 2).
   assert.equal(at5([row(['4'], mk84)]), 18);
   assert.equal(at5([row(['4', '6'], mk84, 1)]), 18);
-  const oneSide = dragIndex(cat, [row(['5'], tank(300, '5').key), row(['4'], mk84)], 0).lines[0];
+  const oneSide = computed([row(['5'], tank(300, '5').key), row(['4'], mk84)], 0).lines[0];
   assert.ok(oneSide?.notes.some((n) => /one of 4 and 6/.test(n)) === true);
   assert.equal(oneSide.suspension?.name, 'CENTERLINE PYLON* (16S951)');
 });
 
 test('count capped by capacity; the default suspension is the smallest that carries the count', () => {
   const mk82 = store('MK 82 LDGP', '3,4,6, OR 7').key;
-  const [onPylon] = dragIndex(cat, [row(['3', '7'], mk82, 4, 'WEAPON PYLON* (16S1700)')], 0).lines;
+  const [onPylon] = computed([row(['3', '7'], mk82, 4, 'WEAPON PYLON* (16S1700)')], 0).lines;
   assert.equal(onPylon?.count, 2);
   assert.equal(onPylon.exact, 2 * 5 + 2 * 15);
-  const [onTer] = dragIndex(cat, [row(['3', '7'], mk82, 6)], 0).lines;
+  const [onTer] = computed([row(['3', '7'], mk82, 6)], 0).lines;
   assert.equal(onTer?.suspension?.name, 'TER (16S1750) + WEAPON PYLON*');
   assert.equal(onTer.count, 6);
   assert.equal(onTer.exact, 6 * 5 + 2 * 24);
-  const [capped] = dragIndex(cat, [row(['3', '7'], mk82, 9)], 0).lines;
+  const [capped] = computed([row(['3', '7'], mk82, 9)], 0).lines;
   assert.equal(capped?.count, 6);
-  const [two] = dragIndex(cat, [row(['3', '7'], mk82, 2)], 0).lines;
+  const [two] = computed([row(['3', '7'], mk82, 2)], 0).lines;
   assert.equal(two?.suspension?.name, 'WEAPON PYLON* (16S1700)');
 });
 
-test('a loadout the catalogue does not allow throws', () => {
+test('a loadout the catalogue does not allow gives its problems, never a throw', () => {
   const mk84 = store('MK 84 LDGP', '3,4,6, OR 7').key;
-  assert.throws(() => dragIndex(cat, [row(['3', '7'], 'no such key')], 0));
-  assert.throws(() => dragIndex(cat, [row(['1', '9'], mk84)], 0));
-  assert.throws(() => dragIndex(cat, [row(['3', '7'], mk84, 2, 'LAU-129/A LAUNCHER')], 0));
-  assert.throws(() => dragIndex(cat, [row(['3', '7'], mk84, 0)], 0));
-  assert.throws(() => dragIndex(cat, [row(['3', '7'], mk84), row(['3'], mk84)], 0));
+  const problems = (loadout: Loadout): readonly LoadoutProblem[] => {
+    const result = dragIndex(cat, loadout, 0);
+    if (result.ok) assert.fail('the loadout computed');
+    assert.deepEqual(checkLoadout(cat, loadout), result.problems);
+    return result.problems;
+  };
+  assert.deepEqual(problems([row(['3', '7'], 'no such key')]), [{ row: 0, code: 'unknownStore' }]);
+  assert.deepEqual(problems([row(['1', '9'], mk84)]), [{ row: 0, code: 'storeOffStations' }]);
+  assert.deepEqual(problems([row(['3', '7'], mk84, 2, 'LAU-129/A LAUNCHER')]), [
+    { row: 0, code: 'suspensionOffStore' },
+  ]);
+  assert.deepEqual(problems([row(['1', '9'], 'noTipMissile', 2, 'LAU-129/A LAUNCHER')]), [
+    { row: 0, code: 'suspensionOffStore' },
+  ]);
+  assert.deepEqual(problems([row(['3', '7'], 'noTipMissile')]), [{ row: 0, code: 'tipOnly' }]);
+  assert.deepEqual(problems([row(['3', '7'], mk84, 0)]), [{ row: 0, code: 'badCount' }]);
+  assert.deepEqual(problems([row(['3', '7'], mk84, 1.5)]), [{ row: 0, code: 'badCount' }]);
+  assert.deepEqual(problems([row(['3', '7'], mk84), row(['3'], null)]), [{ row: 1, code: 'stationTwice' }]);
+  assert.deepEqual(checkLoadout(cat, WORKED_EXAMPLE), []);
+  assert.deepEqual(checkLoadout(cat, DEFAULT_LOADOUT), []);
+  const worked = dragIndex(cat, WORKED_EXAMPLE, 0);
+  assert.ok(worked.ok && worked.exact === 146 && worked.conservative === 146);
 });

@@ -1,8 +1,8 @@
 /**
  * Loadout → drag index, exact and conservative (Fig. B1-1; TOLD.md decisions of 29 Oct 2026, section 5.2).
- * Basic aircraft + each loaded row's stores and suspensions + the pilot's additional drag index. A loadout the
- * catalogue does not allow (unknown store, a store or suspension off its stations, a station in two rows) is a
- * defect of the caller and throws; a count over what the suspension carries is capped.
+ * Basic aircraft + each loaded row's stores and suspensions + the pilot's additional drag index. The loadout is
+ * user input: one the catalogue does not allow gives `ok: false` with `checkLoadout`'s problems, never a throw (a
+ * throw here is a data defect). A count over what the suspension carries is capped, with a note.
  */
 import {
   storesFor,
@@ -12,39 +12,14 @@ import {
   type StoreRow,
   type SuspensionRow,
 } from './catalogue.ts';
+import { checkLoadout, type LoadoutProblem } from './check.ts';
+import type { Loadout, LoadoutRow } from './loadout-row.ts';
 import { capacity } from './racks.ts';
 import { centrelineCondition, wingCondition, type Neighbour, type TankCondition } from './tank.ts';
-import { storeEach, tipMissileDrag } from './tip.ts';
+import { isAim9, storeEach, tipMissileDrag } from './tip.ts';
 
-/** One station row: the store, the suspension (null: the default), the count over all its stations. */
-export interface LoadoutRow {
-  readonly stations: readonly Station[];
-  /** A `StoreRow.key`, or `'noTipMissile'` at 1/9: the tip AIM-9s removed. */
-  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- names the sentinel in the type
-  readonly storeKey: string | 'noTipMissile' | null;
-  readonly suspension: string | null;
-  readonly count: number;
-}
-
-export type Loadout = readonly LoadoutRow[];
-
-const empty = (stations: Station[]): LoadoutRow => ({
-  stations,
-  storeKey: null,
-  suspension: null,
-  count: stations.length,
-});
-
-/** Pairs 1/9, 2/8, 3/7, 4/6, then 5, 5L, 5R, as the manual's worked example; all empty. */
-export const DEFAULT_LOADOUT: Loadout = [
-  empty(['1', '9']),
-  empty(['2', '8']),
-  empty(['3', '7']),
-  empty(['4', '6']),
-  empty(['5']),
-  empty(['5L']),
-  empty(['5R']),
-];
+export { DEFAULT_LOADOUT, type Loadout, type LoadoutRow } from './loadout-row.ts';
+export { checkLoadout, type LoadoutProblem } from './check.ts';
 
 /**
  * One drag index line: `count` stores at `eachExact`/`eachConservative`, plus `suspensionCount` of `suspension`.
@@ -64,11 +39,9 @@ export interface DragLine {
   readonly notes: readonly string[];
 }
 
-export interface DragIndex {
-  readonly exact: number;
-  readonly conservative: number;
-  readonly lines: readonly DragLine[];
-}
+export type DragIndex =
+  | { readonly ok: true; readonly exact: number; readonly conservative: number; readonly lines: readonly DragLine[] }
+  | { readonly ok: false; readonly problems: readonly LoadoutProblem[] };
 
 /** A loaded row, resolved against the catalogue: its store (null: no tip missile), count and suspension. */
 interface Resolved {
@@ -79,8 +52,6 @@ interface Resolved {
   readonly loaded: readonly Station[];
   readonly notes: readonly string[];
 }
-
-const TIP: readonly Station[] = ['1', '9'];
 
 /** The suspension untouched: the smallest that carries the count; with none big enough, the biggest. */
 function defaultSuspension(
@@ -98,27 +69,20 @@ function defaultSuspension(
 
 function resolve(cat: Catalogue, row: LoadoutRow): Resolved {
   const k = row.stations.length;
-  if (!Number.isInteger(row.count) || row.count < 1) {
-    throw new Error(`stations ${row.stations.join('/')}: count ${String(row.count)} is not a whole number from 1`);
-  }
   const notes: string[] = [];
   let store: StoreRow | null = null;
   let suspension: SuspensionRow | null = null;
   let cap = k;
-  if (row.storeKey === 'noTipMissile') {
-    if (!row.stations.every((s) => TIP.includes(s))) throw new Error('no tip missile: only on stations 1 and 9');
-    if (row.suspension !== null) throw new Error('no tip missile: no suspension');
-  } else {
+  if (row.storeKey !== 'noTipMissile') {
     const key = row.storeKey;
     store = storesFor(cat, row.stations).find((s) => s.key === key) ?? null;
-    if (store === null)
-      throw new Error(`store "${String(key)}" is not in Fig. B1-1 for stations ${row.stations.join('/')}`);
+    if (store === null) throw new Error(`unreachable: checkLoadout passed store "${String(key)}"`);
     const candidates = suspensionsFor(cat, store, row.stations);
     if (row.suspension === null) {
       suspension = defaultSuspension(candidates, row.count, k);
     } else {
       suspension = candidates.find((c) => c.name === row.suspension) ?? null;
-      if (suspension === null) throw new Error(`suspension "${row.suspension}" does not carry "${store.key}" here`);
+      if (suspension === null) throw new Error(`unreachable: checkLoadout passed suspension "${row.suspension}"`);
     }
     if (suspension !== null) cap = capacity(suspension.name) * k;
   }
@@ -136,7 +100,7 @@ function neighbours(resolved: readonly Resolved[]): Map<Station, Neighbour> {
   const map = new Map<Station, Neighbour>();
   for (const r of resolved) {
     const perStation = Math.ceil(r.count / r.row.stations.length);
-    const aim9 = r.store !== null && /^AIM-9/.test(r.store.name);
+    const aim9 = r.store !== null && isAim9(r.store);
     for (const s of r.loaded) map.set(s, { loaded: true, aim9, perStation });
   }
   return map;
@@ -219,19 +183,17 @@ function rowLines(cat: Catalogue, r: Resolved, at: Map<Station, Neighbour>): Dra
   ];
 }
 
-/** The drag index of a loadout: basic aircraft (subsonic) + every loaded row + `additional`, exact and conservative. */
+/**
+ * The drag index of a loadout: basic aircraft (subsonic) + every loaded row + `additional`, exact and
+ * conservative. A loadout `checkLoadout` finds problems in gives `ok: false` with them.
+ */
 export function dragIndex(cat: Catalogue, loadout: Loadout, additional: number): DragIndex {
-  const seen = new Set<Station>();
-  for (const row of loadout) {
-    for (const s of row.stations) {
-      if (seen.has(s)) throw new Error(`station ${s} is in two loadout rows`);
-      seen.add(s);
-    }
-  }
+  const problems = checkLoadout(cat, loadout);
+  if (problems.length > 0) return { ok: false, problems };
   const resolved = loadout.filter((row) => row.storeKey !== null).map((row) => resolve(cat, row));
   const at = neighbours(resolved);
   const lines = resolved.flatMap((r) => rowLines(cat, r, at));
   const sum = (pick: (l: DragLine) => number): number => lines.reduce((total, l) => total + pick(l), 0);
   const base = cat.basic.subsonic + additional;
-  return { exact: base + sum((l) => l.exact), conservative: base + sum((l) => l.conservative), lines };
+  return { ok: true, exact: base + sum((l) => l.exact), conservative: base + sum((l) => l.conservative), lines };
 }

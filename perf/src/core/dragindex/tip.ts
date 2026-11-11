@@ -9,10 +9,16 @@ import type { Catalogue, StoreRow } from './catalogue.ts';
 const isTipRow = (store: StoreRow): boolean =>
   store.sheet === 3 && store.stations.length === 2 && store.stations.includes('1') && store.stations.includes('9');
 
+/**
+ * An AIM-9 store: the name starts with "AIM-9". CATM-9 and the other training rounds count as other stores, so
+ * a tank beside one takes "single" rather than "AIM-9'S" (the higher value: errs on the safe side).
+ */
+export const isAim9 = (store: StoreRow): boolean => /^AIM-9/.test(store.name);
+
 /** The tip AIM-9's drag index (sheet 3, `4*`): what a removed tip missile or a tip pod takes away. */
 export function tipMissileDrag(cat: Catalogue): number {
   const values = new Set(
-    cat.stores.filter((s) => isTipRow(s) && s.drag.note === '*' && /^AIM-9/.test(s.name)).map((s) => s.drag.subsonic),
+    cat.stores.filter((s) => isTipRow(s) && s.drag.note === '*' && isAim9(s)).map((s) => s.drag.subsonic),
   );
   const [only] = values;
   if (only === undefined || values.size > 1) throw new Error('Fig. B1-1 sheet 3 has no single tip AIM-9 drag index');
