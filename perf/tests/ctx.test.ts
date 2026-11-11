@@ -210,14 +210,16 @@ describe('evaluate', () => {
     close(valueOf(e.cells.d.conservative), 55);
   });
 
-  test('45 reads, three outputs: 94 runs, in under 20 ms', () => {
+  test('45 reads, three outputs: 94 runs, in under 200 ms', () => {
     const sum = independent(45, 0.37);
     const chain: Chain<'a' | 'b' | 'c'> = plain((ctx) => {
       const s = sum(ctx);
       return { a: ok(s), b: ok(2 * s), c: ok(s + 1) };
     });
     const kinds = { a: 'distance', b: 'refusalSpeed', c: 'speed' } as const;
-    // The fastest of three, so one slow moment on a loaded machine does not fail it.
+    // The fastest of three, so one slow moment on a loaded machine does not fail it. The run count is the real
+    // check (2^45 runs would never end); the time bound only catches a gross slowdown. It was 20 ms and failed
+    // under the full suite's coverage instrumentation on a loaded machine (the plan 1 flake watch).
     const times: number[] = [];
     let e = evaluate(chain, kinds);
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -226,7 +228,7 @@ describe('evaluate', () => {
       times.push(performance.now() - start);
     }
     assert.equal(e.runs, 94);
-    assert.ok(Math.min(...times) < 20, `${times.map(String).join(', ')} ms`);
+    assert.ok(Math.min(...times) < 200, `${times.map(String).join(', ')} ms`);
     close(valueOf(e.cells.a.conservative), 1035);
     close(valueOf(e.cells.b.conservative), 1980);
   });
