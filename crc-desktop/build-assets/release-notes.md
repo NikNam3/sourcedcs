@@ -1,3 +1,9 @@
+### Changed in 2.3.0
+- **Radio only:** CRC can start as the radio alone, in a small window, for controllers working in another tool. Press **RADIO ONLY** on the login screen or in Settings; **FULL CRC** goes back. It needs no login; log in to link frequencies through crc-sync
+- **Global PTT:** RADIO → SETUP → Global PTT keys the radio from any program while CRC is in the background. Choose the input with PRESS A KEY (Windows, X11) or CONFIGURE (Wayland). Off by default in full CRC, on in radio-only. Only that one input is watched; nothing is logged
+- **Fixed: a relayed pilot no longer cuts out for a moment.** When one direct packet was late, crc-sync's relayed copy played as a second transmission and its end tone sounded while the pilot kept talking
+- PTT never keys a guard by itself: choose the radio or group it transmits on
+
 ### Fixed in 2.1.5
 - **MARSHAL: TYPE and FUEL are boxes again** on every row the Marshal holds: type and press Enter (fuel in thousands, 4.8; Escape puts it back)
 

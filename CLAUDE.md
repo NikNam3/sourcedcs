@@ -69,7 +69,7 @@ The soak never rolls the mission, so the mission reset (ADR 0108) is not exercis
 ```bash
 cd crc-desktop && npm install
 npm start           # runs the app locally via `electron .`
-npm test             # node --test 'tests/*.test.{js,mjs}': eight CommonJS tests (packaging, lxsrs-setup, patch-notes, proxy routes, sharded runner, glyph route, external link, no MapTiler key), the rest ES modules
+npm test             # node --test 'tests/*.test.{js,mjs}': the `*.test.js` files are CommonJS (packaging, lxsrs-setup, launch-mode, patch-notes, proxy routes, sharded runner, glyph route, external link, no MapTiler key, the SRS client's `srs-*`), the rest ES modules
 npm run pack:linux   # electron-builder AppImage, unpublished, into dist/
 npm run pack:win     # electron-builder NSIS installer, unpublished, into dist/
 ```

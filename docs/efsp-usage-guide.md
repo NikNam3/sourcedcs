@@ -2275,6 +2275,27 @@ new missions.
 - The airspace frequencies are edited in the airspace editor (§8A), not here. Your SRS radio's own frequencies are in
   crc-desktop's `config.json` and the radio panel; nothing here tunes a radio.
 
+## 8P. Radio only and Global PTT (`adr/0161`)
+
+- **Radio only.** CRC can start as the radio alone, for controllers working in another tool. Press RADIO ONLY on the
+  login screen (also in Settings, under CONNECTION SETTINGS); FULL CRC in the radio window goes back. CRC remembers the
+  choice, and a shortcut can pin one with `--radio-only` or `--full`. The window has the guards, the intercom and your
+  manual radios, and needs no login. Without a login a grey line says there is no linking: duplicates are still dropped,
+  but crc-sync relays nothing. Log in to link frequencies; logged in, + RADIO offers the frequency table. Select what PTT
+  transmits on first: it never keys a guard by itself. A radio window does not keep your Positions: they are released
+  as if you had closed CRC.
+- **Global PTT.** RADIO, SETUP. Tick Global PTT and choose an input: the radio then keys from any program, while CRC is
+  in the background. It is off by default in full CRC and on in radio-only, where it does nothing until an input is
+  chosen. While it is on, CRC watches the keyboard and mouse for that one input; nothing else is kept, forwarded or logged.
+- On Windows and X11, click PRESS A KEY and press the input. Function keys, Scroll Lock, Pause, Insert, the navigation
+  keys, Right Ctrl and mouse buttons 3 to 5 may be used; keys you type with may not, since they would key the radio on
+  every word. Esc cancels. Other programs, DCS included, still receive the key. On Windows, a program run as
+  administrator hides its input from CRC unless CRC is run as administrator too.
+- On Wayland, the desktop owns the key: click CONFIGURE and set it in the desktop's dialog. Keyboard only, and other
+  programs may not receive the key.
+- The maximum transmit time applies to Global PTT as well: after it ends a transmission, release the input and press
+  again. PTT never falls back onto a guard.
+
 ## 8O. The map: basemap, labels, terrain and the airport surface
 
 - **The basemap** is MapTiler's, with the key crc-sync gives the client after login. When MapTiler refuses (no key, a
