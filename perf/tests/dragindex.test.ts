@@ -307,3 +307,15 @@ test('a loadout the catalogue does not allow gives its problems, never a throw',
   const worked = dragIndex(cat, WORKED_EXAMPLE, 0);
   assert.ok(worked.ok && worked.exact === 146 && worked.conservative === 146);
 });
+
+test('a tank group whose variants differ in stations is a data defect and throws', () => {
+  const sh7 = structuredClone(figure(figures, 'B1-1.sh7'));
+  const stores = sh7.panels.find((p) => p.type === 'table' && p.columns.some((c) => c.name === 'station'));
+  assert.ok(stores?.type === 'table');
+  const stationAt = stores.columns.findIndex((c) => c.name === 'station');
+  const tankRows = stores.rows.filter((r) => String(r[0]).includes('370-GALLON TANK'));
+  const second = tankRows[1];
+  assert.ok(second !== undefined);
+  second[stationAt] = '5';
+  assert.throws(() => buildCatalogue({ ...figures, 'B1-1.sh7': sh7 }), /variants differ in stations or rack/);
+});
