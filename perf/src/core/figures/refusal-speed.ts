@@ -91,3 +91,8 @@ export function refusalSpeed(
   }
   return ok(kt);
 }
+
+/** A printed RCR decrement ("DECREASE REFUSAL SPEED BY n KIAS"): applied to the read speed, not a rounding point. */
+export function decreased(read: Read<number>, kt: number): Read<number> {
+  return read.ok ? ok(read.value - kt) : read;
+}
