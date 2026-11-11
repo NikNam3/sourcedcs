@@ -133,8 +133,8 @@ describe('B7-2 sheet 1 uncorrected ground roll', () => {
     const cases: [Partial<UncorrectedInputs>, string][] = [
       [{ tempC: -41 }, 'temperature'],
       [{ tempC: 51 }, 'temperature'],
-      [{ paFt: -100 }, 'altitude'],
-      [{ paFt: 8100 }, 'altitude'],
+      [{ paFt: -100 }, 'pressure_altitude'],
+      [{ paFt: 8100 }, 'pressure_altitude'],
       [{ grossWeightLb: 19000 }, 'gross_weight'],
       [{ grossWeightLb: 49000 }, 'gross_weight'],
     ];

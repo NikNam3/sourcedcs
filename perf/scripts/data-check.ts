@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 
-import type { FigureFile, Manifest, Panel, Pt } from '../src/core/data/types.ts';
+import type { FigureFile, Manifest, Panel, Pt, Quantity } from '../src/core/data/types.ts';
 import { drawnRange, edgeTolerance, unionRange } from '../src/core/read/interp.ts';
 
 const schemaPath = fileURLToPath(new URL('../schema/charts.schema.json', import.meta.url));
@@ -147,11 +147,50 @@ function panelProblems(panel: Panel): string[] {
   return problems;
 }
 
-function figureProblems(dir: string, file: string): string[] {
+/** Every named quantity of a panel: its input, output, param, scale ends and table columns. */
+export function panelQuantities(panel: Panel): Quantity[] {
+  switch (panel.type) {
+    case 'curve_family':
+      return [panel.input, panel.output, panel.param];
+    case 'single_curve':
+    case 'limit_line':
+    case 'guideline_panel':
+      return [panel.input, panel.output];
+    case 'scale_pair':
+      return [panel.from, panel.to];
+    case 'table':
+      return panel.columns;
+  }
+}
+
+/**
+ * One name, one unit across every figure of a dataset (TOLD 1.7 ruling 3): one problem per name with more than one
+ * unit, listing each unit with the figures that use it.
+ */
+function quantityUnitProblems(figures: readonly FigureFile[]): string[] {
+  const units = new Map<string, Map<string, Set<string>>>();
+  for (const figure of figures) {
+    for (const { name, unit } of figure.panels.flatMap(panelQuantities)) {
+      const byUnit = units.get(name) ?? new Map<string, Set<string>>();
+      units.set(name, byUnit);
+      const ids = byUnit.get(unit) ?? new Set<string>();
+      byUnit.set(unit, ids);
+      ids.add(figure.id);
+    }
+  }
+  return [...units]
+    .filter(([, byUnit]) => byUnit.size > 1)
+    .map(([name, byUnit]) => {
+      const list = [...byUnit].map(([unit, ids]) => `${JSON.stringify(unit)} (${[...ids].join(', ')})`).join(' / ');
+      return `quantity "${name}" has more than one unit: ${list}`;
+    });
+}
+
+function figureProblems(dir: string, file: string): { problems: string[]; figure?: FigureFile } {
   const read = readJson(join(dir, file));
-  if ('problem' in read) return [read.problem];
+  if ('problem' in read) return { problems: [read.problem] };
   const validate = getValidators().figure;
-  if (!validate(read.value)) return (validate.errors ?? []).map(describeError);
+  if (!validate(read.value)) return { problems: (validate.errors ?? []).map(describeError) };
   const figure = read.value;
   const problems: string[] = [];
   const stem = file.slice(0, -'.json'.length);
@@ -160,7 +199,7 @@ function figureProblems(dir: string, file: string): string[] {
   if (figure.image.file !== image) problems.push(`image.file "${figure.image.file}" is not "${image}"`);
   else if (!existsSync(join(dir, image))) problems.push(`image.file "${image}": no such file`);
   for (const panel of figure.panels) problems.push(...panelProblems(panel));
-  return problems;
+  return { problems, figure };
 }
 
 /** The data files on disk: every .json but the manifest, and every pages/*.png. */
@@ -218,9 +257,13 @@ export function checkDataset(dir: string): string[] {
     }
   }
 
+  const figures: FigureFile[] = [];
   for (const file of files.filter((f) => f.endsWith('.json'))) {
-    for (const problem of figureProblems(dir, file)) report(file, problem);
+    const checked = figureProblems(dir, file);
+    for (const problem of checked.problems) report(file, problem);
+    if (checked.figure !== undefined) figures.push(checked.figure);
   }
+  for (const problem of quantityUnitProblems(figures)) problems.push(`${dataset}: ${problem}`);
   return problems;
 }
 

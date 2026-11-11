@@ -15,7 +15,7 @@ must_contain: ["Refusal Speed (Non-AB)", "F110-GE-129", "Figure B2-5. (Sheet 1)"
 image_clip: [40, 120, 570, 720]
 axes:
   takeoff_factor: {unit: "", page: y, label_band: [290, 300], range: [510, 705], ticks: [2, 3, 4, 5, 6, 7], title: NON-AB TAKEOFF FACTOR, edge: right}
-  refusal_speed:  {unit: kt, page: y, label_band: [514, 534], range: [190, 495], ticks: [40, 60, 80, 100, 120, 140, 160, 180, 200], title: REFUSAL SPEED KIAS, edge: right}
+  refusal_speed:  {unit: KIAS, page: y, label_band: [514, 534], range: [190, 495], ticks: [40, 60, 80, 100, 120, 140, 160, 180, 200], title: REFUSAL SPEED KIAS, edge: right}
   wind:           {unit: kt, page: x, label_band: [492, 502], range: [330, 412], ticks: [0, 20, 40], title: WIND KNOTS, edge: bottom}
   slope:          {unit: "%", page: x, label_band: [492, 502], range: [450, 515], ticks: [0, 1, 2, 3], title: SLOPE, edge: bottom}
   carry:          {unit: pt, page: x, unscaled: true}   # the line carried up from the GW curves to the runway lines

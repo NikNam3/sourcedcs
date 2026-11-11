@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { checkDataset } from '../scripts/data-check.ts';
+import type { FigureFile, Quantity } from '../src/core/data/types.ts';
+import { checkDataset, panelQuantities } from '../scripts/data-check.ts';
+import { DATASET_DIR, loadFigure } from './helpers/data.ts';
 
 const perfDir = fileURLToPath(new URL('..', import.meta.url));
 const fixture = (name: string): string => join(perfDir, 'tests', 'fixtures', name);
@@ -215,6 +217,52 @@ describe('checkDataset beyond the schema', () => {
     );
     assert.equal(problems.length, 1, problems.join('\n'));
     assert.match(problems[0] ?? '', /row 1/);
+  });
+});
+
+describe('checkDataset: one unit per quantity name (TOLD 1.7 ruling 3)', () => {
+  test('a name with two units in two figures is one problem listing each unit with its files', () => {
+    const dir = editedCopy({ fixture: 'data-ok', file: 'X1-1.json' }, 'two-units', () => undefined);
+    const second = JSON.parse(readFileSync(join(dir, 'X1-1.json'), 'utf8')) as Record<string, unknown>;
+    second['id'] = 'X1-2';
+    second['figure'] = 'X1-2';
+    second['image'] = { ...(second['image'] as Record<string, unknown>), file: 'pages/X1-2.png' };
+    const panel = firstPanel(second);
+    panel['input'] = { name: 'pressure_altitude', unit: 'ft' };
+    const bytes = JSON.stringify(second) + '\n';
+    writeFileSync(join(dir, 'X1-2.json'), bytes);
+    cpSync(join(dir, 'pages', 'X1-1.png'), join(dir, 'pages', 'X1-2.png'));
+    const manifestPath = join(dir, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { files: Record<string, string> };
+    manifest.files['X1-2.json'] = createHash('sha256').update(bytes).digest('hex');
+    manifest.files['pages/X1-2.png'] = createHash('sha256')
+      .update(readFileSync(join(dir, 'pages', 'X1-2.png')))
+      .digest('hex');
+    writeFileSync(manifestPath, JSON.stringify(manifest) + '\n');
+    const problems = checkDataset(dir);
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(
+      problems[0] ?? '',
+      /two-units: quantity "pressure_altitude" has more than one unit: "1000 ft" \(X1-1\) \/ "ft" \(X1-2\)/,
+    );
+  });
+
+  test('a name with two units in one figure is a problem', () => {
+    const problems = checkDataset(
+      editedDataset('two-units-one-figure', (figure) => {
+        figure['panels'] = [
+          firstPanel(figure),
+          {
+            id: 'stores',
+            type: 'table',
+            columns: [{ name: 'distance', unit: 'ft' }],
+            rows: [[1]],
+          },
+        ];
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /quantity "distance" has more than one unit: "1000 ft" \(X1-1\) \/ "ft" \(X1-1\)/);
   });
 });
 
@@ -471,6 +519,66 @@ describe('checkDataset: the PDF pin and empty or malformed panels', () => {
         figure['panels'] = [tablePanel(['store', 'drag_index', 'store'], [['AIM-9', 0, 'x']])];
       },
       /panel "stores" has column "store" more than once/,
+    );
+  });
+});
+
+describe('quantity names across the extracted figures (TOLD 1.7 ruling 3)', () => {
+  const figures: FigureFile[] = readdirSync(DATASET_DIR)
+    .filter((f) => f.endsWith('.json') && f !== 'manifest.json')
+    .sort()
+    .map((f) => loadFigure(f.slice(0, -'.json'.length)));
+
+  test('quantity names have one unit across every figure', () => {
+    const units = new Map<string, Map<string, Set<string>>>();
+    for (const figure of figures) {
+      for (const panel of figure.panels) {
+        const quantities = panelQuantities(panel);
+        for (const axis of Object.keys('axes' in panel ? panel.axes : {})) {
+          assert.ok(
+            quantities.some((q) => q.name === axis),
+            `${figure.id} panel "${panel.id}" axis "${axis}" names no quantity of the panel`,
+          );
+        }
+        for (const { name, unit } of quantities) {
+          const byUnit = units.get(name) ?? new Map<string, Set<string>>();
+          units.set(name, byUnit);
+          const files = byUnit.get(unit) ?? new Set<string>();
+          byUnit.set(unit, files);
+          files.add(figure.id);
+        }
+      }
+    }
+    const conflicts = [...units]
+      .filter(([, byUnit]) => byUnit.size > 1)
+      .map(
+        ([name, byUnit]) =>
+          `${name}: ${[...byUnit].map(([unit, files]) => `${JSON.stringify(unit)} (${[...files].join(', ')})`).join(' / ')}`,
+      );
+    assert.deepEqual(conflicts, [], conflicts.join('\n'));
+  });
+
+  test('the renamed quantities', () => {
+    const named = (id: string, name: string): Quantity[] =>
+      loadFigure(id)
+        .panels.flatMap(panelQuantities)
+        .filter((q) => q.name === name);
+    assert.deepEqual(named('B7-2.sh1', 'altitude'), []);
+    assert.ok(named('B7-2.sh1', 'pressure_altitude').every((q) => q.unit === 'ft'));
+    assert.ok(named('B7-2.sh1', 'pressure_altitude').length > 0);
+    for (const id of ['B2-5.sh1', 'B2-5.sh2', 'B2-5.sh3', 'B2-6.sh1', 'B2-6.sh2', 'B2-6.sh3']) {
+      const speeds = named(id, 'refusal_speed');
+      assert.ok(speeds.length > 0, id);
+      assert.ok(
+        speeds.every((q) => q.unit === 'KIAS'),
+        `${id} refusal_speed is ${JSON.stringify(speeds)}`,
+      );
+    }
+    const temperature = named('B2-1', 'temperature');
+    assert.ok(temperature.length > 0);
+    assert.ok(
+      temperature.every((q) => q.unit === '°C'),
+      JSON.stringify(temperature),
     );
   });
 });
