@@ -6,7 +6,8 @@ Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf`. Never switch the 
 ## State
 
 - **Step 0 (Foundations)** is merged into `main` (PR #146).
-- **Step 1 plans 1 (data and figure functions) and 2 (core)** are on `perf-told`, in PR #147 (still open).
+- **Step 1 plans 1 (data and figure functions) and 2 (core)** are merged into `main` by PR #147 (merge commit
+  1d7205e7, 12 Nov 2026).
 - **Step 1 plan 3 (UI and state) is built** on branch `perf-told-p3`, off `perf-told`, and awaits the human's review.
   The human asked for it to run overnight with every question answered by the supervisor on a separate branch, so
   nothing of plan 3 is on `perf-told` yet.
@@ -14,7 +15,7 @@ Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf`. Never switch the 
   - Web: `src/web/` (layout in `perf/README.md`), the pages `web/index.html` (TOLD), `web/figure.html` (one figure
     view with the exact paths) and `web/limitations.html`, `css/told.css`, `figure.css`, `limitations.css`, print.
   - State in the URL hash (`#v=1&…`) and localStorage (`perf.f16.v1`); `scripts/serve.ts` (`npm run serve`).
-  - The Playwright smoke spec `e2e/smoke.spec.ts` (`npm run e2e`, 6 tests, Chromium, one worker), also in CI
+  - The Playwright smoke spec `e2e/smoke.spec.ts` (`npm run e2e`, 7 tests, Chromium, one worker), also in CI
     (`.github/workflows/perf-docker.yml`).
   - App version 0.1.0 (`perf/CHANGELOG.md`).
 - **Where things are:**
@@ -36,9 +37,8 @@ Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf`. Never switch the 
    - The **screenshots** in `/home/nklx/dev/perf-p3-review/` (its `README.md` lists each file and what to look at).
      They stand in for the figure board: approving them ticks "Mockup approved" in TOLD.md 1.5.
    - Or run it: `cd perf && npm run build && npm run serve`, then `http://localhost:8080/f16/`.
-2. **The PR #147, `perf-told` into `main`**, still open. Merge with a real merge commit (never squash or rebase), as
-   for step 0: the manifest's `extractorCommit` and the commits the plans cite need to stay reachable. Once plan 3 is
-   approved, `perf-told-p3` merges into `perf-told` (or the PR moves to it).
+2. **Merging plan 3.** Once approved, `perf-told-p3` merges into `perf-told` and then into `main` by a PR, with a real
+   merge commit (never squash or rebase). The branch is pushed to `origin/perf-told-p3`; no PR is open.
 
 ## Next
 
@@ -50,6 +50,6 @@ data version visible; perf/README.md current") closes step 1.
 
 How plan 3 ran, for reuse: one lane worktree per task (`../sourcedcs-told-p3-t<N>` on `lane/told-p3-t<N>` off
 `perf-told-p3`), at most 4 agents at once, all on Opus, a task review after each lane. Lanes ran only their own test
-files; the supervisor ran the full gates (`nice -n 19`) and merged. The session ledger and task reports in
-`.superpowers/sdd/TOLD-STEP1-P3/` are uncommitted scratch; what matters from them is copied into the plan and
+files; the supervisor ran the full gates (`nice -n 19`) and merged. The session ledger, task reports, reviews and the final review in
+`.superpowers/sdd/TOLD-STEP1-P3/` are uncommitted scratch, kept for the morning review; what matters from them is copied into the plan and
 TOLD.md.
