@@ -1,0 +1,108 @@
+/*
+ * The figure page (TOLD.md 1.8): each sheet's page image at its own pixel size with the exact paths over it, the
+ * legend, the key and the reason lines. Colours only from tokens.css. On paper the sheets shrink so the page prints on
+ * one A4 or Letter sheet, several sheets side by side; the image is never inverted there (perf.css inverts it in
+ * dark mode on screen only).
+ */
+
+.figure-page {
+  zoom: var(--page-scale, 1);
+}
+
+.page-notes:empty {
+  display: none;
+}
+
+.page-note {
+  margin: 0;
+  text-align: center;
+  font-size: 15px;
+  color: var(--grey);
+}
+
+.figure-view {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.figure-sheet {
+  align-items: center;
+}
+
+.figure-sheet .section-heading {
+  align-self: stretch;
+}
+
+.figure-caption {
+  margin: 0;
+  align-self: stretch;
+  font-size: 15px;
+  color: var(--grey);
+}
+
+/* The wrapper takes the image's size, so the overlay (inset 0) lies exactly on it. */
+.figure-page .figure {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.figure-page .figure-image {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+}
+
+.figure-page .figure-key {
+  width: auto;
+  min-width: 440px;
+}
+
+.figure-page .figure-key th {
+  padding: 0 0 2px 22px;
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--grey);
+  text-align: right;
+}
+
+.figure-page .figure-key .num {
+  padding-left: 22px;
+}
+
+.figure-sheet .reason {
+  align-self: stretch;
+}
+
+@media print {
+  .figure-page {
+    zoom: 0.6;
+  }
+
+  /* Several sheets print side by side, one column each, in chain order. */
+  .figure-view {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 16px 24px;
+    align-items: start;
+  }
+
+  .figure-sheet {
+    gap: 6px;
+    break-inside: avoid;
+  }
+
+  /* About 1,000 px of the printed page are left for the images. */
+  .figure-page .figure-image {
+    max-height: 1000px;
+  }
+
+  .figure-page .figure-key {
+    min-width: 0;
+  }
+
+  .figure-page .figure-key {
+    font-size: 14px;
+  }
+}
