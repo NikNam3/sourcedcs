@@ -1,4 +1,4 @@
-# TOLD: handoff (2026-11-13, after step 1 plan 3)
+# TOLD: handoff (2026-11-12, plan 3 merged)
 
 Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf`. Never switch the branch of the main checkout
 `/home/nklx/dev/personal/sourcedcs` (a crc session works there on `main`).
@@ -8,9 +8,8 @@ Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf`. Never switch the 
 - **Step 0 (Foundations)** is merged into `main` (PR #146).
 - **Step 1 plans 1 (data and figure functions) and 2 (core)** are merged into `main` by PR #147 (merge commit
   1d7205e7, 12 Nov 2026).
-- **Step 1 plan 3 (UI and state) is built** on branch `perf-told-p3`, off `perf-told`, and awaits the human's review.
-  The human asked for it to run overnight with every question answered by the supervisor on a separate branch, so
-  nothing of plan 3 is on `perf-told` yet.
+- **Step 1 plan 3 (UI and state)** was approved by the human on 12 Nov 2026 and merged into `perf-told`, then into
+  `main` by a PR with a real merge commit.
   - Core: `src/core/path/` (`PathMark`, `ctx.mark` in every figure function, `tracePaths`).
   - Web: `src/web/` (layout in `perf/README.md`), the pages `web/index.html` (TOLD), `web/figure.html` (one figure
     view with the exact paths) and `web/limitations.html`, `css/told.css`, `figure.css`, `limitations.css`, print.
@@ -26,26 +25,13 @@ Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf`. Never switch the 
 - The manual PDF is at `/home/nklx/dev/other/HAF-F16-Supplement.pdf` (SHA-256 verified against the pin). Export it as
   `PERF_PDF`; Python runs inside `nix develop` from the worktree root.
 
-## Waiting on the human
-
-1. **Review plan 3 on `perf-told-p3`.** What to look at:
-   - The **(S) rulings in TOLD.md 1.8**: the hash and loadout encoding, the refused-link note, storage, the load
-     order; the TOLD page's field behaviour (defaults as placeholders, "dry / wet" RCR, "230 / 08 G15" wind,
-     thousands separators, the dotted underline), cells, rule and reason line wording, the acceleration check label;
-     the figure page; the Limitations page; print; testing and CI; the process.
-   - The **ledger rulings R1 to R6** and the parked findings in `docs/wip/TOLD-STEP1-P3.md`.
-   - The **screenshots** in `/home/nklx/dev/perf-p3-review/` (its `README.md` lists each file and what to look at).
-     They stand in for the figure board: approving them ticks "Mockup approved" in TOLD.md 1.5.
-   - Or run it: `cd perf && npm run build && npm run serve`, then `http://localhost:8080/f16/`.
-2. **Merging plan 3.** Once approved, `perf-told-p3` merges into `perf-told` and then into `main` by a PR, with a real
-   merge commit (never squash or rebase). The branch is pushed to `origin/perf-told-p3`; no PR is open.
-
 ## Next
 
 **Step 1 plan 4: deployment.** The Docker image (build-and-push in `perf-docker.yml` on `main`, `dev` and `v*` tags),
 nginx serving `/f16/` from `web/` and `/f16/data/` from `data/` (as `scripts/serve.ts` does locally), and `deploy.yml`
-listening to the workflow. It waits on the domain and certificate: the infra commit (`PERF_DOMAIN`, compose, nginx,
-`deploy.yml`) stays its own final commit until the human has them. When it is deployed, TOLD.md 1.5's last box ("Deployed;
+listening to the workflow. The domain `perf.sourcedcs.page` resolves to the prod server and its Let's Encrypt certificate is issued
+(12 Nov 2026, `/etc/letsencrypt/live/perf.sourcedcs.page/` in the `certbot-certs` volume, renewed by the `certbot`
+container). The infra commit (`PERF_DOMAIN`, compose, nginx, `deploy.yml`) is still its own final commit. When it is deployed, TOLD.md 1.5's last box ("Deployed;
 data version visible; perf/README.md current") closes step 1.
 
 How plan 3 ran, for reuse: one lane worktree per task (`../sourcedcs-told-p3-t<N>` on `lane/told-p3-t<N>` off

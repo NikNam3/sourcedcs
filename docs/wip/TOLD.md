@@ -480,7 +480,7 @@ For plan 2 (core); decided in 1.7, which wins where they differ:
 - [x] All figures in 1.1 extracted and passing the extractor's asserts; their JSON passes `data:check` (schema and manifest hashes). Done by plan 1 (30 Oct 2026).
 - [x] Every sample problem in Appendix B Parts 2 and 7 for these figures passes within 2 % (documented errata applied). Done by plan 1 (0.6); B7-2's SEC value belongs to the deferred SEC option.
 - [x] Core tests green, with the coverage floor of 90 % lines on `src/core/` (Node's built-in coverage). Done by plan 2 (12 Nov 2026): 450 tests, 100 % lines.
-- [ ] Mockup approved; page matches it in light and dark. Built on `perf-told-p3` by plan 3 (13 Nov 2026); awaiting the human's approval from the screenshots (`/home/nklx/dev/perf-p3-review/`).
+- [x] Mockup approved; page matches it in light and dark. Built on `perf-told-p3` by plan 3 (13 Nov 2026); approved by the human from the screenshots (12 Nov 2026).
 - [x] Playwright smoke spec green, including print to PDF giving exactly one page on A4 and on Letter. Done by plan 3 (13 Nov 2026): `e2e/smoke.spec.ts`, 6 tests, in CI.
 - [ ] Deployed; data version visible; perf/README.md current.
 
