@@ -28,6 +28,8 @@ export interface SheetInput {
   readonly paths: readonly ViewPath[];
   /** Reason lines for this sheet, already built. */
   readonly reasons: readonly HTMLElement[];
+  /** Grey lines under the key. */
+  readonly notes: readonly string[];
   /** The page link of a figure that gives a value (B2-1). */
   readonly figureHref: (figure: string) => string;
 }
@@ -93,8 +95,9 @@ function keyTable(rows: readonly KeyRow[], labels: readonly string[], href: Shee
       if (row.from !== null) {
         label.push(' ', html('a', { class: 'figure-link', href: href(row.from) }, [`from ${row.from}`]));
       }
-      const last = row.result && i === rows.length - 1;
-      return html('tr', last ? { class: 'total' } : {}, [
+      // Every result is bold; the ink rule sits above the first of them.
+      const cls = row.result ? (rows.findIndex((r) => r.result) === i ? 'total' : 'result') : '';
+      return html('tr', cls === '' ? {} : { class: cls }, [
         html('td', {}, label),
         ...row.values.map((v) => html('td', { class: 'num' }, [v])),
       ]);
@@ -144,6 +147,6 @@ export function renderSheet(input: SheetInput): HTMLElement {
       );
     }
   }
-  section.append(...input.reasons);
+  section.append(...input.notes.map((text) => html('p', { class: 'reason' }, [text])), ...input.reasons);
   return section;
 }

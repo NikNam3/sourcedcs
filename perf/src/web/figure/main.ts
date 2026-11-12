@@ -99,6 +99,7 @@ function render(data: AppData): void {
         paths: result.paths,
         // A reason naming a sheet goes under it; one naming another figure under the first sheet.
         reasons: lines((named) => named === id || (i === 0 && !result.sheets.includes(named))),
+        notes: result.notes.filter((n) => n.sheet === id).map((n) => n.text),
         figureHref: href,
       }),
     ),

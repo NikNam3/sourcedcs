@@ -146,6 +146,23 @@ describe('markRuns on the other figures', () => {
     close(run.points[run.points.length - 1]?.[0] ?? 0, (510.6 - 40) * 2, 'slope frame right edge');
   });
 
+  test('B2-5 sh. 1: the unscaled carry axis is page points: the GW curve point lands on x = carry, and the path goes straight up to the runway lines', () => {
+    const sh1 = fig('B2-5.sh1');
+    const marks = marksOf(SAMPLE, 'mil', 'B2-5.sh1');
+    const gw = marks[0];
+    assert.ok(gw?.kind === 'curve_family' && gw.panel === 'gw');
+    const run = markRuns(sh1, marks)[0];
+    assert.ok(run !== undefined);
+    // carry: a 1, b 0, so the page x is the carried value itself; clipPt starts at x 40, 2 px per pt.
+    close(run.points[1]?.[0] ?? 0, (gw.output - 40) * 2, 'gw point x');
+    close(run.points[1]?.[1] ?? 0, toPx(sh1, 'gw', gw.output, gw.input)[1], 'gw point y');
+    close(run.points[2]?.[0] ?? 0, (gw.output - 40) * 2, 'runway point on the same carry line');
+    assert.ok(
+      run.stations.every((s) => s.quantity.name !== 'carry'),
+      'no letter on the carried axis',
+    );
+  });
+
   test('B7-1: final approach and touchdown are two runs from the gross weight axis', () => {
     const b71 = fig('B7-1');
     const values = { paFt: 2000, tempC: 40, grossWeightLb: 28000, headwindKt: 10, slopePct: 1, rcr: 23 };

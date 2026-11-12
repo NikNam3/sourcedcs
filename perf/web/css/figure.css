@@ -70,6 +70,10 @@
   padding-left: 22px;
 }
 
+.figure-page .figure-key .result {
+  font-weight: bold;
+}
+
 .figure-sheet .reason {
   align-self: stretch;
 }

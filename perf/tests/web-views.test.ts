@@ -94,6 +94,7 @@ describe('takeoff views', () => {
   test('B2-5 at dry RCR 23: sheet 1 (dry) and sheet 2 (wet), MIL only', () => {
     const v = view('B2-5', 'takeoff');
     assert.deepEqual(v.sheets, ['B2-5.sh1', 'B2-5.sh2']);
+    assert.deepEqual(v.notes, []);
     assert.deepEqual(
       v.paths.map((p) => p.label),
       ['MIL'],
@@ -103,6 +104,12 @@ describe('takeoff views', () => {
   test('B2-5 at dry RCR 12: sheet 1 above sheet 3, then the wet sheet 2', () => {
     const v = view('B2-5', 'takeoff', { rcrDry: '12' });
     assert.deepEqual(v.sheets, ['B2-5.sh1', 'B2-5.sh3', 'B2-5.sh2']);
+    assert.deepEqual(v.notes, [
+      {
+        sheet: 'B2-5.sh3',
+        text: "The TOLD value for RCR 12 lies between these two sheets' values (interpolated, Part 2).",
+      },
+    ]);
   });
 
   test('B2-6 draws MAX AB only, dashed', () => {

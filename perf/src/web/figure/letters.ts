@@ -92,7 +92,18 @@ export function valueText(s: Station): string {
 /** The stations of a path on one sheet, every run in order. */
 const stationsOf = (runs: readonly Run[]): Station[] => runs.flatMap((run) => [...run.stations]);
 
-/** The letters and key of one sheet; `paths` holds each path's runs on it, in path order. */
+/** Equal up to float noise. */
+const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
+
+/** The same value read at the same place: two runs from one axis point (B7-1's two speeds from one gross weight). */
+const sameReading = (a: Station, b: Station): boolean =>
+  a.quantity.name === b.quantity.name && near(a.value, b.value) && near(a.at[0], b.at[0]) && near(a.at[1], b.at[1]);
+
+/**
+ * The letters and key of one sheet; `paths` holds each path's runs on it, in path order. A station that reads the
+ * same quantity and value at the same point as an earlier one (on the path that places the letter) takes no new
+ * letter: it is that letter again.
+ */
 export function sheetLetters(
   figure: string,
   paths: readonly (readonly Run[])[],
@@ -101,13 +112,16 @@ export function sheetLetters(
   const count = Math.max(0, ...stations.map((s) => s.length));
   const letters: Letter[] = [];
   const rows: KeyRow[] = [];
+  const lettered: Station[] = [];
   for (let i = 0; i < count; i++) {
     const first = stations.map((s) => s[i]).find((s) => s !== undefined);
-    if (first === undefined) continue;
+    if (first === undefined || lettered.some((s) => sameReading(s, first))) continue;
+    lettered.push(first);
+    const n = rows.length;
     const from = FROM[first.quantity.name];
-    letters.push({ letter: plainLetter(i), at: first.at });
+    letters.push({ letter: plainLetter(n), at: first.at });
     rows.push({
-      circled: circled(i),
+      circled: circled(n),
       label: labelOf(first),
       from: from !== undefined && figureOf(figure) !== from ? from : null,
       values: stations.map((s) => {

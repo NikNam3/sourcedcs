@@ -13,6 +13,7 @@ import { landingChain } from '../../core/told/landing.ts';
 import { takeoffChain } from '../../core/told/takeoff.ts';
 import { chainValues } from '../../core/told/told.ts';
 import type { Reason } from '../../core/told/told.ts';
+import { formatThousands } from '../format.ts';
 import type { AppState } from '../state/hash.ts';
 
 export type View = 'takeoff' | 'normal' | 'heavy';
@@ -32,6 +33,8 @@ export interface FigureView {
   readonly paths: readonly ViewPath[];
   /** The exact reasons of the drawn columns' cells this figure gives, and of any that names it; each once. */
   readonly reasons: readonly Reason[];
+  /** Grey lines under a sheet's key, by sheet id: a TOLD value read between two of the shown sheets. */
+  readonly notes: readonly { readonly sheet: string; readonly text: string }[];
 }
 
 const TAKEOFF_FIGURES: ReadonlySet<string> = new Set(['B2-1', 'B2-2', 'B2-3', 'B2-4', 'B2-5', 'B2-6']);
@@ -111,6 +114,28 @@ function reasonKey(e: OutOfChart): string {
 /** A label after "and": 'Wet' → 'wet', an abbreviation (MAX AB) unchanged. */
 const andLabel = (label: string): string => (/^[A-Z ]+$/.test(label) ? label : label.toLowerCase());
 
+/**
+ * The refusal charts print dry RCR 16 on sheet 1 and 8 on sheet 3: a dry RCR between them is the linear value between
+ * the two sheets' reads (Part 2), which the TOLD cell shows and neither sheet does. Said once, under the later sheet.
+ */
+function betweenSheets(
+  figures: FigureSet,
+  state: AppState,
+  fig: string,
+  view: View,
+  sheets: readonly string[],
+): FigureView['notes'] {
+  if (view !== 'takeoff' || (fig !== 'B2-5' && fig !== 'B2-6')) return [];
+  const low = `${fig}.sh3`;
+  if (!sheets.includes(`${fig}.sh1`) || !sheets.includes(low)) return [];
+  const v = chainValues(figures, state.inputs, state.loadout).takeoff;
+  if (!v.ok || !(v.values.rcrDry > 8 && v.values.rcrDry < 16)) return [];
+  const rcr = formatThousands(v.values.rcrDry);
+  return [
+    { sheet: low, text: `The TOLD value for RCR ${rcr} lies between these two sheets' values (interpolated, Part 2).` },
+  ];
+}
+
 /** The figure's first sheet: the figure file itself, else its sheet 1. */
 function firstSheet(figures: FigureSet, fig: string): string {
   return Object.hasOwn(figures, fig) ? fig : `${fig}.sh1`;
@@ -146,5 +171,6 @@ export function viewPaths(figures: FigureSet, state: AppState, fig: string, view
   }
 
   const sheets = [...new Set(paths.flatMap((p) => p.marks.map((m) => m.figure)))];
-  return { sheets: sheets.length > 0 ? sheets : [firstSheet(figures, fig)], paths, reasons };
+  const notes = betweenSheets(figures, state, fig, view, sheets);
+  return { sheets: sheets.length > 0 ? sheets : [firstSheet(figures, fig)], paths, reasons, notes };
 }
