@@ -9,7 +9,7 @@ const path = require('path');
 
 const ENV = {
   WIKI_DOMAIN: 'wiki.example.org', AUTH_DOMAIN: 'auth.example.org', DOMAIN: 'example.org',
-  ATOBRIEF_DOMAIN: 'ato.example.org', CRCSYNC_DOMAIN: 'asacs.example.org',
+  ATOBRIEF_DOMAIN: 'ato.example.org', CRCSYNC_DOMAIN: 'asacs.example.org', PERF_DOMAIN: 'perf.example.org',
 };
 const root = path.join(__dirname, '..');
 const norm = (s) => s.replace(/#[^\n]*\n/g, '\n').replace(/\s+/g, ' ').trim();
@@ -37,9 +37,32 @@ function renderNew() {
 // The one deliberate difference since the inline config: the crc-sync vhost denies the registry API (S-DES1 F6).
 const REGISTRY_DENY = '# The airspace registry API is for sourcedcs-web inside the stack only (http://crc-sync:3000); never public.\n  location /api/airspace-registry { return 404; }\n';
 
-test('new template renders identically to the old inline config (bar the registry deny)', () => {
+// The perf vhost came after the inline config (docs/wip/TOLD.md, "Deployment and operations"): the template's last part.
+const PERF_START = '# perf (F-16 TOLD calculator)';
+const withoutPerf = (t) => t.slice(0, t.indexOf(PERF_START));
+
+test('new template renders identically to the old inline config (bar the registry deny and the perf vhost)', () => {
   assert.ok(renderNew().includes(REGISTRY_DENY), 'registry deny present');
-  assert.strictEqual(norm(renderNew().replace(REGISTRY_DENY, '')), norm(renderOld()));
+  assert.ok(renderNew().includes(PERF_START), 'perf vhost present');
+  assert.strictEqual(norm(withoutPerf(renderNew()).replace(REGISTRY_DENY, '')), norm(renderOld()));
+});
+
+test('the perf vhost: ACME on 80, its own certificate on 443, proxied to perf:80 with X-Forwarded-For', () => {
+  const perf = renderNew().slice(renderNew().indexOf(PERF_START));
+  assert.strictEqual((perf.match(/server_name perf\.example\.org;/g) || []).length, 2);
+  assert.match(perf, /location \/\.well-known\/acme-challenge\/ \{ root \/var\/www\/certbot; \}/);
+  assert.match(perf, /ssl_certificate \/etc\/letsencrypt\/live\/perf\.example\.org\/fullchain\.pem;/);
+  assert.match(perf, /ssl_certificate_key \/etc\/letsencrypt\/live\/perf\.example\.org\/privkey\.pem;/);
+  assert.match(perf, /set \$upstream perf;\s+proxy_pass http:\/\/\$upstream:80;/);
+  assert.match(perf, /proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;/);
+  assert.doesNotMatch(perf, /\$\{/, 'every variable substituted');
+});
+
+test('compose passes PERF_DOMAIN to nginx and runs the perf image on the web network', () => {
+  const y = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');
+  assert.match(y, /PERF_DOMAIN=\$\{PERF_DOMAIN\}/);
+  assert.match(y, /image: ghcr\.io\/niknam3\/sourcedcs\/perf:\$\{TAG:-latest\}/);
+  assert.match(fs.readFileSync(path.join(root, '..', '.env.example'), 'utf8'), /^PERF_DOMAIN=$/m);
 });
 
 test('the registry deny sits in the crc-sync vhost only, ahead of the catch-all', () => {

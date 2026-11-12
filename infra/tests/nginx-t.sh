@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 IMAGE="${NGINX_IMAGE:-nginx:alpine}"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-domains=(wiki.example.org auth.example.org example.org ato.example.org crc.example.org)
+domains=(wiki.example.org auth.example.org example.org ato.example.org crc.example.org perf.example.org)
 for d in "${domains[@]}"; do
   mkdir -p "$tmp/live/$d"
   openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=$d" \
@@ -16,7 +16,7 @@ done
 chmod -R a+rX "$tmp"
 docker run --rm \
   -e WIKI_DOMAIN=wiki.example.org -e AUTH_DOMAIN=auth.example.org -e DOMAIN=example.org \
-  -e ATOBRIEF_DOMAIN=ato.example.org -e CRCSYNC_DOMAIN=crc.example.org \
+  -e ATOBRIEF_DOMAIN=ato.example.org -e CRCSYNC_DOMAIN=crc.example.org -e PERF_DOMAIN=perf.example.org \
   -v "$PWD/nginx/templates:/etc/nginx/templates:ro" \
   -v "$PWD/nginx/snippets:/etc/nginx/snippets:ro" \
   -v "$tmp:/etc/letsencrypt:ro" \

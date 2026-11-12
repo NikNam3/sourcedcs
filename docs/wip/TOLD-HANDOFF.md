@@ -27,15 +27,9 @@ Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf`. Never switch the 
 
 ## Next
 
-**Step 1 plan 4: deployment.** The Docker image (build-and-push in `perf-docker.yml` on `main`, `dev` and `v*` tags),
-nginx serving `/f16/` from `web/` and `/f16/data/` from `data/` (as `scripts/serve.ts` does locally), and `deploy.yml`
-listening to the workflow. The domain `perf.sourcedcs.page` resolves to the prod server and its Let's Encrypt certificate is issued
-(12 Nov 2026, `/etc/letsencrypt/live/perf.sourcedcs.page/` in the `certbot-certs` volume, renewed by the `certbot`
-container). The infra commit (`PERF_DOMAIN`, compose, nginx, `deploy.yml`) is still its own final commit. When it is deployed, TOLD.md 1.5's last box ("Deployed;
-data version visible; perf/README.md current") closes step 1.
-
-How plan 3 ran, for reuse: one lane worktree per task (`../sourcedcs-told-p3-t<N>` on `lane/told-p3-t<N>` off
-`perf-told-p3`), at most 4 agents at once, all on Opus, a task review after each lane. Lanes ran only their own test
-files; the supervisor ran the full gates (`nice -n 19`) and merged. The session ledger, task reports, reviews and the final review in
-`.superpowers/sdd/TOLD-STEP1-P3/` are uncommitted scratch, kept for the morning review; what matters from them is copied into the plan and
-TOLD.md.
+**Step 1 plan 4 (deployment) is built** on `perf-told` (12 Nov 2026): `perf/Dockerfile` and `perf/nginx/default.conf`
+(the image passes the smoke spec), build-and-push in `perf-docker.yml`, then one infra commit (the `perf` compose
+service, the `PERF_DOMAIN` vhost, `.env.example`, `deploy.yml`, `infra/tests/`, `infra/RUNBOOK.md`, CLAUDE.md). The
+domain resolves and its certificate is issued. Before the PR to `main` merges, the server's `infra/.env` needs
+`PERF_DOMAIN=perf.sourcedcs.page` (RUNBOOK "perf: domain, certificate and first deploy"). When it is deployed and
+`https://perf.sourcedcs.page/f16/` shows the data version, TOLD.md 1.5's last box closes step 1.

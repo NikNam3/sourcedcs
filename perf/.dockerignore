@@ -1,0 +1,14 @@
+node_modules
+web/js
+test-results
+playwright-report
+extraction/out
+prototype
+e2e
+*.log
+.env
+.env.*
+Dockerfile
+.dockerignore
+# The component specimen of css/perf.css: a development page, not linked from the app.
+web/components.html

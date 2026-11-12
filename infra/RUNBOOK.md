@@ -72,6 +72,25 @@ rather throw it away.
   `docker compose exec crc-sync rm -rf /app/state/terrain-cache/10`.
 - No wire protocol change; nothing to set in `infra/.env`.
 
+## perf: domain, certificate and first deploy
+
+perf (the F-16 TOLD calculator, `perf/`) is served at `https://${PERF_DOMAIN}/f16/` by the `perf` container behind
+the `PERF_DOMAIN` vhost. **Order matters:** nginx refuses its whole config when a certificate it names is missing,
+or when `PERF_DOMAIN` is empty (`server_name ;`), and then every site is down. So, for a new domain:
+
+1. DNS: an A record for the domain to the server.
+2. Certificate, on the server (nginx's default port-80 server already answers ACME challenges for any host):
+   ```bash
+   docker exec certbot certbot certonly --webroot -w /var/www/certbot -d perf.sourcedcs.page \
+     --non-interactive --agree-tos --keep-until-expiring
+   ```
+   The `certbot` container renews it with the others; nginx reloads certificates every 12 h.
+3. `PERF_DOMAIN=perf.sourcedcs.page` in the server's `infra/.env`.
+4. Only then merge the change that adds the vhost. Its deploy (`perf-docker.yml` → `deploy.yml`) pushes the image
+   first, then pulls it, so the first `docker compose up -d` finds `perf:latest`.
+
+Done for `perf.sourcedcs.page` on 12 Nov 2026 (steps 1 to 3).
+
 ## Wire protocol and the deploy gate (crc-sync ADR 0103)
 
 crc-sync and crc-desktop each compile in a wire protocol number (`crc-sync/src/wire-protocol.js`, `crc-desktop/app/public/js/wire-protocol.js`).

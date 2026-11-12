@@ -12,7 +12,7 @@ SOURCE DCS is an open-source monorepo for a virtual aviation squadron. It contai
 - **crc-desktop** — Electron desktop GCI/datalink client ("CRC") that connects to crc-sync. Bundles a local Node server and a Python SRS radio bridge (`lxsrs_v2`).
 - **lxsrs_v2** — Python SRS Standalone client library used by crc-desktop's bundled radio bridge (not a standalone service — see crc-desktop's architecture below).
 - **tools/miztoyaml** — Python CLI that converts DCS `.miz` mission files to ATO brief YAML
-- **perf** — F-16 performance calculator, TOLD first (takeoff and landing data from the flight manual's charts, exact and conservative). Static TypeScript app, all calculation in the browser, public without login. Plan `docs/wip/TOLD.md`, ADRs 0148–0153; step 0 done; the UI (TOLD, figure and Limitations pages) built in step 1 plan 3, not yet deployed.
+- **perf** — F-16 performance calculator, TOLD first (takeoff and landing data from the flight manual's charts, exact and conservative). Static TypeScript app, all calculation in the browser, public without login. Plan `docs/wip/TOLD.md`, ADRs 0148–0153; step 1 (TOLD, figure and Limitations pages) built, served at `https://perf.sourcedcs.page/f16/` as a static nginx image.
 
 Infrastructure (Nginx, MariaDB, Casdoor OAuth, MediaWiki) lives in `infra/` as a Docker Compose stack.
 
@@ -173,7 +173,7 @@ F-16 TOLD calculator (`perf/README.md`). Data flows one way: manual PDF → `ext
 - `src/core/` has no DOM, no `fetch`, no `node:` imports, no I/O; chart data is passed in. `read/` building blocks never extrapolate or throw outside a chart: they return `OutOfChart`. Every chart read goes through `ctx.read(id, value, step)`, which gives the exact and the conservative value (ADR 0149). Units in names (`lengthFt`, `windKt`); never test a number for truthiness (0 kt, 0 %, DI 0 are values).
 - The manual's procedure is the spec (ADR 0148); misprints go into `extraction/manual-errata.yaml`, never patched silently. The chart spec format (one YAML per data file, a figure or a sheet: axes, panels, parameters, corrections, sample problems) is `docs/wip/TOLD.md` 0.2, with 0.5 as the worked example.
 - The manual PDF is never committed (`perf/**/*.pdf` is gitignored). Its path is `PERF_PDF`; the extractor refuses any file whose SHA-256 is not `7954f2391a66bffc79d77027cdb5063a332ba31a693dba1e42f0a67b276c791b`.
-- CI is `.github/workflows/perf-docker.yml` ("Build and Push perf Docker Image"), the test job only in step 0; step 1 adds the image build and the deploy.
+- CI is `.github/workflows/perf-docker.yml` ("Build and Push perf Docker Image"): tests on every push touching `perf/`, the image (`perf/Dockerfile`: tsc, then `nginx:alpine` with `perf/nginx/default.conf`, `/f16/` from `web/`, `/f16/data/` from `data/`) built and pushed on `main`, `dev` and `v*` tags; `deploy.yml` listens to it. No state, no secrets, no volume.
 
 ### miztoyaml
 
@@ -191,22 +191,22 @@ Module responsibilities:
 - `dtc.py` — DTC file and SPINS markdown parsing
 - `sam.py` — SAM threat definitions and classification
 
-## How the docker-image services deploy (atobrief, sourcedcs-web, crc-sync)
+## How the docker-image services deploy (atobrief, sourcedcs-web, crc-sync, perf)
 
 Each has its own `.github/workflows/<name>-docker.yml`: on push to `main`/`dev` (path-filtered to that service's directory) or a `v*` tag, it builds and pushes `ghcr.io/niknam3/sourcedcs/<name>:<tag>`.
 
-`.github/workflows/deploy.yml` listens for any of those three workflows completing successfully on `main`/`dev`, then SSHes into the server and runs:
+`.github/workflows/deploy.yml` listens for any of those four workflows completing successfully on `main`/`dev`, then SSHes into the server and runs:
 ```bash
 cd <PATH>            # repo checkout root on the server
 git pull --ff-only    # picks up infra/docker-compose.yml, .env key names, etc.
 cd infra
-docker compose pull main-website atobrief crc-sync   # only our own published images —
+docker compose pull main-website atobrief perf crc-sync   # only our own published images —
 docker compose up -d                                  #   NOT mariadb/casdoor/certbot/nginx (see below)
 ```
 On `main`, a "Wire protocol gate" step runs first (`.github/scripts/protocol-gate.sh`, tested by `infra/tests/protocol-gate.test.js`). It resolves the crc-sync image to a digest, reads the `org.sourcedcs.wire-protocol` label `crc-sync-docker.yml` stamped on it, compares that with the newest published crc-desktop release, and **fails closed**; the SSH step then exports `CRC_SYNC_IMAGE=<that digest>` so compose pulls exactly the image that was checked (unset, compose uses `crc-sync:${TAG:-latest}`). A hold leaves only crc-sync alone. Recreate crc-sync by re-running the Deploy workflow, never by a bare `docker compose up -d` (`infra/RUNBOOK.md`).
 
 **Two non-obvious things about this pipeline, both found the hard way:**
-1. `docker compose pull` is deliberately scoped to just the three images we publish. Pulling every service (including third-party base images like `mariadb:11`) means one transient registry hiccup on an image that didn't even change aborts the *entire* deploy under `set -e` — this once blocked an unrelated nginx config fix for hours.
+1. `docker compose pull` is deliberately scoped to just the four images we publish. Pulling every service (including third-party base images like `mariadb:11`) means one transient registry hiccup on an image that didn't even change aborts the *entire* deploy under `set -e` — this once blocked an unrelated nginx config fix for hours.
 2. The `git pull` step is what actually gets a **non-image** config change (e.g. `infra/docker-compose.yml`, `nginx`'s embedded config, `.env.example`) onto the server. Before it existed, editing `docker-compose.yml` in the repo did nothing to the running stack until someone manually pulled on the server — `docker compose pull && up -d` alone only ever picks up new *images*.
 
 **`crc-sync` has three directories, and the distinction matters for deploys.** `config/` holds shipped
@@ -264,6 +264,7 @@ See `.env.example` for all required variables. Key ones:
 | `CRCSYNC_CLIENT_ID` / `CRCSYNC_CLIENT_SECRET` | crc-sync |
 | `CRCSYNC_DCS_GRPC_HOST`, `CRCSYNC_SRS_HOST`, `CRCSYNC_SRS_PORT` | crc-sync (DCS server upstream). These are the root `.env` / compose names and compose passes them to the container unrenamed; the code reads them from the injected env and falls back to the bare `DCS_GRPC_HOST`, `SRS_HOST`, `SRS_PORT` (what `crc-sync/.env.example` and the e2e harness set), the `CRCSYNC_` name winning |
 | `DISCORD_BOT_TOKEN` | sourcedcs-web |
+| `PERF_DOMAIN` | nginx (the perf vhost's server name and certificate path). Must be set and its certificate must exist before the vhost reaches the server, or nginx refuses the whole config (`infra/RUNBOOK.md`, "perf: domain, certificate and first deploy") |
 | `CRCSYNC_DOMAIN` | nginx (the crc-sync vhost's server name and certificate path; compose passes it to the nginx template). The retired `ASACS_DOMAIN` is no longer read |
 | `CRCSYNC_URL` | sourcedcs-web (the crc-sync/CRC link on the public site, `store.CRCSYNC_URL`, exposed to pages as `var CRCSYNC_URL` in `/js/config.js`) and crc-desktop (the crc-sync WebSocket endpoint, default `wss://asacs.sourcedcs.page`; from the user's `config.json` key `crcSyncUrl`, which stays). **The name has two meanings**: an https page link on the web, a wss WebSocket endpoint in crc-desktop (they never share a value). The retired `ASACS_URL` and `CRC_SYNC_URL` are no longer read |
 | `RELEASE_UPLOAD_TOKEN` | sourcedcs-web (accepts uploads) + the `crc-desktop-release.yml` repo secret (sends them) — must match. Every service token gate answers 503 "not configured" when its token is unset and 401 when wrong or missing (`service-token.js`, a hand copy per service under a parity test) |
