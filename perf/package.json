@@ -16,7 +16,8 @@
     "test": "node --test --experimental-test-coverage --test-coverage-include='src/core/**' --test-coverage-lines=90 'tests/**/*.test.ts'",
     "types:gen": "node scripts/gen-types.ts",
     "types:check": "node scripts/gen-types.ts --check",
-    "data:check": "node scripts/data-check.ts"
+    "data:check": "node scripts/data-check.ts",
+    "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
