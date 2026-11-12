@@ -887,7 +887,7 @@ unit tests; the views are covered by the smoke spec.
   `noTipMissile` row is the literal `noTipMissile`. Rows are kept in order, so a split pair round-trips.
 - **Refusal:** a hash whose `v` is not `1` is refused with the grey note "This link is from another version of the
   calculator and was not loaded." under the title, and loading continues from storage. A hash with `v=1` but a row
-  that does not decode (wrong part count, a count that is not an integer 0 to 3, an unknown station) drops that
+  that does not decode (wrong part count, a count that is not an integer from 1 to 3 per station of the row (a pair on TERs carries 6), an unknown station) drops that
   row, with a grey note "Part of the loadout in this link could not be read."; an unknown store key is kept and
   shows as a loadout problem in the builder (`checkLoadout`), so a link from an older data version says what is
   wrong instead of silently changing the loadout.

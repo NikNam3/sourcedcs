@@ -136,7 +136,7 @@ export function initialState(hash: string, stored: string | null): Initial;
   loaded."; the dropped-rows note "Part of the loadout in this link could not be read."; `DASH` is U+2014.
 - Hash keys and loadout encoding exactly as 1.8 "State". A decoded `v=1` hash with a key missing takes that field's
   `DEFAULT_INPUTS` value; an unknown key is ignored. Loadout absent → `DEFAULT_LOADOUT`. A row decodes only if: 4
-  parts, stations each a `Station` and joined by `-`, count an integer 0 to 3; else it is dropped and counted.
+  parts, stations each a `Station` and joined by `-`, count an integer from 1 to 3 × the row's station count; else it is dropped and counted.
 - `initialState`: hash `ok` → its state (note if rows dropped); `refused` → the refused note, then the stored state
   (decoded the same way; a bad stored string is ignored silently); `none` → stored, else defaults.
 - `reasonText`: name = quantity name with `_` → space, looked up on the figure's panels (input, output, param,
