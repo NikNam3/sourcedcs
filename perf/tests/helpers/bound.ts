@@ -20,6 +20,7 @@ export function planCtx(plan: ReadonlyMap<string, 'down' | 'up'>): Ctx {
   return {
     read: round,
     input: (id, value, step) => round(id, value.conservative, step),
+    mark: () => undefined,
   };
 }
 

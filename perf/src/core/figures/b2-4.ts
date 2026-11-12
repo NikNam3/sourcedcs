@@ -6,6 +6,7 @@ import { STEPS } from '../ctx.ts';
 import type { Ctx } from '../ctx.ts';
 import { panel } from '../data/panel.ts';
 import type { FigureFile } from '../data/types.ts';
+import { guidelineMark } from '../path/mark.ts';
 import { curveFamily } from '../read/curve-family.ts';
 import { guidelinePanel } from '../read/guideline-panel.ts';
 import { ok } from '../result.ts';
@@ -20,7 +21,8 @@ const LB_PER_CHART_UNIT = 1000;
  * slope skips its panel but still reads its id. The first panel out of chart stops the figure: the speed is its
  * OutOfChart and no later id is read. A takeoff factor the curves do not draw ([1.09, 6.0], the 500 ft curve from
  * 1.18) is out of chart on `takeoff_factor` (ruling P11); a speed under the DI panel's lowest line (60 kt) with a drag
- * index is out of chart on the speed (ruling P9).
+ * index is out of chart on the speed (ruling P9). Marks each panel it reads after its read, in that order (TOLD 1.8);
+ * a skipped panel is not marked, nor one out of chart.
  */
 export function accelCheckSpeed(
   ctx: Ctx,
@@ -37,6 +39,14 @@ export function accelCheckSpeed(
   const chart = curveFamily(panel(fig, 'distance', 'curve_family'), fig.id, i.takeoffFactor, i.checkDistanceFt);
   if (!chart.ok) return { accelCheckKias: chart };
   let kias = ctx.read('b2-4.distance', chart.value, STEPS.speedKt);
+  ctx.mark({
+    kind: 'curve_family',
+    figure: fig.id,
+    panel: 'distance',
+    input: i.takeoffFactor,
+    param: i.checkDistanceFt,
+    output: chart.value,
+  });
 
   const steps: readonly { id: string; panel: string; family: string; target: number; skip: boolean }[] = [
     { id: 'b2-4.gw', panel: 'gw', family: 'all', target: i.grossWeightLb / LB_PER_CHART_UNIT, skip: false },
@@ -58,8 +68,10 @@ export function accelCheckSpeed(
   ];
   for (const step of steps) {
     if (!step.skip) {
-      const moved = guidelinePanel(panel(fig, step.panel, 'guideline_panel'), fig.id, step.family, kias, step.target);
+      const p = panel(fig, step.panel, 'guideline_panel');
+      const moved = guidelinePanel(p, fig.id, step.family, kias, step.target);
       if (!moved.ok) return { accelCheckKias: moved };
+      ctx.mark(guidelineMark(fig.id, p, step.family, kias, step.target, moved.value));
       kias = moved.value;
     }
     kias = ctx.read(step.id, kias, STEPS.speedKt);

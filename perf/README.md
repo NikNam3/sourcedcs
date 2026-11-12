@@ -4,7 +4,7 @@ The F-16 performance calculator of the SOURCE tool suite. Step 1 is TOLD: takeof
 
 perf is a static app: all calculation runs in the browser, the server only serves files. It is public, without login. The plan is `docs/wip/TOLD.md`; the decisions are ADRs 0148 to 0153 in `docs/adr/`.
 
-Status: step 0 (foundations) is done. Step 1 (TOLD) is cut into four plans (`docs/wip/TOLD.md` 1.6); plan 1, the data and one figure function per chart for B2-4, B2-5, B2-6, B7-1 and B7-2 sheets 1 and 2, is done. Plan 2, the core (`computeTold`: the chains, runway rules, drag index builder and input parsing; `docs/wip/TOLD.md` 1.7), is done. Plan 3 (UI and state) is next. There is no UI yet.
+Status: step 0 (foundations) is done. Step 1 (TOLD) is cut into four plans (`docs/wip/TOLD.md` 1.6); plan 1, the data and one figure function per chart for B2-4, B2-5, B2-6, B7-1 and B7-2 sheets 1 and 2, is done. Plan 2, the core (`computeTold`: the chains, runway rules, drag index builder and input parsing; `docs/wip/TOLD.md` 1.7), is done. Plan 3, the UI and state (the three pages, the URL hash and localStorage, the figure paths and the Playwright smoke spec; `docs/wip/TOLD.md` 1.8), is built on branch `perf-told-p3` and awaits the human's review. Plan 4 (deployment) is next.
 
 ## Data flow
 
@@ -26,16 +26,54 @@ manual PDF -> extraction/ -> data/f16c-f110-129/ -> src/core/ -> src/web/
 - `src/core/inputs/`: `inputs.ts` (the `Inputs` type, every field as typed, and the defaults), `parse.ts` (numbers and the `ddd/ssGgg` wind), `derive.ts` (pressure altitude from the near-end threshold and the altimeter, slope, wind components, the physical limits). A derived value that does not compute names the fields that did not parse.
 - `src/core/dragindex/`: the drag index builder on Fig. B1-1. `catalogue.ts` (stores and suspensions from the data), `racks.ts` (which suspension carries which rack string, and its capacity), `tip.ts` and `tank.ts` (the tip rules and the tank variants), `check.ts` (`checkLoadout`), `loadout-row.ts` (the `Loadout` type), `loadout.ts` (`dragIndex`, exact and conservative; an invalid loadout gives its problems, never a throw).
 - `src/core/told/`: one chain per TOLD column, `takeoff.ts` (MIL, MAX AB) and `landing.ts` (normal weight and heavyweight, dry and wet); `rcr.ts` (refusal speed at the column's RCR); `rules.ts` (the runway rules with their paragraphs); `column.ts` (a column's cells, marks, reasons and exact trace); `told.ts` (`computeTold(figures, inputs, loadout)`, the one object plan 3's page renders).
-- `src/web/` is the only code that fetches the data files. `tsc` emits it to `web/js/` (gitignored).
+- `src/core/path/`: `mark.ts` (`PathMark`, where the exact path entered and left one panel, in the panel's chart units; every figure function calls `ctx.mark` once per panel it read) and `trace.ts` (`tracePaths`, the exact pass of a chain once, with its marks in order). The figure page draws them.
+- `src/web/` is the UI (below). `tsc` emits it to `web/js/` (gitignored).
+
+## The web pages
+
+Three plain HTML pages in `web/`, each loading `css/tokens.css`, `css/perf.css`, its own page CSS and `css/print.css` (media print), and one ES module from `web/js/web/<page>/main.js`. No framework, no bundler. Served at `/f16/`, with the data at `/f16/data/`.
+
+- `index.html`, the TOLD page: I. Aircraft (gross weights, CG, the drag index builder), II. Fields, III. TOLD (takeoff MIL and MAX AB, landing normal and heavyweight, dry and wet, exact and conservative). Every input recomputes everything.
+- `figure.html#<state>&fig=B2-3&view=takeoff`: one figure view (`view` is `takeoff`, `normal` or `heavy`), the greyscale page image with the exact paths drawn over it in SVG and the circled letters with their key. The TOLD page's "Fig." links open it.
+- `limitations.html`: the notes and caveats, with the data and app versions.
+- `components.html`: the component specimen of `css/perf.css` (not linked from the pages).
+
+The state is the inputs as typed and the loadout, in the URL hash (`#v=1&…`, so a link carries it) and under `perf.f16.v1` in localStorage; a hash from another version is refused with a grey note (TOLD.md 1.8 "State"). The TOLD and figure pages print on one A4 or Letter page, black on white.
+
+`src/web/` layout, one job per file:
+
+```
+load.ts             the only fetch: the manifest, then every figure file it lists
+format.ts           numbers, units, "—"
+inputs.ts           typed text -> Inputs (computeInputs, blankDefaults, the RCR field), for both pages
+figure-ref.ts       a figure view's name: the View union and figureOf ('B2-6.sh2' -> 'B2-6')
+browser-storage.ts  the page's localStorage, or null (state/storage.ts takes it as an argument)
+scale.ts            fit the 1280 px page to the window (--page-scale)
+reasons.ts          OutOfChart -> reason line
+rule-lines.ts       RuleMark -> rule line
+version.ts          APP_VERSION (a test keeps it equal to package.json) and the footer's version line
+state/              hash.ts (state <-> hash), loadout-code.ts (the loadout part), loadout-layout.ts (stations a
+                    decoded loadout lacks get their default empty rows), storage.ts, initial.ts (load order)
+told/               main.ts (the page), inputs-view.ts, field-check.ts (underlines), derived-line.ts, tables.ts, table-cells.ts, table-lines.ts, links.ts,
+                    dragindex-view.ts, dragindex-rows.ts, dragindex-text.ts, loadout-edit.ts, store-menu.ts
+figure/             main.ts (the page), views.ts (which paths a view draws), missing.ts (the "No path" line),
+                    geometry.ts (marks -> page polylines), letters.ts, sheet.ts (one sheet in SVG), frames.ts and edges.ts (panel frames, copied from the
+                    extraction specs under a parity test), dom.ts
+limitations/        main.ts (versions and the back link)
+```
+
+Dependencies run one way: `src/web/` imports `src/core/`, never the reverse, and only `load.ts` fetches (lint enforces both: `src/core/**` may not import `**/web/**` nor use `document`, `window`, `localStorage`, `location`, `history`, `navigator` or `fetch`). The pure modules (`format`, `inputs`, `reasons`, `rule-lines`, `state/*`, the `told/` models, `figure/geometry`, `figure/views`, `figure/missing`, `figure/letters`) have node unit tests; the views are covered by the smoke spec.
 
 ## npm scripts
 
 Node 22.18 or later. Run them in `perf/` after `npm ci`.
 
 - `npm run build`: `tsc -p tsconfig.build.json`, `src/` to `web/js/`.
-- `npm run typecheck`: `tsc --noEmit` over `src/`, `tests/` and `scripts/`.
+- `npm run serve`: `scripts/serve.ts`, a local static server: `/f16/` from `web/`, `/f16/data/` from `data/`. Port from `PORT` (default 8080). Run `npm run build` first.
+- `npm run e2e`: the Playwright smoke spec `e2e/smoke.spec.ts` (`e2e/playwright.config.ts`: Chromium only, one worker), which builds and starts `scripts/serve.ts` on port 8199 itself. Needs Chromium once: `npx playwright install chromium`.
+- `npm run typecheck`: `tsc --noEmit` over `src/`, `tests/`, `scripts/` and `e2e/`.
 - `npm run lint`: ESLint, typescript-eslint `strictTypeChecked`.
-- `npm run format:check`: Prettier. `data/`, `web/js/` and `extraction/` are not formatted.
+- `npm run format:check`: Prettier. `data/`, `web/js/`, `extraction/`, `test-results/` and `playwright-report/` are not formatted.
 - `npm test`: `node --test` on `tests/**/*.test.ts`, run directly from TypeScript, with a 90 % line-coverage floor on `src/core/`.
 - `npm run data:check`: every file in `data/<aircraft-engine>/` against the schema, and its SHA-256 against `manifest.json`; the manifest's `pdfSha256` against the pinned manual.
 - `npm run types:gen`: writes `src/core/data/types.ts` from `schema/charts.schema.json` (json-schema-to-typescript).
@@ -77,4 +115,4 @@ The manifest records the commit that last produced the data (`git rev-parse --sh
 
 ## CI
 
-`.github/workflows/perf-docker.yml` runs on every push touching `perf/**` or `crc-sync/src/altimetry.js`: `npm ci`, then `lint`, `format:check`, `typecheck`, `build`, `types:check`, `data:check` and `test`. CI never extracts: it has no PDF, and it checks the committed data instead. Step 1 adds the Docker image build and the Playwright smoke spec.
+`.github/workflows/perf-docker.yml` runs on every push touching `perf/**` or `crc-sync/src/altimetry.js`: `npm ci`, then `lint`, `format:check`, `typecheck`, `build`, `types:check`, `data:check` and `test`, then `npx playwright install --with-deps chromium` and `npm run e2e`. CI never extracts: it has no PDF, and it checks the committed data instead. Plan 4 adds the Docker image build and the deploy.

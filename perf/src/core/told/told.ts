@@ -20,11 +20,11 @@ import { parseNumber } from '../inputs/parse.ts';
 import { computedColumn, unparsedColumn } from './column.ts';
 import type { ToldColumn, UnparsedField } from './column.ts';
 import { LANDING_FIELDS, LANDING_KINDS, landingChain } from './landing.ts';
-import type { LandingKey, LandingSide } from './landing.ts';
+import type { LandingKey, LandingSide, LandingValues } from './landing.ts';
 import { landingMarks, mark, RCR_MIN, takeoffMarks } from './rules.ts';
 import type { RuleMark } from './rules.ts';
 import { TAKEOFF_FIELDS, TAKEOFF_KINDS, takeoffChain } from './takeoff.ts';
-import type { TakeoffKey, TakeoffSide } from './takeoff.ts';
+import type { TakeoffKey, TakeoffSide, TakeoffValues } from './takeoff.ts';
 
 export type { Reason, ToldCell, ToldColumn, UnparsedField } from './column.ts';
 
@@ -57,16 +57,29 @@ function valueOf(d: Derived<number>): number {
   return d.value;
 }
 
-function takeoffColumn(
-  figures: FigureSet,
+/** One column's chain values, or the input fields it lacks (each once). `runwayFt` is for the runway rules. */
+export type ColumnValues<V> =
+  | { readonly ok: true; readonly values: V; readonly runwayFt: number }
+  | { readonly ok: false; readonly fields: readonly UnparsedField[] };
+
+/**
+ * The values each chain runs on, exactly as `computeTold` builds them (plan 3's figure view runs the same chains):
+ * the takeoff values (both modes), the landing values per weight and surface, and the drag index builder's result.
+ */
+export interface ChainValues {
+  readonly dragIndex: DragIndex;
+  readonly takeoff: ColumnValues<TakeoffValues>;
+  readonly landing: Readonly<Record<Weight, Readonly<Record<Surface, ColumnValues<LandingValues>>>>>;
+}
+
+function takeoffValues(
   derived: DerivedInputs,
   drag: DragIndex,
   extra: readonly UnparsedField[],
-  mode: Mode,
-): ToldColumn<TakeoffKey, TakeoffSide> {
+): ColumnValues<TakeoffValues> {
   const fields = [...missingFields(derived, TAKEOFF_FIELDS), ...extra];
   // A drag index that is not ok is already in `fields` as 'loadout'; `!drag.ok` is kept to narrow its type.
-  if (fields.length > 0 || !drag.ok) return unparsedColumn(TAKEOFF_KINDS, fields);
+  if (fields.length > 0 || !drag.ok) return { ok: false, fields };
   const runwayFt = valueOf(derived.runwayFt);
   const values = {
     paFt: valueOf(derived.paFt),
@@ -80,36 +93,40 @@ function takeoffColumn(
     rcrDry: valueOf(derived.rcrDry),
     rcrWet: valueOf(derived.rcrWet),
   };
-  const evaluation = evaluate(takeoffChain(figures, values, mode), TAKEOFF_KINDS);
-  return computedColumn(evaluation, TAKEOFF_KINDS, (k, cell) =>
-    k === 'distance' ? takeoffMarks(mode, cell, runwayFt) : [],
-  );
+  return { ok: true, values, runwayFt };
 }
 
 const RCR_FIELD = { dry: 'rcrDry', wet: 'rcrWet' } as const;
 
-function landingColumn(
-  figures: FigureSet,
-  derived: DerivedInputs,
-  weight: Weight,
-  surface: Surface,
-): ToldColumn<LandingKey, LandingSide> {
+function landingValues(derived: DerivedInputs, weight: Weight, surface: Surface): ColumnValues<LandingValues> {
   const fields = missingFields(derived, LANDING_FIELDS[weight][surface]);
-  if (fields.length > 0) return unparsedColumn(LANDING_KINDS, fields);
-  const runwayFt = valueOf(derived.runwayFt);
-  const rcr = valueOf(derived[RCR_FIELD[surface]]);
+  if (fields.length > 0) return { ok: false, fields };
   const values = {
     paFt: valueOf(derived.paFt),
     tempC: valueOf(derived.tempC),
     grossWeightLb: valueOf(weight === 'normal' ? derived.landingGwLb : derived.takeoffGwLb),
     headwindKt: valueOf(derived.headwindKt),
     slopePct: valueOf(derived.slopePct),
-    rcr,
+    rcr: valueOf(derived[RCR_FIELD[surface]]),
   };
-  const evaluation = evaluate(landingChain(figures, values, surface), LANDING_KINDS);
-  return computedColumn(evaluation, LANDING_KINDS, (k, cell) =>
-    k === 'distance' ? landingMarks(cell, runwayFt, rcr) : [],
-  );
+  return { ok: true, values, runwayFt: valueOf(derived.runwayFt) };
+}
+
+function chainValuesOf(figures: FigureSet, inputs: Inputs, loadout: Loadout, derived: DerivedInputs): ChainValues {
+  const additional = parseNumber(inputs.additionalDragIndex);
+  const drag = dragIndex(buildCatalogue(figures), loadout, additional.ok ? additional.value : 0);
+  const extra: UnparsedField[] = [];
+  if (!additional.ok) extra.push('additionalDragIndex');
+  if (!drag.ok) extra.push('loadout');
+  const landing = (weight: Weight): Record<Surface, ColumnValues<LandingValues>> => ({
+    dry: landingValues(derived, weight, 'dry'),
+    wet: landingValues(derived, weight, 'wet'),
+  });
+  return {
+    dragIndex: drag,
+    takeoff: takeoffValues(derived, drag, extra),
+    landing: { normal: landing('normal'), heavy: landing('heavy') },
+  };
 }
 
 /** 3.18 on the input: one mark per RCR field below 10, on the value as typed. */
@@ -122,22 +139,37 @@ function rcrMarksOf(derived: DerivedInputs): RuleMark[] {
   return marks;
 }
 
+/** The chain values `computeTold` runs on, for the figure view's exact paths (`tracePaths`). */
+export function chainValues(figures: FigureSet, inputs: Inputs, loadout: Loadout): ChainValues {
+  return chainValuesOf(figures, inputs, loadout, deriveInputs(inputs));
+}
+
 export function computeTold(figures: FigureSet, inputs: Inputs, loadout: Loadout): Told {
   const derived = deriveInputs(inputs);
-  const additional = parseNumber(inputs.additionalDragIndex);
-  const drag = dragIndex(buildCatalogue(figures), loadout, additional.ok ? additional.value : 0);
-  const extra: UnparsedField[] = [];
-  if (!additional.ok) extra.push('additionalDragIndex');
-  if (!drag.ok) extra.push('loadout');
+  const values = chainValuesOf(figures, inputs, loadout, derived);
 
-  const takeoff = (mode: Mode): ToldColumn<TakeoffKey, TakeoffSide> =>
-    takeoffColumn(figures, derived, drag, extra, mode);
+  const takeoff = (mode: Mode): ToldColumn<TakeoffKey, TakeoffSide> => {
+    const v = values.takeoff;
+    if (!v.ok) return unparsedColumn(TAKEOFF_KINDS, v.fields);
+    const evaluation = evaluate(takeoffChain(figures, v.values, mode), TAKEOFF_KINDS);
+    return computedColumn(evaluation, TAKEOFF_KINDS, (k, cell) =>
+      k === 'distance' ? takeoffMarks(mode, cell, v.runwayFt) : [],
+    );
+  };
+  const landingColumn = (weight: Weight, surface: Surface): ToldColumn<LandingKey, LandingSide> => {
+    const v = values.landing[weight][surface];
+    if (!v.ok) return unparsedColumn(LANDING_KINDS, v.fields);
+    const evaluation = evaluate(landingChain(figures, v.values, surface), LANDING_KINDS);
+    return computedColumn(evaluation, LANDING_KINDS, (k, cell) =>
+      k === 'distance' ? landingMarks(cell, v.runwayFt, v.values.rcr) : [],
+    );
+  };
   const landing = (weight: Weight): Record<Surface, ToldColumn<LandingKey, LandingSide>> => ({
-    dry: landingColumn(figures, derived, weight, 'dry'),
-    wet: landingColumn(figures, derived, weight, 'wet'),
+    dry: landingColumn(weight, 'dry'),
+    wet: landingColumn(weight, 'wet'),
   });
   return {
-    dragIndex: drag,
+    dragIndex: values.dragIndex,
     takeoff: { mil: takeoff('mil'), ab: takeoff('ab') },
     landing: { normal: landing('normal'), heavy: landing('heavy') },
     rcrMarks: rcrMarksOf(derived),

@@ -1,0 +1,302 @@
+/*
+ * The TOLD page (TOLD.md 1.8; the approved board docs/mockups/perf-told.html, its "proposed" CSS). Colours come only
+ * from tokens.css.
+ *
+ * Drag index builder  .drag-index's column widths, .picker (a picked store, suspension or count: plain text,
+ *                     underlined on hover or focus), .chosen (a suspension's shown value over its hidden select),
+ *                     .count, .empty (an empty station), .unparsed (a row with a loadout problem), .variant (the
+ *                     grey tank variant line), .suspension (the suspension row), .station-start, .empty-station,
+ *                     .station-action (split, join), .store-menu (the menu of Fig. B1-1 stores)
+ * Page                .page's window scale (--page-scale, set by scale.ts; screen only, print.css sets its own),
+ *                     .header-link (Limitations, in the header), .page-note (a grey note under the title), .fig
+ *                     (the figure column), .row-label (a TOLD row's label, one line), .field input.alert (an input
+ *                     that breaks a rule: RCR below 10)
+ */
+
+/* The drag index table's fixed columns. */
+.data-table.drag-index th:first-child {
+  width: 72px;
+}
+
+.data-table.drag-index .num {
+  width: 44px;
+  white-space: nowrap;
+}
+
+/* The drag index builder. A store or suspension is picked like an input is typed: bold value, underline. */
+.data-table.drag-index td {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.data-table.drag-index .station-start {
+  border-top: 1px solid var(--rule);
+}
+
+.data-table.drag-index .suspension td:nth-child(2) {
+  padding-left: 24px;
+}
+
+.picker {
+  position: relative;
+}
+
+/* A picked store, suspension or count reads as plain text, as in the manual's table; hover or focus underlines it
+   to show it can be changed. Only a typed value (Additional) is bold and underlined. */
+.picker > button,
+.picker > select,
+.data-table.drag-index input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 1px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.data-table.drag-index input {
+  border-bottom-color: currentColor;
+  font-weight: bold;
+  text-align: right;
+  cursor: text;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table.drag-index input::placeholder {
+  color: var(--grey);
+  font-weight: normal;
+  opacity: 1;
+}
+
+.picker > .chosen {
+  display: block;
+  border-bottom: 1px solid transparent;
+}
+
+.picker > button:hover,
+.picker:hover > .chosen,
+.picker > select.count:hover {
+  border-bottom-color: currentColor;
+}
+
+.picker > select.count {
+  appearance: none;
+  text-align: right;
+  text-align-last: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.picker > .chosen + select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+}
+
+.picker:focus-within > .chosen {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.picker > select option {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.picker > button.empty {
+  color: var(--grey);
+}
+
+/* A row with a loadout problem (an unknown store from an old link): the grey dotted underline of a field that does
+   not parse, on its store. */
+.picker > button.unparsed,
+.data-table.drag-index input.unparsed {
+  border-bottom: 1px dotted var(--grey);
+}
+
+.picker > button:focus-visible,
+.picker > select:focus-visible,
+.data-table.drag-index input:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.variant {
+  color: var(--grey);
+  font-size: 14px;
+}
+
+/* The store menu: a sheet of the manual laid over the page. */
+.store-menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 640px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  font-size: 15px;
+  font-weight: normal;
+}
+
+.data-table.drag-index .store-menu input[type='text'] {
+  margin: 8px 10px;
+  width: auto;
+  text-align: left;
+  font-weight: normal;
+}
+
+.store-menu ul {
+  margin: 0;
+  padding: 0 0 6px;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.store-menu .group {
+  padding: 6px 10px 2px;
+  font-style: italic;
+  color: var(--grey);
+}
+
+.store-menu li[role='option'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px 50px;
+  gap: 12px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.store-menu li[role='option'] span:nth-child(2) {
+  color: var(--grey);
+  font-size: 13px;
+}
+
+.store-menu li[role='option'] span:nth-child(3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.store-menu li[aria-selected='true'] {
+  outline: 1px solid var(--ink);
+  outline-offset: -1px;
+}
+
+.store-menu .menu-foot {
+  padding: 4px 10px 8px;
+  border-top: 1px solid var(--rule);
+  color: var(--grey);
+  font-size: 13px;
+}
+
+/* Split a pair for an asymmetric load, or join it again: grey, beside the station label. */
+.station-action {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--grey);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media print {
+  /* The drag index builder on paper: the picked stores as their values; no menu, no empty stations, no pickers'
+     underlines, no focus rings, no split or join (print.css hides every button). */
+  .store-menu,
+  .data-table.drag-index tr.empty-station {
+    display: none;
+  }
+
+  .picker > button:not(.unparsed),
+  .picker > .chosen,
+  .data-table.drag-index input:not(.unparsed) {
+    border-bottom-color: transparent;
+  }
+
+  .picker > .chosen + select {
+    display: none;
+  }
+
+  .picker > button {
+    display: block;
+  }
+
+  .data-table.drag-index input::placeholder {
+    color: var(--ink);
+    font-weight: bold;
+  }
+
+  .picker > button:focus-visible,
+  .picker:focus-within > .chosen,
+  .data-table.drag-index input:focus-visible {
+    outline: none;
+  }
+}
+
+/* The page: the fixed 1280 px paper scaled to the window (scale.ts sets --page-scale). Screen only: print.css
+   gives the printed page its own fixed scale. */
+@media screen {
+  .page {
+    zoom: var(--page-scale, 1);
+  }
+}
+
+/* Sections wait for the chart data; an author display rule would otherwise beat the hidden attribute. */
+[hidden] {
+  display: none !important;
+}
+
+.header-link {
+  margin-left: 24px;
+}
+
+/* A refused link or dropped loadout rows (#v= other than 1): grey notes under the title. */
+.page-notes {
+  margin: -18px 0 0;
+}
+
+.page-notes:empty {
+  display: none;
+}
+
+.page-note {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--grey);
+}
+
+/* The figure column: every row names its figure and links to the figure view, which draws the row's paths. */
+.data-table .fig {
+  width: 92px;
+  font-size: 14px;
+}
+
+/* A TOLD row's label and its figure links stay on one line ("Accel. check at 2,000 / 1,000 ft, KIAS"). */
+.data-table .row-label,
+.data-table .fig {
+  white-space: nowrap;
+}
+
+/* The TOLD tables' cells sit closer than the default 8 px (4 px a side), so the longest label fits its column on one line. */
+.told-section .data-table th,
+.told-section .data-table td {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/* The input that breaks a rule (RCR below 10) is marked like a problem value. */
+.field input.alert {
+  color: var(--alert);
+}

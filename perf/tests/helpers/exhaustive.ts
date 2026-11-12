@@ -42,6 +42,7 @@ export function evaluateExhaustive<K extends string, S>(
     const ctx: Ctx = {
       read: (id, value, step) => point(id, value, step, [value]),
       input: (id, value, step) => point(id, value.conservative, step, [value.exact, value.conservative]),
+      mark: () => undefined,
     };
     results.push(chain(ctx));
     for (let j = fixed.length; j < choices.length; j++) {
