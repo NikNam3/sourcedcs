@@ -9,8 +9,9 @@ import { describe, test } from 'node:test';
 import { DEFAULT_LOADOUT } from '../src/core/dragindex/loadout-row.ts';
 import { DEFAULT_INPUTS } from '../src/core/inputs/inputs.ts';
 import type { Inputs } from '../src/core/inputs/inputs.ts';
+import { LOADOUT_LINE, missingLines } from '../src/web/figure/missing.ts';
 import { parseView, viewPaths } from '../src/web/figure/views.ts';
-import type { FigureView } from '../src/web/figure/views.ts';
+import type { ViewResult } from '../src/web/figure/views.ts';
 import type { AppState } from '../src/web/state/hash.ts';
 
 import { DATASET_DIR, loadFigureSet } from './helpers/data.ts';
@@ -43,7 +44,7 @@ const state = (change: Partial<Inputs> = {}): AppState => ({
   loadout: DEFAULT_LOADOUT,
 });
 
-function view(fig: string, v: 'takeoff' | 'normal' | 'heavy', change: Partial<Inputs> = {}): FigureView {
+function view(fig: string, v: 'takeoff' | 'normal' | 'heavy', change: Partial<Inputs> = {}): ViewResult {
   const result = viewPaths(FIGURES, state(change), fig, v);
   assert.ok(result !== null);
   return result;
@@ -186,7 +187,7 @@ describe('landing views', () => {
   test('heavyweight reads the takeoff gross weight', () => {
     const normal = view('B7-2', 'normal');
     const heavy = view('B7-2', 'heavy');
-    const gw = (v: FigureView): number | undefined => {
+    const gw = (v: ViewResult): number | undefined => {
       const m = v.paths[0]?.marks.find((x) => x.panel === 'gw');
       return m?.kind === 'curve_family' ? m.param : undefined;
     };
@@ -200,5 +201,61 @@ describe('landing views', () => {
       v.paths.map((p) => p.label),
       ['Dry and wet'],
     );
+  });
+});
+
+describe('a view whose columns did not compute because of inputs (final review I1)', () => {
+  test('the sample computes: nothing missing, no line', () => {
+    assert.deepEqual(view('B2-3', 'takeoff').missing, []);
+    assert.deepEqual(view('B7-1', 'normal').missing, []);
+    assert.deepEqual(missingLines([]), []);
+  });
+
+  test('an empty landing GW: no path, the first sheet, and the field named', () => {
+    const v = view('B7-1', 'normal', { landingGwLb: '' });
+    assert.deepEqual(v.paths, []);
+    assert.deepEqual(v.sheets, ['B7-1']);
+    assert.deepEqual(v.missing, ['landingGwLb']);
+    assert.deepEqual(missingLines(v.missing), ['No path: Landing GW not entered or not readable.']);
+  });
+
+  test('a wet RCR that does not read: the dry path stays, RCR wet named', () => {
+    const v = view('B7-2', 'normal', { rcrWet: 'x' });
+    assert.deepEqual(
+      v.paths.map((p) => p.label),
+      ['Dry'],
+    );
+    assert.deepEqual(v.missing, ['rcrWet']);
+  });
+
+  test('takeoff: an unread temperature and an empty length, listed in one line', () => {
+    const v = view('B2-3', 'takeoff', { tempC: '4o', lengthFt: '' });
+    assert.deepEqual(v.paths, []);
+    assert.ok(v.missing.includes('tempC'));
+    const [line] = missingLines(v.missing);
+    assert.match(line ?? '', /^No path: .*Temperature.* not entered or not readable\.$/);
+    assert.deepEqual(missingLines(['tempC', 'lengthFt', 'wind']), [
+      'No path: Temperature, Length avail. and Wind not entered or not readable.',
+    ]);
+  });
+
+  test('a loadout problem has its own line', () => {
+    const result = viewPaths(
+      FIGURES,
+      {
+        inputs: SAMPLE,
+        loadout: [{ stations: ['3', '7'], storeKey: 'never-heard-of-it', suspension: null, count: 2 }],
+      },
+      'B2-3',
+      'takeoff',
+    );
+    assert.ok(result !== null);
+    assert.deepEqual(result.missing, ['loadout']);
+    assert.deepEqual(missingLines(result.missing), [LOADOUT_LINE]);
+    assert.equal(LOADOUT_LINE, 'No path: the loadout has a problem (see the drag index builder).');
+    assert.deepEqual(missingLines(['tempC', 'loadout']), [
+      'No path: Temperature not entered or not readable.',
+      LOADOUT_LINE,
+    ]);
   });
 });

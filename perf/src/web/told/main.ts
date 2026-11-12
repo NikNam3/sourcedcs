@@ -18,13 +18,14 @@ import { encodeState } from '../state/hash.ts';
 import type { AppState } from '../state/hash.ts';
 import { initialState } from '../state/initial.ts';
 import { readStored, writeStored } from '../state/storage.ts';
-import { APP_VERSION } from '../version.ts';
+import { versionLine } from '../version.ts';
+import { browserStorage } from '../browser-storage.ts';
+import { computeInputs } from '../inputs.ts';
 
 import { derivedLines } from './derived-line.ts';
 import { mountDragIndex } from './dragindex-view.ts';
 import type { DragIndexView } from './dragindex-view.ts';
 import { unparsedFields } from './field-check.ts';
-import { blankDefaults, computeInputs } from './field-text.ts';
 import { mountInputs } from './inputs-view.ts';
 import type { InputsView } from './inputs-view.ts';
 import { figureHref, limitationsHref } from './links.ts';
@@ -41,15 +42,6 @@ function byId<T extends HTMLElement>(id: string, type: new () => T): T {
   return node;
 }
 
-/** localStorage, or null where reading it throws (storage disabled). */
-function storage(): Storage | null {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
 function showNotes(notes: readonly string[]): void {
   byId('page-notes', HTMLElement).replaceChildren(
     ...notes.map((note) => {
@@ -60,9 +52,6 @@ function showNotes(notes: readonly string[]): void {
     }),
   );
 }
-
-const today = (): string =>
-  new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date());
 
 class ToldPage {
   private state: AppState = { inputs: DEFAULT_INPUTS, loadout: DEFAULT_LOADOUT };
@@ -86,23 +75,20 @@ class ToldPage {
       this.state = { ...this.state, inputs: this.inputs.read() };
       this.recompute(true);
     });
-    byId('versions', HTMLElement).textContent =
-      `Data version ${String(data.manifest.dataVersion)} · App version ${APP_VERSION} · ${today()}`;
+    byId('versions', HTMLElement).textContent = versionLine(data.manifest.dataVersion, new Date());
   }
 
   /**
    * The state from the hash, storage or the defaults, with its notes; fills every field. A state from the hash or
    * storage is written back once to both, so an opened link becomes the stored state. A page from the defaults
-   * shows its defaulted fields as placeholders and writes nothing until the first change.
+   * (its defaulted fields empty, shown as placeholders) writes nothing until the first change.
    */
   load(): void {
-    const initial = initialState(location.hash, readStored(storage()));
-    const { inputs, loadout } = initial.state;
-    const defaults = initial.source === 'defaults';
-    this.state = { inputs: defaults ? blankDefaults(inputs) : inputs, loadout };
+    const initial = initialState(location.hash, readStored(browserStorage()));
+    this.state = initial.state;
     showNotes(initial.notes);
     this.inputs.write(this.state.inputs);
-    this.recompute(!defaults);
+    this.recompute(initial.source !== 'defaults');
   }
 
   recompute(save: boolean): void {
@@ -138,7 +124,7 @@ class ToldPage {
     if (save) {
       const text = encodeState(state);
       history.replaceState(null, '', `#${text}`);
-      writeStored(storage(), text);
+      writeStored(browserStorage(), text);
     }
   }
 }

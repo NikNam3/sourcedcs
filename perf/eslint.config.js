@@ -40,14 +40,21 @@ export default defineConfig(
     rules: {
       'no-restricted-imports': [
         'error',
-        { patterns: [{ group: ['node:*'], message: 'src/core/ has no Node imports: pass the data in.' }] },
+        {
+          patterns: [
+            { group: ['node:*'], message: 'src/core/ has no Node imports: pass the data in.' },
+            { group: ['**/web/**'], message: 'src/web/ imports src/core/, never the reverse (TOLD 1.8).' },
+          ],
+        },
       ],
       'no-restricted-globals': [
         'error',
-        ...['fetch', 'document', 'window', 'localStorage', 'process'].map((name) => ({
-          name,
-          message: 'src/core/ has no DOM, no I/O and no process: pass the data in.',
-        })),
+        ...['fetch', 'document', 'window', 'localStorage', 'location', 'history', 'navigator', 'process'].map(
+          (name) => ({
+            name,
+            message: 'src/core/ has no DOM, no I/O and no process: pass the data in.',
+          }),
+        ),
       ],
     },
   },

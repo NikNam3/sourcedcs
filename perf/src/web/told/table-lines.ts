@@ -10,29 +10,24 @@ import type { RuleMark } from '../../core/told/rules.ts';
 import type { TakeoffKey, TakeoffSide } from '../../core/told/takeoff.ts';
 import type { Told, ToldColumn } from '../../core/told/told.ts';
 import { formatThousands } from '../format.ts';
-import { reasonText } from '../reasons.ts';
+import { reasonText, signsOf } from '../reasons.ts';
 import type { Signs } from '../reasons.ts';
 import { ruleLine } from '../rule-lines.ts';
 import type { ColumnName } from '../rule-lines.ts';
 
-import type { FigureView } from './links.ts';
+import type { View } from '../figure-ref.ts';
 
 export interface LineModel {
   /** The reason's figure: its label ('B2-6 sh. 2'), its file id and the view the link opens; null for other lines. */
-  readonly figure: { readonly label: string; readonly id: string; readonly view: FigureView } | null;
+  readonly figure: { readonly label: string; readonly id: string; readonly view: View } | null;
   readonly text: string;
 }
 
 interface Column {
   readonly name: ColumnName;
-  readonly view: FigureView;
+  readonly view: View;
   readonly column: ToldColumn<string, unknown>;
 }
-
-const signsOf = (d: DerivedInputs): Signs => ({
-  headwindKt: d.headwindKt.ok ? d.headwindKt.value : null,
-  slopePct: d.slopePct.ok ? d.slopePct.value : null,
-});
 
 function reasonLines(columns: readonly Column[], figures: FigureSet, signs: Signs): LineModel[] {
   const seen = new Set<string>();

@@ -7,7 +7,7 @@ import { DEFAULT_INPUTS } from '../src/core/inputs/inputs.ts';
 import type { Inputs } from '../src/core/inputs/inputs.ts';
 import { derivedLines } from '../src/web/told/derived-line.ts';
 import { unparsedFields } from '../src/web/told/field-check.ts';
-import { computeInputs } from '../src/web/told/field-text.ts';
+import { computeInputs } from '../src/web/inputs.ts';
 
 const MOCKUP: Inputs = {
   ...DEFAULT_INPUTS,

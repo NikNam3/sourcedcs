@@ -1,11 +1,11 @@
 /**
- * The TOLD page's typed text → the core's `Inputs` (TOLD 1.8 "The TOLD page"). The state keeps every field as typed;
+ * The typed text → the core's `Inputs` (TOLD 1.8 "The TOLD page"), shared by the TOLD and figure pages. The state keeps every field as typed;
  * only the copy given to `computeTold` is normalised: grouping commas stripped ("37,240" → "37240", never "29,86"), the wind's
  * spaces removed ("230 / 08 G15" → "230/08G15"), and an empty field with a default (CG, additional drag index, RCR
  * dry and wet) given that default. RCR is one field on the page, "dry / wet". Pure: no DOM.
  */
-import { DEFAULT_INPUTS } from '../../core/inputs/inputs.ts';
-import type { InputField, Inputs } from '../../core/inputs/inputs.ts';
+import { DEFAULT_INPUTS } from '../core/inputs/inputs.ts';
+import type { InputField, Inputs } from '../core/inputs/inputs.ts';
 
 /** The fields whose empty value means the default; the page shows the default as the placeholder. */
 export const DEFAULTED: readonly InputField[] = Object.freeze(['cgPct', 'additionalDragIndex', 'rcrDry', 'rcrWet']);

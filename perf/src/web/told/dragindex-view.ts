@@ -7,6 +7,7 @@
 import type { Catalogue } from '../../core/dragindex/catalogue.ts';
 import type { DragIndex, Loadout } from '../../core/dragindex/loadout.ts';
 import { capacity } from '../../core/dragindex/racks.ts';
+import { DASH } from '../format.ts';
 import { notesText, rowModels, totalText, type RowModel } from './dragindex-rows.ts';
 import { menuOptions } from './dragindex-text.ts';
 import { join, setCount, setStore, setSuspension, split } from './loadout-edit.ts';
@@ -17,8 +18,6 @@ export interface DragIndexView {
   /** The Additional field (stores not in Fig. B1-1), made once: the page reads it and marks it unparsed. */
   readonly additionalInput: HTMLInputElement;
 }
-
-const DASH = '—';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,

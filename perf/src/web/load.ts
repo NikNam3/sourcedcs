@@ -32,7 +32,7 @@ export async function loadData(base: string = DEFAULT_BASE): Promise<AppData> {
   return { manifest, figures: Object.freeze(figures) };
 }
 
-/** The figure's page image: base + `pages/<id>.png`. */
+/** The figure's page image: base + the figure file's `image.file` (`pages/<id>.png` in the shipped data). */
 export function pageImageUrl(fig: FigureFile, base: string = DEFAULT_BASE): string {
   return `${base}${fig.image.file}`;
 }

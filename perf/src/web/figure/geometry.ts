@@ -125,7 +125,7 @@ function exitOf(x: Paired): { q: Quantity; value: number } {
 }
 
 /** Equal up to float noise: a carried value can come back as x * 1000 / 1000. */
-const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
+export const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
 
 interface Placed {
   readonly points: Pt[];
