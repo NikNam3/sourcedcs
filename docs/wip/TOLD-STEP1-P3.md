@@ -105,14 +105,14 @@ export function formatPercent(value: number): string;                           
 export function formatThousands(value: number, decimals?: number): string;                 // en-US grouping, '−' minus
 export function figureLabel(figureId: string): string;                                    // 'B2-6.sh2' → 'B2-6 sh. 2'
 // scale.ts
-export function fitPage(page: HTMLElement, widthPx?: number): () => void; // 1280; sets a CSS scale on resize; returns dispose
+export function fitPage(page: HTMLElement, widthPx?: number): () => void; // 1280; sets --page-scale on resize; page CSS applies zoom: var(--page-scale, 1), print resets it; returns dispose
 // reasons.ts
 export interface Signs { readonly headwindKt: number | null; readonly slopePct: number | null }
 export function reasonText(reason: Reason, figures: FigureSet, signs: Signs): { figure: string; text: string };
 //   figure: figureLabel(reason.error.figure); text after "<figure>: "
 // rule-lines.ts
 export type ColumnName = 'MIL' | 'MAX AB' | 'normal dry' | 'normal wet' | 'heavyweight dry' | 'heavyweight wet';
-export function ruleLine(mark: RuleMark, column: ColumnName | null, pct: number | null, figures: FigureSet): string;
+export function ruleLine(mark: RuleMark, column: ColumnName | null, rcr: number | null, figures: FigureSet): string; // rcr: for landing-rcr-10 only; roll rules use mark.percent
 // version.ts
 export const APP_VERSION = '0.1.0';
 // state/hash.ts
