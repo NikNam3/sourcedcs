@@ -6,7 +6,7 @@ import { storesFor, suspensionsFor, type Catalogue, type StoreRow } from '../../
 import type { DragIndex, DragLine, Loadout, LoadoutRow } from '../../core/dragindex/loadout.ts';
 import { capacity } from '../../core/dragindex/racks.ts';
 import { EMPTY_TEXT, NO_TIP_TEXT, problemText, signed, stationLabel, storeText, unbreak } from './dragindex-text.ts';
-import { pairOf } from './loadout-edit.ts';
+import { maxCount, pairOf } from './loadout-edit.ts';
 
 export interface SuspensionModel {
   readonly chosen: string;
@@ -27,7 +27,10 @@ export interface RowModel {
   /** A `LoadoutProblem` names this row: the store gets the dotted underline. */
   readonly problem: boolean;
   readonly action: 'split' | 'join' | null;
-  /** The count shown and the highest the picker offers; null on an empty row. */
+  /**
+   * The count shown and the highest the picker offers (what the allowed suspensions carry); null on an empty row.
+   * While the drag index does not compute, `value` is the loadout's own and may lie outside 1 .. `max`.
+   */
   readonly count: { readonly value: number; readonly max: number } | null;
   readonly eachText: string;
   readonly dragText: string;
@@ -132,7 +135,7 @@ function rowModel(cat: Catalogue, loadout: Loadout, drag: DragIndex, index: numb
     empty: key === null,
     problem,
     action: actionOf(loadout, index, row),
-    count: key === null ? null : { value, max: Math.max(max, value) },
+    count: key === null ? null : { value, max: Math.min(max, maxCount(row.stations)) },
     eachText: unique(lines.map((l) => signed(l.eachExact))).join(', '),
     dragText: lines.length > 0 ? signed(sum(lines.map((l) => l.count * l.eachExact))) : '',
     variant: variantOf(row, lines, value),

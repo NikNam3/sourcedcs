@@ -121,10 +121,14 @@ export function mountDragIndex(
   }
 
   function countCell(m: RowModel, count: { readonly value: number; readonly max: number }): HTMLTableCellElement {
-    if (count.max <= 1) return num(String(count.value));
+    const valid = Number.isInteger(count.value) && count.value >= 1 && count.value <= count.max;
+    if (count.max < 1 || (count.max === 1 && valid)) return num(String(count.value));
     const select = el('select', { className: 'count' });
     select.setAttribute('aria-label', `Number of stores at ${m.label}`);
     select.dataset.focus = focusKey('count', m);
+    // A count the picker does not offer (from a link) is shown as it is, so picking any offered count changes it.
+    if (!valid)
+      select.append(el('option', { value: '', textContent: String(count.value), selected: true, disabled: true }));
     for (let n = 1; n <= count.max; n += 1) {
       select.append(el('option', { value: String(n), textContent: String(n), selected: n === count.value }));
     }
@@ -165,8 +169,8 @@ export function mountDragIndex(
   }
 
   function rowsOf(m: RowModel): HTMLTableRowElement[] {
-    const hidden = m.empty && m.action !== 'join';
-    const tr = el('tr', { className: hidden ? 'station-start empty-station' : 'station-start' }, stationCell(m));
+    // An empty station does not print, the first of a split pair (with its "join") included.
+    const tr = el('tr', { className: m.empty ? 'station-start empty-station' : 'station-start' }, stationCell(m));
     tr.append(storeCell(m));
     if (m.count === null) tr.append(...blank());
     else tr.append(countCell(m, m.count), num(m.eachText), num(m.dragText));

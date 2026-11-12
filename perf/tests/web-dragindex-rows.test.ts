@@ -148,3 +148,13 @@ test('tank variants that differ between the stations are named per station', () 
   const tank = rowModels(cat, l, drag).find((m) => m.storeText === '370-GALLON TANK');
   assert.equal(tank?.variant, '4: single racks or stores at 3 or 7; 6: no stores at 3 or 7');
 });
+
+test('while another row has a problem, the count picker stays within what the suspensions carry', () => {
+  let l = setStore(workedExample(), 4, '6||MK 99 GONE|3,4,6, OR 7');
+  l = l.map((r, i) => (i === 2 ? { ...r, suspension: null, count: 6 } : r)); // MK 84 on pylons at 6, from a link
+  const drag = dragIndex(cat, l, 0);
+  assert.equal(drag.ok, false);
+  assert.deepEqual(model(rowModels(cat, l, drag), 2).count, { value: 6, max: 2 });
+  const zero = l.map((r, i) => (i === 2 ? { ...r, count: 0 } : r));
+  assert.deepEqual(model(rowModels(cat, zero, dragIndex(cat, zero, 0)), 2).count, { value: 0, max: 2 });
+});

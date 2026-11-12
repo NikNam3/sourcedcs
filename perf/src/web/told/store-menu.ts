@@ -89,7 +89,10 @@ export function openStoreMenu(
     list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
   };
 
-  search.addEventListener('input', () => {
+  // The filter's typing is the menu's own: a page that recomputes on every bubbling `input` event would otherwise
+  // call `update`, which closes the menu at the first letter.
+  search.addEventListener('input', (e) => {
+    e.stopPropagation();
     active = 0;
     paint();
   });
