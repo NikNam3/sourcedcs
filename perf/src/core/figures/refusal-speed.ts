@@ -8,6 +8,7 @@ import { STEPS } from '../ctx.ts';
 import type { Ctx } from '../ctx.ts';
 import { panel } from '../data/panel.ts';
 import type { FigureFile } from '../data/types.ts';
+import { guidelineMark } from '../path/mark.ts';
 import { curveFamily } from '../read/curve-family.ts';
 import { guidelinePanel } from '../read/guideline-panel.ts';
 import { ok, outOfChart } from '../result.ts';
@@ -42,6 +43,9 @@ const LB_PER_CHART_UNIT = 1000;
  * the top or the bottom of the chart) is OutOfChart on the GW panel's `gross_weight`, in its chart unit (1000 lb),
  * with no drawn range, since no one range of GW holds for every takeoff factor and runway length (Review Focus 3).
  * A runway reading outside the wind or slope lines is OutOfChart on `refusal_speed` (ruling P15).
+ *
+ * Marks each panel it reads after its read, in order (TOLD 1.8): the GW curves, the runway lines, wind, slope. A GW
+ * read whose carried position the runway lines do not draw keeps its mark: the path stops at the runway lines.
  */
 export function refusalSpeed(
   ctx: Ctx,
@@ -57,6 +61,14 @@ export function refusalSpeed(
   const grossWeight = i.grossWeightLb / LB_PER_CHART_UNIT;
   const carried = curveFamily(gw, fig.id, i.takeoffFactor, grossWeight);
   if (!carried.ok) return carried;
+  ctx.mark({
+    kind: 'curve_family',
+    figure: fig.id,
+    panel: gw.id,
+    input: i.takeoffFactor,
+    param: grossWeight,
+    output: carried.value,
+  });
 
   const runway = panel(fig, `runway${suffix}`, 'curve_family');
   const entry = curveFamily(runway, fig.id, carried.value, i.runwayFt);
@@ -64,6 +76,14 @@ export function refusalSpeed(
     return entry.error.input === runway.input.name ? outOfChart(fig.id, gw.param.name, grossWeight, null) : entry;
   }
   let kt = ctx.read(`${ids}.runway`, entry.value, STEPS.speedKt);
+  ctx.mark({
+    kind: 'curve_family',
+    figure: fig.id,
+    panel: runway.id,
+    input: carried.value,
+    param: i.runwayFt,
+    output: entry.value,
+  });
 
   const steps: readonly { id: string; panel: string; family: string; target: number; skip: boolean }[] = [
     {
@@ -83,8 +103,10 @@ export function refusalSpeed(
   ];
   for (const step of steps) {
     if (!step.skip) {
-      const moved = guidelinePanel(panel(fig, step.panel, 'guideline_panel'), fig.id, step.family, kt, step.target);
+      const p = panel(fig, step.panel, 'guideline_panel');
+      const moved = guidelinePanel(p, fig.id, step.family, kt, step.target);
       if (!moved.ok) return moved;
+      ctx.mark(guidelineMark(fig.id, p, step.family, kt, step.target, moved.value));
       kt = moved.value;
     }
     kt = ctx.read(step.id, kt, STEPS.speedKt);

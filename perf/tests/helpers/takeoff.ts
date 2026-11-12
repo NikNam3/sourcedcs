@@ -78,6 +78,9 @@ export function reduced(
     const frozen: Ctx = {
       read: (id, value, step) => (keep.includes(id) ? ctx.read(id, value, step) : value),
       input: (id, value, step) => (keep.includes(id) ? ctx.input(id, value, step) : value.conservative),
+      mark: (m) => {
+        ctx.mark(m);
+      },
     };
     return chain(frozen);
   };

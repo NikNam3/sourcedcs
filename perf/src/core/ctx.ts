@@ -16,12 +16,15 @@
  * it (TOLD 1.7, ruling 2).
  */
 
+import type { PathMark } from './path/mark.ts';
 import type { Read } from './result.ts';
 
 export interface Ctx {
   read(id: string, value: number, step: number): number;
   /** Exact pass: `value.exact`; every conservative run starts from `value.conservative`. */
   input(id: string, value: { readonly exact: number; readonly conservative: number }, step: number): number;
+  /** A panel the path crossed (TOLD 1.8); `evaluate` and `runExact` ignore it, `tracePaths` records it. */
+  mark(m: PathMark): void;
 }
 
 export type OutputKind = 'distance' | 'speed' | 'refusalSpeed' | 'accelCheckSpeed';
@@ -99,6 +102,9 @@ function onStep(read: ReadRecord): boolean {
   return roundTo(read.value, read.step, 'down') === roundTo(read.value, read.step, 'up');
 }
 
+/** The default `mark`: the exact pass of `runExact` and every run of `evaluate` draw no path. */
+const ignoreMark = (): void => undefined;
+
 /** The exact pass reads every value exact; a conservative run starts every input from its conservative value. */
 type Pass = 'exact' | 'conservative';
 
@@ -108,7 +114,12 @@ type Pass = 'exact' | 'conservative';
  * `read` or `input`), a step that is not a positive finite number, a value that is not finite (either value of an
  * input, in every pass).
  */
-function execute<K extends string, S>(chain: Chain<K, S>, pass: Pass, plan: ReadonlyMap<string, Direction>): Run<K, S> {
+function execute<K extends string, S>(
+  chain: Chain<K, S>,
+  pass: Pass,
+  plan: ReadonlyMap<string, Direction>,
+  mark: (m: PathMark) => void = ignoreMark,
+): Run<K, S> {
   const reads: ReadRecord[] = [];
   const seen = new Set<string>();
   const point = (id: string, value: number, step: number, checked: readonly number[]): number => {
@@ -126,6 +137,7 @@ function execute<K extends string, S>(chain: Chain<K, S>, pass: Pass, plan: Read
     read: (id, value, step) => point(id, value, step, [value]),
     input: (id, value, step) =>
       point(id, pass === 'exact' ? value.exact : value.conservative, step, [value.exact, value.conservative]),
+    mark,
   };
   const { outputs, side } = chain(ctx);
   return { outputs, side, reads };
@@ -203,8 +215,9 @@ function traceOf(reads: readonly ReadRecord[]): Evaluation<string>['trace'] {
 
 export function runExact<K extends string, S>(
   chain: Chain<K, S>,
+  mark?: (m: PathMark) => void,
 ): { run: ChainRun<K, S>; trace: Evaluation<K, S>['trace'] } {
-  const { outputs, side, reads } = execute(chain, 'exact', new Map());
+  const { outputs, side, reads } = execute(chain, 'exact', new Map(), mark);
   return { run: { outputs, side }, trace: traceOf(reads) };
 }
 
