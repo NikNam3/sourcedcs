@@ -482,7 +482,7 @@ For plan 2 (core); decided in 1.7, which wins where they differ:
 - [x] Core tests green, with the coverage floor of 90 % lines on `src/core/` (Node's built-in coverage). Done by plan 2 (12 Nov 2026): 450 tests, 100 % lines.
 - [x] Mockup approved; page matches it in light and dark. Built on `perf-told-p3` by plan 3 (13 Nov 2026); approved by the human from the screenshots (12 Nov 2026).
 - [x] Playwright smoke spec green, including print to PDF giving exactly one page on A4 and on Letter. Done by plan 3 (13 Nov 2026): `e2e/smoke.spec.ts`, 6 tests, in CI.
-- [ ] Deployed; data version visible; perf/README.md current.
+- [x] Deployed; data version visible; perf/README.md current. Done by plan 4 (12 Nov 2026): `https://perf.sourcedcs.page/f16/`, data version 8; the smoke spec passes against production.
 
 ### 1.6 Plan 1: data and figure functions (design of 29 Oct 2026)
 
