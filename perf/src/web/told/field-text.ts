@@ -1,6 +1,6 @@
 /**
  * The TOLD page's typed text → the core's `Inputs` (TOLD 1.8 "The TOLD page"). The state keeps every field as typed;
- * only the copy given to `computeTold` is normalised: thousands separators stripped ("37,240" → "37240"), the wind's
+ * only the copy given to `computeTold` is normalised: grouping commas stripped ("37,240" → "37240", never "29,86"), the wind's
  * spaces removed ("230 / 08 G15" → "230/08G15"), and an empty field with a default (CG, additional drag index, RCR
  * dry and wet) given that default. RCR is one field on the page, "dry / wet". Pure: no DOM.
  */
@@ -13,8 +13,17 @@ export const DEFAULTED: readonly InputField[] = Object.freeze(['cgPct', 'additio
 /** Fields that are not numbers: the runway's name (never parsed) and the wind. */
 const TEXT_FIELDS: ReadonlySet<InputField> = new Set(['runway', 'wind']);
 
-/** "37,240" → "37240". */
-export const plainNumber = (text: string): string => text.replaceAll(',', '');
+/** A number with thousands separators only: commas between groups of three digits. */
+const GROUPED = /^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/;
+
+/**
+ * "37,240" → "37240". Only grouping commas are stripped; any other comma ("29,86", "1,2", "37,") is left, so the
+ * field does not parse and is underlined instead of reading as another number.
+ */
+export function plainNumber(text: string): string {
+  const trimmed = text.trim();
+  return GROUPED.test(trimmed) ? trimmed.replaceAll(',', '') : text;
+}
 
 /** "230 / 08 G15" → "230/08G15". */
 export const plainWind = (text: string): string => text.replace(/\s+/g, '');

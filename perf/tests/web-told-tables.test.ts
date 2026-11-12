@@ -17,7 +17,7 @@ import { computeInputs } from '../src/web/told/field-text.ts';
 import { figureHref, figureOf } from '../src/web/told/links.ts';
 import { landingRows, takeoffRows } from '../src/web/told/table-cells.ts';
 import type { RowModel } from '../src/web/told/table-cells.ts';
-import { landingLines, takeoffLines } from '../src/web/told/table-lines.ts';
+import { accelLabel, landingLines, takeoffLines } from '../src/web/told/table-lines.ts';
 
 import { DATASET_DIR, loadFigureSet } from './helpers/data.ts';
 
@@ -87,7 +87,7 @@ test('takeoff rows: speeds, distances, runway used, the distance marked red with
       'Takeoff speed, KIAS',
       'Takeoff distance, ft',
       'Runway used, %',
-      rows[4]?.kind === 'values' ? rows[4].label : '',
+      'Accel. check at 2,000 ft, KIAS',
       'Refusal speed, dry, KIAS',
       'Refusal speed, wet, KIAS',
     ],
@@ -98,11 +98,48 @@ test('takeoff rows: speeds, distances, runway used, the distance marked red with
   assert.equal(distance[1]?.className, 'num cons alert');
   assert.match(values(rows, 'Runway used, %')[0]?.text ?? '', /^\d+\.\d$/);
   assert.equal(values(rows, 'Runway used, %')[0]?.className, 'num exact alert');
-  const lines = takeoffLines(told, derived, FIGURES).map((l) => l.text);
+  // Each rule once per column, the exact mark's percentage.
+  assert.deepEqual(
+    takeoffLines(told, derived, FIGURES).map((l) => l.text),
+    [
+      'MIL roll 97.3 % of runway: over 50 %, afterburner takeoff required (para. 3.6.6)',
+      'MIL roll 97.3 % of runway: over 80 % (para. 3.6.3)',
+    ],
+  );
+  assert.deepEqual(
+    landingLines(told, derived, FIGURES).map((l) => l.text),
+    [
+      'Landing roll, normal wet, 98.4 % of runway: over 80 % (para. 3.18)',
+      'Landing roll, heavyweight wet, 131.9 % of runway: over 80 % (para. 3.18)',
+    ],
+  );
+});
+
+test('a conservative-only mark names "conservative" after its column', () => {
+  const { told, derived } = run({ ...MOCKUP, lengthFt: '5,750', farElevFt: '1,980' }, []);
   assert.ok(
-    lines.some((l) =>
-      /^MIL roll \d+\.\d % of runway: over 50 %, afterburner takeoff required \(para\. 3\.6\.6\)$/.test(l),
+    landingLines(told, derived, FIGURES).some(
+      (l) => l.text === 'Landing roll, heavyweight dry conservative, 80.3 % of runway: over 80 % (para. 3.18)',
     ),
+  );
+});
+
+const SEA_LEVEL = { ...MOCKUP, tempC: '0', nearElevFt: '0', farElevFt: '0', altimeterInHg: '29.92', wind: '210/00' };
+
+test('the acceleration check label names both distances when MIL and MAX AB differ', () => {
+  const { told, derived } = run({ ...SEA_LEVEL, takeoffGwLb: '30,000' }, []);
+  const accel = takeoffRows(told, derived)[4];
+  assert.equal(accel?.kind === 'values' ? accel.label : null, 'Accel. check at 2,000 / 1,000 ft, KIAS');
+});
+
+test('a conservative cell checked at the other distance gives its grey line', () => {
+  const { told, derived } = run({ ...SEA_LEVEL, takeoffGwLb: '29,300' }, []);
+  assert.equal(accelLabel(told), 'Accel. check at 1,000 ft, KIAS');
+  assert.deepEqual(
+    takeoffLines(told, derived, FIGURES)
+      .filter((l) => l.text.includes('checked'))
+      .map((l) => l.text),
+    ['MIL conservative: checked at 2,000 ft'],
   );
 });
 
@@ -117,13 +154,22 @@ test('landing rows: subheadings with the weights; an unparsed landing GW gives "
   assert.match(values(heavy, 'Final approach, KIAS')[1]?.text ?? '', /^\d{3}$/);
 });
 
-test('RCR below 10: one rule line under the landing table', () => {
-  const { told, derived } = run({ ...MOCKUP, rcrWet: '8' });
-  const lines = landingLines(told, derived, FIGURES);
-  assert.deepEqual(
-    lines.filter((l) => l.figure === null && l.text.startsWith('RCR')).map((l) => l.text),
-    ['RCR 8 at the landing field: below 10 (para. 3.18)'],
-  );
+const rcrLinesOf = (typed: Inputs): string[] => {
+  const { told, derived } = run(typed);
+  return landingLines(told, derived, FIGURES)
+    .filter((l) => l.figure === null && l.text.startsWith('RCR'))
+    .map((l) => l.text);
+};
+
+test('RCR below 10: one rule line under the landing table, both values when dry and wet differ', () => {
+  assert.deepEqual(rcrLinesOf({ ...MOCKUP, rcrWet: '8' }), ['RCR 8 at the landing field: below 10 (para. 3.18)']);
+  assert.deepEqual(rcrLinesOf({ ...MOCKUP, rcrDry: '6', rcrWet: '4' }), [
+    'RCR 6 / 4 at the landing field: below 10 (para. 3.18)',
+  ]);
+  assert.deepEqual(rcrLinesOf({ ...MOCKUP, rcrDry: '6', rcrWet: '6' }), [
+    'RCR 6 at the landing field: below 10 (para. 3.18)',
+  ]);
+  assert.deepEqual(rcrLinesOf(MOCKUP), []);
 });
 
 test('a reason line names its figure and the view its link opens', () => {

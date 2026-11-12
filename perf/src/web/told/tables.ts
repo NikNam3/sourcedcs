@@ -41,7 +41,13 @@ function rowElement(r: RowModel, view: FigureView, hrefOf: HrefOf): HTMLTableRow
   }
   const links = r.figures.flatMap((id, i) => [...(i > 0 ? [' '] : []), figureLink(id, hrefOf(id, view))]);
   const cells = r.cells.map((c) => el('td', c.className, c.text));
-  return el('tr', r.groupStart ? 'group-start' : '', el('td', '', r.label), el('td', 'fig', ...links), ...cells);
+  return el(
+    'tr',
+    r.groupStart ? 'group-start' : '',
+    el('td', 'row-label', r.label),
+    el('td', 'fig', ...links),
+    ...cells,
+  );
 }
 
 function lineElement(line: LineModel, hrefOf: HrefOf): HTMLParagraphElement {

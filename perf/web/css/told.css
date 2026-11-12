@@ -9,7 +9,8 @@
  *                     .station-action (split, join), .store-menu (the menu of Fig. B1-1 stores)
  * Page                .page's window scale (--page-scale, set by scale.ts; screen only, print.css sets its own),
  *                     .header-link (Limitations, in the header), .page-note (a grey note under the title), .fig
- *                     (the figure column), .field input.alert (an input that breaks a rule: RCR below 10)
+ *                     (the figure column), .row-label (a TOLD row's label, one line), .field input.alert (an input
+ *                     that breaks a rule: RCR below 10)
  */
 
 /* The drag index table's fixed columns. */
@@ -280,6 +281,19 @@
 .data-table .fig {
   width: 92px;
   font-size: 14px;
+}
+
+/* A TOLD row's label and its figure links stay on one line ("Accel. check at 2,000 / 1,000 ft, KIAS"). */
+.data-table .row-label,
+.data-table .fig {
+  white-space: nowrap;
+}
+
+/* The TOLD tables' cells sit closer than the default 8 px (4 px a side), so the longest label fits its column on one line. */
+.told-section .data-table th,
+.told-section .data-table td {
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 /* The input that breaks a rule (RCR below 10) is marked like a problem value. */

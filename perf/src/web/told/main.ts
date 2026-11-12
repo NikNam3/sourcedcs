@@ -14,7 +14,7 @@ import { computeTold } from '../../core/told/told.ts';
 import { loadData } from '../load.ts';
 import type { AppData } from '../load.ts';
 import { fitPage } from '../scale.ts';
-import { decodeState, encodeState } from '../state/hash.ts';
+import { encodeState } from '../state/hash.ts';
 import type { AppState } from '../state/hash.ts';
 import { initialState } from '../state/initial.ts';
 import { readStored, writeStored } from '../state/storage.ts';
@@ -64,11 +64,6 @@ function showNotes(notes: readonly string[]): void {
 const today = (): string =>
   new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date());
 
-/** Neither the hash nor storage gave a state: the page starts from the defaults, shown as placeholders. */
-function fromDefaults(hash: string, stored: string | null): boolean {
-  return decodeState(hash).kind !== 'ok' && (stored === null || decodeState(stored).kind !== 'ok');
-}
-
 class ToldPage {
   private state: AppState = { inputs: DEFAULT_INPUTS, loadout: DEFAULT_LOADOUT };
   private readonly figures: FigureSet;
@@ -95,15 +90,19 @@ class ToldPage {
       `Data version ${String(data.manifest.dataVersion)} · App version ${APP_VERSION} · ${today()}`;
   }
 
-  /** The state from the hash, storage or the defaults, with its notes; fills every field. */
+  /**
+   * The state from the hash, storage or the defaults, with its notes; fills every field. A state from the hash or
+   * storage is written back once to both, so an opened link becomes the stored state. A page from the defaults
+   * shows its defaulted fields as placeholders and writes nothing until the first change.
+   */
   load(): void {
-    const stored = readStored(storage());
-    const initial = initialState(location.hash, stored);
+    const initial = initialState(location.hash, readStored(storage()));
     const { inputs, loadout } = initial.state;
-    this.state = { inputs: fromDefaults(location.hash, stored) ? blankDefaults(inputs) : inputs, loadout };
+    const defaults = initial.source === 'defaults';
+    this.state = { inputs: defaults ? blankDefaults(inputs) : inputs, loadout };
     showNotes(initial.notes);
     this.inputs.write(this.state.inputs);
-    this.recompute(false);
+    this.recompute(!defaults);
   }
 
   recompute(save: boolean): void {

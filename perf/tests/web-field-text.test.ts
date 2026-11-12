@@ -23,14 +23,25 @@ const EMPTY: Inputs = {
   rcrWet: '',
 };
 
-test('plainNumber strips thousands separators', () => {
+test('plainNumber strips grouping commas only', () => {
   for (const [typed, plain] of [
     ['37,240', '37240'],
-    ['37,', '37'],
+    [' 37,240 ', '37240'],
     ['1,980.5', '1980.5'],
+    ['-1,980', '-1980'],
+    ['1,234,567', '1234567'],
+    ['37240', '37240'],
     ['', ''],
-    ['-1,2', '-12'],
     ['abc', 'abc'],
+    // Any other comma is left, so the field does not parse and is underlined.
+    ['37,', '37,'],
+    ['29,86', '29,86'],
+    ['38,4', '38,4'],
+    ['1,2', '1,2'],
+    ['-1,2', '-1,2'],
+    ['37,24', '37,24'],
+    ['1,2345', '1,2345'],
+    ['37240,000', '37240,000'],
   ] as const) {
     assert.equal(plainNumber(typed), plain, typed);
   }

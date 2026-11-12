@@ -116,13 +116,19 @@ export function takeoffLines(told: Told, derived: DerivedInputs, figures: Figure
   ];
 }
 
-/** RCR below 10 at the landing field, once per RCR value (the input carries the mark, TOLD 1.8). */
+/**
+ * RCR below 10 at the landing field, one line in all (TOLD 1.8 "shown once"): the input carries the mark, one per RCR
+ * field; dry and wet both below 10 with different values name both, dry first ("RCR 8 / 6").
+ */
 function rcrLines(told: Told, derived: DerivedInputs, figures: FigureSet): LineModel[] {
-  const texts = told.rcrMarks.map((m) => {
+  const [first] = told.rcrMarks;
+  if (first === undefined) return [];
+  const values: number[] = [];
+  for (const m of told.rcrMarks) {
     const rcr = m.field === undefined ? null : derived[m.field];
-    return ruleLine(m, null, rcr?.ok === true ? rcr.value : null, figures);
-  });
-  return [...new Set(texts)].map((text) => ({ figure: null, text }));
+    if (rcr?.ok === true && !values.includes(rcr.value)) values.push(rcr.value);
+  }
+  return [{ figure: null, text: ruleLine(first, null, values, figures) }];
 }
 
 export function landingLines(told: Told, derived: DerivedInputs, figures: FigureSet): LineModel[] {

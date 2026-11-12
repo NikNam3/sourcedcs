@@ -40,6 +40,8 @@ test('the mockup inputs: nothing underlined, both derived lines', () => {
 test('a filled field that does not parse or fails a physical limit is underlined; an empty one is not', () => {
   const typed = { ...MOCKUP, landingGwLb: '28,0O0', headingDeg: '0', lengthFt: '', wind: '230 / 0' };
   assert.deepEqual([...unparsedFields(typed, derive(typed), true)].sort(), ['headingDeg', 'landingGwLb']);
+  const commas = { ...MOCKUP, altimeterInHg: '29,86', tempC: '38,4', takeoffGwLb: '37,24' };
+  assert.deepEqual([...unparsedFields(commas, derive(commas), true)].sort(), ['altimeterInHg', 'takeoffGwLb', 'tempC']);
   const partial = { ...MOCKUP, wind: '230 / ' };
   assert.deepEqual([...unparsedFields(partial, derive(partial), true)], ['wind']);
 });

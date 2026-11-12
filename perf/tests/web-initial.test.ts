@@ -15,7 +15,11 @@ const FROM_HASH = { inputs: { ...DEFAULT_INPUTS, takeoffGwLb: '30000' }, loadout
 const STORED = { inputs: { ...DEFAULT_INPUTS, tempC: '15' }, loadout: [] };
 
 test('a good hash wins over storage, with no note', () => {
-  assert.deepEqual(initialState(`#${encodeState(FROM_HASH)}`, encodeState(STORED)), { state: FROM_HASH, notes: [] });
+  assert.deepEqual(initialState(`#${encodeState(FROM_HASH)}`, encodeState(STORED)), {
+    state: FROM_HASH,
+    notes: [],
+    source: 'hash',
+  });
 });
 
 test('a hash with dropped rows notes it', () => {
@@ -25,15 +29,19 @@ test('a hash with dropped rows notes it', () => {
 });
 
 test('a refused hash notes it and loads storage', () => {
-  assert.deepEqual(initialState('#v=2', encodeState(STORED)), { state: STORED, notes: [REFUSED] });
-  assert.deepEqual(initialState('#v=2', null), { state: DEFAULTS, notes: [REFUSED] });
-  assert.deepEqual(initialState('#v=2', 'garbage'), { state: DEFAULTS, notes: [REFUSED] });
+  assert.deepEqual(initialState('#v=2', encodeState(STORED)), {
+    state: STORED,
+    notes: [REFUSED],
+    source: 'storage',
+  });
+  assert.deepEqual(initialState('#v=2', null), { state: DEFAULTS, notes: [REFUSED], source: 'defaults' });
+  assert.deepEqual(initialState('#v=2', 'garbage'), { state: DEFAULTS, notes: [REFUSED], source: 'defaults' });
 });
 
 test('no hash: storage, else the defaults; a bad stored string is ignored silently', () => {
-  assert.deepEqual(initialState('', encodeState(STORED)), { state: STORED, notes: [] });
-  assert.deepEqual(initialState('', null), { state: DEFAULTS, notes: [] });
-  assert.deepEqual(initialState('', 'v=9'), { state: DEFAULTS, notes: [] });
+  assert.deepEqual(initialState('', encodeState(STORED)), { state: STORED, notes: [], source: 'storage' });
+  assert.deepEqual(initialState('', null), { state: DEFAULTS, notes: [], source: 'defaults' });
+  assert.deepEqual(initialState('', 'v=9'), { state: DEFAULTS, notes: [], source: 'defaults' });
   assert.deepEqual(initialState('', 'v=1&lo=bad').notes, []);
 });
 
