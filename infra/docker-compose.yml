@@ -30,6 +30,8 @@ services:
       - ATOBRIEF_DOMAIN=${ATOBRIEF_DOMAIN}
       # The crc-sync vhost. One spelling only; the retired asacs_link name is no longer read (R3-35).
       - CRCSYNC_DOMAIN=${CRCSYNC_DOMAIN}
+      # The perf vhost (docs/wip/TOLD.md, "Deployment and operations"). Must be set: an empty or missing value breaks the whole config.
+      - PERF_DOMAIN=${PERF_DOMAIN}
     # No `command:`: the nginx image's entrypoint renders templates/*.template with
     # envsubst into conf.d/ (only the variables set in `environment` above).
     depends_on:
@@ -37,6 +39,7 @@ services:
       - casdoor
       - atobrief
       - crc-sync
+      - perf
     networks:
       - web
 
@@ -207,6 +210,19 @@ services:
       - ATOBRIEF_CLIENT_ID=${ATOBRIEF_CLIENT_ID}
       - ATOBRIEF_CLIENT_SECRET=${ATOBRIEF_CLIENT_SECRET}
       - ATOBRIEF_USMTF_TOKEN=${ATOBRIEF_USMTF_TOKEN}
+    networks:
+      - web
+
+  # ─────────────────────────────────────────
+  # PERF (F-16 TOLD calculator, static files)
+  # perf/Dockerfile: nginx serving /f16/ on port 80, reached only through
+  # the nginx vhost for PERF_DOMAIN. No state, no secrets, no volume.
+  # ─────────────────────────────────────────
+  perf:
+    image: ghcr.io/niknam3/sourcedcs/perf:${TAG:-latest}
+    container_name: perf
+    restart: unless-stopped
+    logging: *default-logging
     networks:
       - web
 
