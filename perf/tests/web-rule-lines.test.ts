@@ -44,18 +44,25 @@ test('landing-roll-80', () => {
   );
 });
 
-test('the percentage comes from the mark, else from the argument, else a dash', () => {
+test('a roll rule takes the percentage from the mark only; the rcr argument is ignored, none gives a dash', () => {
   assert.equal(
     ruleLine(mark('takeoff-roll-80', 'exact', { percent: 84.2 }), 'MAX AB', 99, FIGURES),
     'MAX AB roll 84.2 % of runway: over 80 % (para. 3.6.3)',
   );
   assert.equal(
-    ruleLine(mark('takeoff-roll-80', 'exact'), 'MAX AB', 84.2, FIGURES),
-    'MAX AB roll 84.2 % of runway: over 80 % (para. 3.6.3)',
+    ruleLine(mark('landing-roll-80', 'exact', { percent: 83 }), 'normal dry', 8, FIGURES),
+    'Landing roll, normal dry, 83.0 % of runway: over 80 % (para. 3.18)',
   );
   assert.equal(
-    ruleLine(mark('takeoff-roll-80', 'exact'), 'MAX AB', null, FIGURES),
+    ruleLine(mark('takeoff-roll-80', 'exact'), 'MAX AB', 84.2, FIGURES),
     `MAX AB roll ${DASH} % of runway: over 80 % (para. 3.6.3)`,
+  );
+});
+
+test('landing-rcr-10 without an RCR: a dash', () => {
+  assert.equal(
+    ruleLine(mark('landing-rcr-10', 'exact', { field: 'rcrDry' }), null, null, FIGURES),
+    `RCR ${DASH} at the landing field: below 10 (para. 3.18)`,
   );
 });
 

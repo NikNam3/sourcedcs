@@ -68,8 +68,14 @@ function handle(req: IncomingMessage, res: ServerResponse): void {
     return;
   }
   res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' });
-  if (req.method === 'HEAD') res.end();
-  else createReadStream(file).pipe(res);
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  // A read failing after the stat (file removed, EACCES, web/js/ rebuilt) ends this response, not the server.
+  createReadStream(file)
+    .on('error', () => res.destroy())
+    .pipe(res);
 }
 
 const server = createServer(handle);

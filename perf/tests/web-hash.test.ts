@@ -30,7 +30,8 @@ const STORE = '3|PYLONS|AIM-120 & co; x:y|3,7';
 const LOADOUT: Loadout = [
   { stations: ['1', '9'], storeKey: 'noTipMissile', suspension: null, count: 2 },
   { stations: ['3'], storeKey: STORE, suspension: 'LAU-129/A: one', count: 1 },
-  { stations: ['7'], storeKey: null, suspension: null, count: 0 },
+  { stations: ['7'], storeKey: null, suspension: null, count: 1 },
+  { stations: ['3', '7'], storeKey: 'k', suspension: 'TER (16S1750) + WEAPON PYLON*', count: 6 },
   { stations: ['5L'], storeKey: 'unknown|key', suspension: null, count: 1 },
 ];
 
@@ -87,7 +88,7 @@ test('a split pair keeps its order, and the noTipMissile row its literal store p
   const text = encodeState({ inputs: DEFAULT_INPUTS, loadout: LOADOUT });
   const lo = new URLSearchParams(text).get('lo') ?? '';
   assert.ok(lo.startsWith('1-9:noTipMissile::2;3:'));
-  assert.ok(lo.includes(';7:::0;'));
+  assert.ok(lo.includes(';7:::1;'));
 });
 
 test('no hash, or no v: none', () => {
@@ -112,8 +113,12 @@ test('a missing key takes its default, an unknown key is ignored, no lo is the d
 test('rows that do not decode are dropped and counted; an unknown store key is kept', () => {
   const rows = [
     '3-7:k::2', // kept
+    '3-7:k:TER (16S1750) + WEAPON PYLON*:6', // kept: two TERs, 3 each
     '3-7:k:2', // three parts
-    '3-7:k::4', // count above 3
+    '3-7:k::7', // above 3 per station
+    '3:k::4', // above 3 on one station
+    '3-7:k::0', // zero
+    '3-7:k::06', // leading zero
     '3-7:k::1.5', // not an integer
     '3-7:k::-1', // negative
     '3-7:k::', // empty count
@@ -124,9 +129,10 @@ test('rows that do not decode are dropped and counted; an unknown store key is k
     '5R:never-heard-of-it::1', // kept: unknown store key
   ];
   const d = decodedOk(`v=1&lo=${encodeURIComponent(rows.join(';'))}`);
-  assert.equal(d.droppedRows, 9);
+  assert.equal(d.droppedRows, 12);
   assert.deepEqual(d.state.loadout, [
     { stations: ['3', '7'], storeKey: 'k', suspension: null, count: 2 },
+    { stations: ['3', '7'], storeKey: 'k', suspension: 'TER (16S1750) + WEAPON PYLON*', count: 6 },
     { stations: ['5R'], storeKey: 'never-heard-of-it', suspension: null, count: 1 },
   ]);
 });
