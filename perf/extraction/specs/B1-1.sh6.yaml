@@ -1,6 +1,6 @@
 # Figure B1-1 sheet 6, Drag Indexes and Weights - Individual Stores. Coordinates are PDF points:
 # column x ranges are the printed table's vertical rules, the row band lies between the header
-# rule and the bottom rule (read from the page drawings, .superpowers/sdd/TOLD-STEP0/t8-scratch/).
+# rule and the bottom rule (read from the page drawings with a scratch script, not kept).
 # Groups SUU-20A/A, B/A WITH: and SUU-5003A/A, B/A WITH:, whose header carries (A/A) (B/A) in the
 # weight column, so the group text ends with it; each sub-row's weight cell holds the A/A and
 # the B/A weight (`474 420`), kept verbatim. MXU-648A/A has its drag index on line 1 and a

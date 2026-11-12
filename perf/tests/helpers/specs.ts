@@ -32,6 +32,12 @@ export function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+/** Throws naming `where` and the key when `entry` lacks one of `keys` or has any other key. */
+export function exactKeys(entry: Record<string, unknown>, keys: readonly string[], where: string): void {
+  for (const key of keys) if (!(key in entry)) throw new Error(`${where}: missing ${key}`);
+  for (const key of Object.keys(entry)) if (!keys.includes(key)) throw new Error(`${where}: unknown key ${key}`);
+}
+
 /** `sheet` is null (a one-sheet figure) or a 1-based sheet number. */
 export function isSheet(value: unknown): value is number | null {
   return value === null || (typeof value === 'number' && Number.isInteger(value) && value >= 1);

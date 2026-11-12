@@ -10,3 +10,11 @@
   correct: PRI 3,902 ft
   reason: 3,902 ft is sheet 1's PRI distance; the SEC distance is 4,058 ft (x1.04)
   affects: null
+
+- figure: B2-5
+  sheet: 3
+  where: chart notes
+  printed: FIGURE B2-10
+  correct: FIGURE B2-12
+  reason: the note names the maximum brake application speed chart, which is B2-12 (as sheets 1 and 2 say); B2-10 is the roll trim chart
+  affects: null

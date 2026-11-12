@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parse } from 'yaml';
 
-import { isFiniteNumber, isRecord, isSheet, type ChartSpec, type SampleProblem } from './specs.ts';
+import { exactKeys, isFiniteNumber, isRecord, isSheet, type ChartSpec, type SampleProblem } from './specs.ts';
 
 export interface Erratum {
   figure: string;
@@ -30,11 +30,6 @@ function nonEmpty(entry: Record<string, unknown>, key: string, where: string): s
   const value = entry[key];
   if (typeof value !== 'string' || value.trim() === '') throw new Error(`${where}: ${key} is not a non-empty string`);
   return value;
-}
-
-function exactKeys(entry: Record<string, unknown>, keys: readonly string[], where: string): void {
-  for (const key of keys) if (!(key in entry)) throw new Error(`${where}: missing ${key}`);
-  for (const key of Object.keys(entry)) if (!keys.includes(key)) throw new Error(`${where}: unknown key ${key}`);
 }
 
 function affectsOf(value: unknown, where: string): Erratum['affects'] {

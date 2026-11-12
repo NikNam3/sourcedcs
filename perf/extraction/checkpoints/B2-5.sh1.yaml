@@ -1,0 +1,18 @@
+- inputs: {takeoff_factor: 5.0, gross_weight_lb: 28000, runway_ft: 8000, headwind_kt: 0, slope_pct: 0}
+  expected: {refusal_rcr23_kias: 131}
+  tolerance_kias: 2
+  source: hand
+  read_by: plan 1 task 2 reviewer
+  date: 2026-10-29
+- inputs: {takeoff_factor: 4.4, gross_weight_lb: 40000, runway_ft: 6000, headwind_kt: 20, slope_pct: 2}
+  expected: {refusal_rcr23_kias: 125}
+  tolerance_kias: 2
+  source: hand
+  read_by: plan 1 task 2 reviewer
+  date: 2026-10-29
+- inputs: {takeoff_factor: 6.0, gross_weight_lb: 20000, runway_ft: 12000, headwind_kt: -10, slope_pct: -1}
+  expected: {refusal_rcr23_kias: 153}
+  tolerance_kias: 2
+  source: hand
+  read_by: plan 1 task 2 reviewer
+  date: 2026-10-29

@@ -8,7 +8,9 @@ import { drawnRange, edgeTolerance, interpWithin, unionRange } from './interp.ts
  *
  * - `target === baseline` returns `entry` before any line check (ruling R1).
  * - A line is usable when it draws both baseline and target, within the edge tolerance of the
- *   panel's param span (all lines of all families); a read beyond a drawn end clamps to it.
+ *   panel's param span (all lines of all families) at an end on its family's drawn span or on the
+ *   baseline (ruling 4: a line stopping anywhere else inside its family's span gets none); a read
+ *   beyond a drawn end clamps to it.
  * - Fewer than two usable lines: OutOfChart on the input (the param), with the range over which at
  *   least two lines that draw the baseline also draw the target (null when there is none).
  * - An entry outside the outermost usable lines at the baseline: OutOfChart on the output.
@@ -33,13 +35,14 @@ export function guidelinePanel(
         .map((line) => drawnRange(line)),
     ),
   );
+  const familySpan = unionRange(lines.map((line) => drawnRange(line)));
   const usable: { atBaseline: number; atTarget: number }[] = [];
   const throughBaseline: [number, number][] = [];
   for (const line of lines) {
-    const atBaseline = interpWithin(line, p.baseline, tolerance);
+    const atBaseline = interpWithin(line, p.baseline, tolerance, familySpan, [p.baseline]);
     if (atBaseline === undefined) continue;
     throughBaseline.push(drawnRange(line));
-    const atTarget = interpWithin(line, target, tolerance);
+    const atTarget = interpWithin(line, target, tolerance, familySpan, [p.baseline]);
     if (atTarget !== undefined) usable.push({ atBaseline, atTarget });
   }
 

@@ -31,7 +31,11 @@
       "properties": {
         "page": { "enum": ["x", "y"] },
         "a": { "type": "number" },
-        "b": { "type": "number" }
+        "b": { "type": "number" },
+        "unscaled": {
+          "const": true,
+          "description": "An axis the chart prints no scale for: the line a pilot carries from one panel into the next. Its values are page points (unit \"pt\", a 1, b 0); omitted on a scaled axis."
+        }
       },
       "required": ["page", "a", "b"],
       "additionalProperties": false
@@ -103,7 +107,8 @@
         { "$ref": "#/definitions/SingleCurve" },
         { "$ref": "#/definitions/GuidelinePanel" },
         { "$ref": "#/definitions/ScalePair" },
-        { "$ref": "#/definitions/Table" }
+        { "$ref": "#/definitions/Table" },
+        { "$ref": "#/definitions/LimitLine" }
       ]
     },
     "CurveFamily": {
@@ -227,6 +232,34 @@
         }
       },
       "required": ["id", "type", "columns", "rows"],
+      "additionalProperties": false
+    },
+    "LimitLine": {
+      "title": "LimitLine",
+      "description": "A printed limit drawn as a line over another panel's axes (B7-2's brake energy and tire speed limits).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "const": "limit_line" },
+        "label": { "type": "string", "description": "The limit's printed label, verbatim from the spec." },
+        "input": { "$ref": "#/definitions/Quantity" },
+        "output": { "$ref": "#/definitions/Quantity" },
+        "beyond": {
+          "enum": ["above", "below"],
+          "description": "The side of the line where the limit is exceeded, in output terms."
+        },
+        "points": {
+          "description": "Sorted by input, ascending.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/Pt" }
+        },
+        "axes": {
+          "description": "Page transforms keyed by quantity name.",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/Transform" }
+        }
+      },
+      "required": ["id", "type", "label", "input", "output", "beyond", "points", "axes"],
       "additionalProperties": false
     },
     "Manifest": {
