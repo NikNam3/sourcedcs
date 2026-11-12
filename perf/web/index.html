@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1280" />
+    <title>F-16 Takeoff and Landing Data</title>
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/perf.css" />
+    <link rel="stylesheet" href="css/told.css" />
+    <link rel="stylesheet" href="css/print.css" media="print" />
+    <script type="module" src="js/web/told/main.js"></script>
+  </head>
+  <body>
+    <!-- The TOLD page (TOLD.md 1.8), the approved board docs/mockups/perf-told.html. js/web/told/main.js fills it:
+         every input recomputes everything; the state lives in the URL hash and localStorage. -->
+    <div class="page">
+      <header class="page-header">
+        <span>T.O. GR1F-16CJ-1-1 · Appendix B · F110-GE-129</span>
+        <span
+          >F-16C Block 50<a class="subpage-link header-link" id="limitations-link" href="limitations.html"
+            >Limitations</a
+          ></span
+        >
+      </header>
+
+      <h1 class="page-title">Takeoff and Landing Data</h1>
+      <div class="page-notes" id="page-notes"></div>
+
+      <div class="columns" data-needs-data hidden>
+        <section class="section">
+          <h2 class="section-heading">I. Aircraft</h2>
+          <div class="fields">
+            <label class="field">Takeoff GW, lb<input data-field="takeoffGwLb" inputmode="decimal" /></label>
+            <label class="field">Landing GW, lb<input data-field="landingGwLb" inputmode="decimal" /></label>
+            <label class="field">CG, % MAC<input data-field="cgPct" inputmode="decimal" placeholder="35.0" /></label>
+          </div>
+          <table class="data-table drag-index" id="drag-index">
+            <thead>
+              <tr>
+                <th>Sta.</th>
+                <th>Store</th>
+                <th class="num">No.</th>
+                <th class="num">Each</th>
+                <th class="num">DI</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="reason" id="drag-index-notes"></p>
+        </section>
+
+        <section class="section">
+          <h2 class="section-heading">II. Fields</h2>
+          <div class="fields">
+            <label class="field">Runway<input data-field="runway" /></label>
+            <label class="field">Heading, °<input data-field="headingDeg" inputmode="numeric" /></label>
+            <label class="field">Length avail., ft<input data-field="lengthFt" inputmode="numeric" /></label>
+            <label class="field">Threshold elev., ft<input data-field="nearElevFt" inputmode="decimal" /></label>
+            <label class="field">Far-end elev., ft<input data-field="farElevFt" inputmode="decimal" /></label>
+            <label class="field">Altimeter, in. Hg<input data-field="altimeterInHg" inputmode="decimal" /></label>
+            <label class="field">Temperature, °C<input data-field="tempC" inputmode="decimal" /></label>
+            <label class="field">Wind, ° / kt<input data-field="wind" /></label>
+            <label class="field">RCR dry / wet<input data-field="rcr" placeholder="23 / 18" /></label>
+          </div>
+          <p class="derived" id="derived"></p>
+        </section>
+      </div>
+
+      <section class="section told-section" data-needs-data hidden>
+        <h2 class="section-heading">III. TOLD</h2>
+        <div class="columns">
+          <div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="table-title">Takeoff</th>
+                  <th></th>
+                  <th colspan="2" class="column-group">MIL</th>
+                  <th colspan="2" class="column-group">MAX AB</th>
+                </tr>
+                <tr class="column-kinds">
+                  <th></th>
+                  <th class="fig">Fig.</th>
+                  <th class="num exact">exact</th>
+                  <th class="num cons">cons.</th>
+                  <th class="num exact">exact</th>
+                  <th class="num cons">cons.</th>
+                </tr>
+              </thead>
+              <tbody id="takeoff-rows"></tbody>
+            </table>
+            <div id="takeoff-lines"></div>
+          </div>
+
+          <div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="table-title">Landing</th>
+                  <th></th>
+                  <th colspan="2" class="column-group">Dry</th>
+                  <th colspan="2" class="column-group">Wet</th>
+                </tr>
+                <tr class="column-kinds">
+                  <th></th>
+                  <th class="fig">Fig.</th>
+                  <th class="num exact">exact</th>
+                  <th class="num cons">cons.</th>
+                  <th class="num exact">exact</th>
+                  <th class="num cons">cons.</th>
+                </tr>
+              </thead>
+              <tbody id="landing-rows"></tbody>
+            </table>
+            <div id="landing-lines"></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="page-footer">
+        <span id="versions"></span>
+      </footer>
+    </div>
+  </body>
+</html>
