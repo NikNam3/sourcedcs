@@ -37,8 +37,9 @@
             </p>
             <p>
               3. Inputs outside a chart's drawn range are rejected, not extrapolated. If only a conservative rounding
-              step leaves the drawn range, the exact value is still given and the conservative one is not. The one
-              exception is a drag index made negative by removed wingtip missiles (II.6).
+              step leaves the drawn range, the exact value is still given and the conservative one is not. There are two
+              exceptions, where the exact value is not given but the conservative one is: a drag index made negative by
+              removed wingtip missiles (II.6) and a pressure altitude below sea level on landing (V.4).
             </p>
             <p>
               4. Figure B2-3's guideline panels start at a takeoff distance of 1,000 ft. A shorter distance is out of
@@ -50,9 +51,10 @@
               in Appendix B, Part 2. Changes of slope along the runway are not considered.
             </p>
             <p>
-              6. Pressure altitude is the pilot's hand calculation: field elevation corrected for the altimeter setting
-              by the standard atmosphere. It is not the DCS altimeter, which on a hot day can read differently (about
-              150 ft at 40 °C and 2,000 ft).
+              6. Pressure altitude is the pilot's hand calculation: the elevation of the near-end threshold, where the
+              takeoff roll starts, corrected for the altimeter setting by the standard atmosphere. The landing uses the
+              same value. It is not the DCS altimeter, which on a hot day can read differently (about 150 ft at 40 °C
+              and 2,000 ft).
             </p>
             <p>
               7. A curve that ends on the edge of a chart is not read past its last drawn point; the value is not
@@ -66,7 +68,8 @@
             </p>
             <p>
               9. Headwind is worked out from the steady wind and crosswind from the gust, both against the runway
-              heading. The crosswind is shown only; it is not checked against a crosswind chart.
+              heading. The crosswind is shown only; it is not checked against a crosswind chart. A calm wind is entered
+              as 000/00 (or 360/00); a direction of 000 is accepted only with a speed of 0 and no gust.
             </p>
           </section>
 
@@ -95,9 +98,9 @@
               conservative value subtracts nothing, which the manual calls slightly conservative.
             </p>
             <p>
-              6. A clean aircraft without its wingtip AIM-9s has an exact drag index below 0 (4 − 8 = −4), which Figures
-              B2-3 and B2-4 do not draw: the exact takeoff distance and acceleration check are not given. The
-              conservative values are computed, since the conservative drag index is never below 0.
+              6. A loadout without its wingtip AIM-9s can have an exact drag index below 0 (a clean aircraft: 4 − 8 =
+              −4), which Figures B2-3 and B2-4 do not draw: the exact takeoff distance and acceleration check are not
+              given. The conservative values are computed, since the conservative drag index is never below 0.
             </p>
             <p>
               7. A wing tank's drag index depends on the stores on the station inboard of it. A multiple-carriage rack
@@ -158,13 +161,14 @@
           <section class="section notes">
             <h2 class="section-heading">IV. Takeoff charts</h2>
             <p>
-              1. A CG outside 30 to 40 % MAC, the range Figure B2-3 draws, is not computed. Figure B2-2's CG correction
-              has no range of its own and takes this one.
+              1. With a CG outside 30 to 40 % MAC, the range Figure B2-3 draws, the rotation and takeoff speeds, the
+              takeoff distance and the acceleration check are not computed. Figure B2-2's CG correction has no range of
+              its own and takes this one. Refusal speed and the landing values do not use the CG and are still given.
             </p>
             <p>2. Takeoffs with 8° pitch are not offered; every value is for the normal takeoff.</p>
             <p>
               3. Each chart is entered only within the takeoff factors it draws: Figure B2-4 1.09 to 6.00, Figure B2-5
-              2.10 to 6.78, Figure B2-6 1.20 to 3.86. Outside them the speed is not computed, never extrapolated.
+              2.10 to 6.78, Figure B2-6 1.20 to 3.87. Outside them the speed is not computed, never extrapolated.
             </p>
             <p>
               4. On Figure B2-4 the drag index lines start at 60 KIAS, so an acceleration check speed under 60 KIAS with
@@ -172,10 +176,11 @@
               or an uphill slope with a lower entry is not computed.
             </p>
             <p>
-              5. On the refusal speed charts (Figures B2-5 and B2-6) the tailwind lines end below 20 kt at low speeds.
-              On Figure B2-6 sheet 3 the line from 60 KIAS stops at 18.75 kt, so a 20 kt tailwind needs an entry of
-              about 80 KIAS or more; on Figure B2-5 sheet 3 it stops at 19.81 kt. On every refusal sheet the 160 and 180
-              KIAS headwind lines stop short of 40 kt.
+              5. On sheet 3 (snow and icy) of the refusal speed charts, Figures B2-5 and B2-6, the 60 KIAS tailwind line
+              ends below 20 kt: at 19.81 kt on Figure B2-5 and at 18.75 kt on Figure B2-6, so on Figure B2-6 a 20 kt
+              tailwind needs an entry of about 80 KIAS or more. The headwind lines end at the chart's top edge, 200 KIAS
+              (from 140 KIAS on Figure B2-6 sheet 2, from 160 KIAS on the other sheets), so a headwind that would carry
+              refusal speed past 200 KIAS is not computed.
             </p>
             <p>
               6. Refusal speed is given only for the RCRs the charts print, and in between by straight-line
