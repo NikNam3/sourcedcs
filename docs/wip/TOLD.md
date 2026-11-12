@@ -911,7 +911,10 @@ unit tests; the views are covered by the smoke spec.
 - Every `input` event recomputes everything (`computeTold` takes milliseconds; no debounce).
 - **Fields with a default** (CG 35, additional drag index 0, RCR 23 / 18) show it as the placeholder; an empty field
   means the default. Every other empty field shows its placeholder (none), no underline, and its dependent cells
-  show "—" with no reason line: empty is not an error.
+  show "—" with no reason line: empty is not an error. Instead one grey line under each table names the empty
+  fields its columns wait for, in page order: "Fill in to compute: far-end elevation, temperature" (`told/
+  missing-line.ts`; added 12 Nov 2026 after the human's first try left only the far-end elevation empty and got
+  a page of "—" with no hint why). A filled field that does not parse is not named; it is underlined.
 - **RCR** is one field, "dry / wet", as in the mockup: split at `/`, each part trimmed; an empty part takes its
   default. It writes `rcrDry` and `rcrWet` (two hash keys).
 - **Wind** is typed "230 / 08 G15" (mockup); the page normalises it to the core's `230/08G15` (spaces removed) before

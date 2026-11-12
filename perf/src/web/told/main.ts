@@ -30,6 +30,7 @@ import { mountInputs } from './inputs-view.ts';
 import type { InputsView } from './inputs-view.ts';
 import { figureHref, limitationsHref } from './links.ts';
 import { landingRows, takeoffRows } from './table-cells.ts';
+import { missingLines } from './missing-line.ts';
 import { landingLines, takeoffLines } from './table-lines.ts';
 import { renderTable } from './tables.ts';
 import type { HrefOf } from './tables.ts';
@@ -106,7 +107,7 @@ class ToldPage {
       byId('takeoff-rows', HTMLTableSectionElement),
       byId('takeoff-lines', HTMLElement),
       [{ rows: takeoffRows(told, derived), view: 'takeoff' }],
-      takeoffLines(told, derived, figures),
+      [...missingLines([told.takeoff.mil, told.takeoff.ab], state.inputs), ...takeoffLines(told, derived, figures)],
       hrefOf,
     );
     renderTable(
@@ -116,7 +117,13 @@ class ToldPage {
         { rows: landingRows(told, derived, 'normal'), view: 'normal' },
         { rows: landingRows(told, derived, 'heavy'), view: 'heavy' },
       ],
-      landingLines(told, derived, figures),
+      [
+        ...missingLines(
+          [told.landing.normal.dry, told.landing.normal.wet, told.landing.heavy.dry, told.landing.heavy.wet],
+          state.inputs,
+        ),
+        ...landingLines(told, derived, figures),
+      ],
       hrefOf,
     );
     byId('limitations-link', HTMLAnchorElement).href = limitationsHref(state);
