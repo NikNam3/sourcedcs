@@ -17,6 +17,7 @@ import { encodeState } from '../state/hash.ts';
 import type { AppState } from '../state/hash.ts';
 import { initialState } from '../state/initial.ts';
 import { readStored } from '../state/storage.ts';
+import { computeInputs } from '../told/field-text.ts';
 import { APP_VERSION } from '../version.ts';
 
 import { html } from './dom.ts';
@@ -71,6 +72,8 @@ function reasonLine(
 
 function render(data: AppData): void {
   const { state, notes } = initialState(location.hash, readStored(storage()));
+  // The state keeps the fields as typed ("33,000", "230 / 08", an empty CG); the chains get the TOLD page's copy.
+  const computed: AppState = { ...state, inputs: computeInputs(state.inputs) };
   const params = new URLSearchParams(location.hash.slice(1));
   const stateText = encodeState(state);
   byId('notes').replaceChildren(...notes.map((n) => html('p', { class: 'page-note' }, [n])));
@@ -78,7 +81,7 @@ function render(data: AppData): void {
 
   const target = byId('figure-view');
   const parsed = parseView(params.get('fig'), params.get('view'));
-  const result = parsed === null ? null : viewPaths(data.figures, state, parsed.fig, parsed.view);
+  const result = parsed === null ? null : viewPaths(data.figures, computed, parsed.fig, parsed.view);
   if (parsed === null || result === null) {
     target.replaceChildren(html('p', { class: 'page-note' }, [NO_VIEW]));
     document.title = 'TOLD: figure';
@@ -87,7 +90,7 @@ function render(data: AppData): void {
   const { fig, view } = parsed;
   document.title = `TOLD: Fig. ${fig}`;
   const href = (f: string): string => `figure.html#${stateText}&fig=${f}&view=${viewFor(f, view)}`;
-  const signs = signsOf(state);
+  const signs = signsOf(computed);
   const lines = (keep: (sheetId: string) => boolean): HTMLElement[] =>
     result.reasons.filter((r) => keep(r.error.figure)).map((r) => reasonLine(r, data.figures, signs, fig, href));
 
