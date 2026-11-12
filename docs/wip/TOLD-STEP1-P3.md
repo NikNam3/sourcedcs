@@ -286,4 +286,32 @@ export function markPolyline(fig: FigureFile, marks: readonly PathMark[]): Px[][
 
 ## Ledger: supervisor rulings
 
-(Filled during execution.)
+Taken by the supervisor during execution (12 and 13 Nov 2026), for the human's review with the (S) rulings in 1.8.
+
+- **R1, a loadout row's count.** A row's count is over all its stations: valid 1 to 3 × stations (a pair on TERs
+  carries 6); 0 is `badCount` in the core. The hash decode accepts an integer 1 to 3 × stations, else the row is
+  dropped. 1.8 and this plan were corrected (the old "0 to 3" was a plan error). Cost if wrong: a link loses a row.
+- **R2, the Additional field.** `DragIndexView` gains `additionalInput`: the Additional drag index field sits in the
+  builder table, as in the mockup; Task 4 wires it.
+- **R3, problem values in print.** Print shows problem values in ink, boxed: 1.2 item 4 ("always black on white")
+  wins over the mockup's red on paper.
+- **R4, panel frames.** The panel frames are copied from the extraction specs into `src/web/figure/frames.ts`, with
+  a parity test against the YAML. Moving them into the data (an extractor change and a human re-run) is left for
+  later. Cost if wrong: a second source to keep in sync, guarded by the test.
+- **R5, refusal on wet.** The B2-5 and B2-6 takeoff views include sheet 2 (the wet refusal links there).
+- **R6, the interpolation note.** The figure page's note for a reading between two sheets is worded by the
+  supervisor (Task 5 review round 1).
+
+Parked findings (reviews' minors not fixed, for later):
+
+- Task 1: comment width; more value assertions in the path tests; the float join tolerance (left as a Task 5 note).
+- Task 3: the builder restates some core rules in its own code; the store menu's active option is not marked for
+  ARIA.
+- Task 5: the figure page's circled letters are our own (one per reading, in chain order), not the manual's printed
+  sample letters.
+
+Found in Task 7:
+
+- The figure page passed the typed state to the chains, so a link from the TOLD page with "33,000", a spaced wind or
+  an empty defaulted field (CG, RCR) drew no path. Fixed in Task 7 (`figure/main.ts` gives the chains
+  `computeInputs`' copy, as the TOLD page does); the smoke spec's "Fig." test covers it.

@@ -480,8 +480,8 @@ For plan 2 (core); decided in 1.7, which wins where they differ:
 - [x] All figures in 1.1 extracted and passing the extractor's asserts; their JSON passes `data:check` (schema and manifest hashes). Done by plan 1 (30 Oct 2026).
 - [x] Every sample problem in Appendix B Parts 2 and 7 for these figures passes within 2 % (documented errata applied). Done by plan 1 (0.6); B7-2's SEC value belongs to the deferred SEC option.
 - [x] Core tests green, with the coverage floor of 90 % lines on `src/core/` (Node's built-in coverage). Done by plan 2 (12 Nov 2026): 450 tests, 100 % lines.
-- [ ] Mockup approved; page matches it in light and dark.
-- [ ] Playwright smoke spec green, including print to PDF giving exactly one page on A4 and on Letter.
+- [ ] Mockup approved; page matches it in light and dark. Built on `perf-told-p3` by plan 3 (13 Nov 2026); awaiting the human's approval from the screenshots (`/home/nklx/dev/perf-p3-review/`).
+- [x] Playwright smoke spec green, including print to PDF giving exactly one page on A4 and on Letter. Done by plan 3 (13 Nov 2026): `e2e/smoke.spec.ts`, 6 tests, in CI.
 - [ ] Deployed; data version visible; perf/README.md current.
 
 ### 1.6 Plan 1: data and figure functions (design of 29 Oct 2026)
@@ -834,6 +834,10 @@ This section is plan 3's spec: the three pages, the figure paths, the URL hash a
 renders what `computeTold` returns and adds one thing to the core, the path marks. The plan is
 `docs/wip/TOLD-STEP1-P3.md`.
 
+**Status:** built on branch `perf-told-p3` (13 Nov 2026): tasks 1 to 7 merged, the smoke spec green; awaiting the
+human's review of the (S) rulings below, the plan's ledger rulings and the screenshots in
+`/home/nklx/dev/perf-p3-review/`. Deployment is plan 4.
+
 **How it was decided.** Part 1 (paths, module layout, order) was approved by the human on 12 Nov 2026, with two
 rulings: the figure view draws **exact paths only**, and landing has **one figure view per weight**, dry solid and
 wet dashed. Parts 2 and 3 (state, page behaviour, wording, testing, CI) were decided by the supervisor overnight at
@@ -952,8 +956,9 @@ letters Ⓐ to Ⓖ mark each panel's entry in chain order, with a key listing ea
 with several sheets in a chain (B7-2 sh. 1 above sh. 2; refusal B2-5 sh. 1 above sh. 3 for a dry RCR between 8 and
 16) stacks them in chain order. An input from another figure (Ⓐ takeoff factor from B2-1) links to that figure's
 view. A path that stopped shows the reason line under the image. The figure page has the same title block, a link
-back to the TOLD page with the same state, and prints on one page. The old board `docs/mockups/perf-figure.html` is
-replaced by the real page, which the human approves from screenshots (light and dark) in place of a separate board.
+back to the TOLD page with the same state, and prints on one page. The old board (`perf-figure.html`, deleted) is
+replaced by the real page `perf/web/figure.html`, which the human approves from screenshots (light and dark) in place
+of a separate board.
 
 **The Limitations page (S).** Static HTML: the notes listed under "Notes carried" in 1.2 (step 0, plan 1, plan 2),
 the 29 Oct list (per-point rounding, the conservative step leaving the chart, B2-3 under 1,000 ft, hot-day pressure
@@ -1051,7 +1056,7 @@ Step 3 chains the step 2 calculations into a mission and fills the landing block
 
 ## Design system and UI
 
-The look is a printed tech-order page: black on white, white on black in dark mode, Times New Roman, red only for a problem with a cited rule. The approved mockup is the reference: `docs/mockups/perf-told.html`, `perf-figure.html`, `perf-limitations.html`.
+The look is a printed tech-order page: black on white, white on black in dark mode, Times New Roman, red only for a problem with a cited rule. The approved mockup is the reference: `docs/mockups/perf-told.html` and `perf-limitations.html`; the figure view's reference is the real page `perf/web/figure.html` (its board `perf-figure.html` was deleted in plan 3, 1.8).
 
 ### 10.1 Fixed from step 1
 
@@ -1190,7 +1195,7 @@ The step 1 board (`docs/mockups/perf-told.html`, `perf-limitations.html`) was ap
 - **Limitations page:** dark mode, per-point rounding wording (ADR 0149), the conservative step leaving the chart, the
   B2-3 under-1,000 ft cases (R11), the hot-day pressure altitude note, RCR below 10, data and app versions, and the
   drag index notes II.3 to II.5.
-- **Still to update:** the figure board (`perf-figure.html`) is on inline styles and shows only the exact MIL key.
+- **Still to update:** the figure board (`perf-figure.html`) is on inline styles and shows only the exact MIL key. (Superseded: plan 3 deleted the board; the real page `perf/web/figure.html` replaces it, 1.8.)
 
 ## Decisions of 28 Oct 2026
 

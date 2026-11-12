@@ -1,6 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 (13 Nov 2026, not deployed)
+
+Step 1 plans 1 to 3 (`docs/wip/TOLD.md` 1.6 to 1.8): the TOLD calculator, built on branch `perf-told-p3` and awaiting the human's review. Deployment is plan 4.
+
+- Data for Figures B2-4, B2-5 sheets 1 to 3, B2-6 sheets 1 to 3, B7-1 and B7-2 sheets 1 and 2, with one figure function per chart and hand-read checkpoints for the charts without a sample problem (plan 1). Data version 8.
+- Core: `computeTold(figures, inputs, loadout)`, every MDC TOLD cell exact and conservative (takeoff MIL and MAX AB, landing normal and heavyweight, dry and wet) with rule marks, out-of-chart reasons and the exact trace; input parsing and derived values; the drag index builder on Fig. B1-1 (plan 2).
+- Path marks in the core: `PathMark`, `ctx.mark` in every figure function, `tracePaths` (plan 3).
+- The TOLD page `web/index.html`: inputs as typed (thousands separators, "230 / 08 G15" wind, "dry / wet" RCR, defaults as placeholders), the drag index builder with its store menu, the TOLD tables with "Fig." links, rule lines and reason lines, the derived line.
+- The figure page `web/figure.html`: one view per figure and takeoff or landing weight, the exact paths over the page image in SVG, circled letters and their key, stacked sheets, reason lines where a path stops.
+- The Limitations page `web/limitations.html`, with the data and app versions.
+- State in the URL hash (`#v=1&…`) and localStorage (`perf.f16.v1`); a link from another version is refused with a note.
+- Print on one A4 or Letter page, black on white, problem values boxed; dark mode through the tokens.
+- `scripts/serve.ts` (`npm run serve`), the Playwright smoke spec `e2e/smoke.spec.ts` (`npm run e2e`), and the smoke spec in CI.
+
+## Step 0 (foundations, before 0.1.0)
 
 Step 0: foundations (`docs/wip/TOLD.md`).
 
