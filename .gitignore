@@ -221,3 +221,5 @@ lxsrs_v2_state.json
 perf/extraction/out/
 perf/web/js/
 perf/node_modules/
+perf/test-results/
+perf/playwright-report/

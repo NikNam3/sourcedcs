@@ -3,3 +3,5 @@ web/js/
 extraction/
 package-lock.json
 tests/fixtures/
+test-results/
+playwright-report/

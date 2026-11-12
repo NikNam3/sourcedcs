@@ -828,6 +828,159 @@ For plan 3 (UI and state), from the deferred minors:
 - A limit verdict `true` marks a landing distance cell even when that cell shows "—" (sheet 1 judged, sheet 2 out
   of chart).
 
+### 1.8 Plan 3: UI and state (design of 12 Nov 2026)
+
+This section is plan 3's spec: the three pages, the figure paths, the URL hash and localStorage, the smoke spec. It
+renders what `computeTold` returns and adds one thing to the core, the path marks. The plan is
+`docs/wip/TOLD-STEP1-P3.md`.
+
+**How it was decided.** Part 1 (paths, module layout, order) was approved by the human on 12 Nov 2026, with two
+rulings: the figure view draws **exact paths only**, and landing has **one figure view per weight**, dry solid and
+wet dashed. Parts 2 and 3 (state, page behaviour, wording, testing, CI) were decided by the supervisor overnight at
+the human's request ("answer all questions yourself in a separate branch"), on branch `perf-told-p3`; every one of
+those decisions is marked **(S)** below for the morning review.
+
+**Path geometry (part 1).**
+
+- `Ctx` gains `mark(m: PathMark): void`. Every figure function calls it once per panel it reads, after the read,
+  with the panel's entry and exit in chart units; ids and signatures are unchanged. `evaluate` ignores marks.
+- `PathMark` (`src/core/path/mark.ts`) is a union on the panel type, every value in the panel's own chart units
+  (the numbers its `axes` transforms take), with `figure` (the figure file id, `B2-5.sh1`) and `panel` (the panel
+  id): `curve_family` `{ input, param, output }`; `single_curve` `{ input, output }`; `scale_pair` `{ from, to }`;
+  `guideline_panel` `{ family, baseline, entry, target, exit }`. The figure page lays out each kind (geometry is not
+  the core's job). A panel that returned `OutOfChart` is not marked: the path stops at the last panel it crossed,
+  and the reason line says why. A skipped guideline panel (zero wind or slope) is not marked either.
+- `tracePaths(chain)` (`src/core/path/trace.ts`) runs the exact pass once with a recording ctx and returns the
+  marks in order with the chain's outputs. Exact only (ruling of 12 Nov).
+- The figure page turns marks into polylines in page-image pixels with each axis transform (`page`, `a`, `b`) and
+  the image's `clipPt` and `pxPerPt`. A guideline mark is drawn along the bracketing lines, sampled between
+  baseline and target, the way `guidelinePanel` interpolates them.
+
+**Module layout (part 1).** One job per file, each well under 300 lines.
+
+```
+src/core/path/      mark.ts (PathMark), trace.ts (tracePaths)
+src/web/            load.ts (the only fetch: manifest, figures, page images)
+                    format.ts (numbers, units, "—"), scale.ts (fit the 1280 px page to the window)
+                    reasons.ts (OutOfChart → reason line), rule-lines.ts (RuleMark → rule line), version.ts
+                    state/hash.ts (Inputs + Loadout ↔ hash), state/storage.ts, state/initial.ts (load order)
+                    told/inputs-view.ts, told/dragindex-view.ts, told/store-menu.ts, told/tables.ts, told/main.ts
+                    figure/geometry.ts (marks → page polylines), figure/letters.ts, figure/views.ts, figure/main.ts
+                    limitations/main.ts
+web/                index.html, figure.html, limitations.html, css/ (tokens, perf, print; told.css, figure.css)
+scripts/serve.ts    local static server: /f16/ → web/, /f16/data/ → data/
+e2e/                smoke.spec.ts, playwright.config.ts
+```
+
+Dependencies run one way: `src/web/` imports `src/core/`, never the reverse; only `load.ts` fetches; the pure web
+modules (`format`, `reasons`, `rule-lines`, `state/*`, `figure/geometry`, `figure/views`) have no DOM and get node
+unit tests; the views are covered by the smoke spec.
+
+**State (S).**
+
+- **Hash:** `#v=1&` then every Inputs field as typed, short keys: `tgw` takeoffGwLb, `lgw` landingGwLb, `cg`,
+  `adi` additionalDragIndex, `rwy`, `hdg`, `len`, `ne` nearElevFt, `fe` farElevFt, `alt`, `t`, `w`, `rd`, `rw`;
+  then `lo`, the loadout. Every key is written, empty ones too, so a cleared field stays cleared. Built and read
+  with `URLSearchParams`.
+- **Loadout encoding:** rows joined by `;`, each `stations:storeKey:suspension:count` with stations joined by `-`,
+  each part through `encodeURIComponent`, a null store or suspension as an empty part (`3-7:<key>::2`). A
+  `noTipMissile` row is the literal `noTipMissile`. Rows are kept in order, so a split pair round-trips.
+- **Refusal:** a hash whose `v` is not `1` is refused with the grey note "This link is from another version of the
+  calculator and was not loaded." under the title, and loading continues from storage. A hash with `v=1` but a row
+  that does not decode (wrong part count, a count that is not an integer 0 to 3, an unknown station) drops that
+  row, with a grey note "Part of the loadout in this link could not be read."; an unknown store key is kept and
+  shows as a loadout problem in the builder (`checkLoadout`), so a link from an older data version says what is
+  wrong instead of silently changing the loadout.
+- **Storage:** the same string, without `#`, under `perf.f16.v1` in localStorage. Every change rewrites both, the
+  hash with `history.replaceState` (typing does not fill the history). Storage that throws (private mode) is
+  ignored.
+- **Load order:** hash, then storage, then `DEFAULT_INPUTS` and `DEFAULT_LOADOUT`. A `hashchange` (a pasted link)
+  reloads the state.
+
+**The TOLD page (S).**
+
+- Every `input` event recomputes everything (`computeTold` takes milliseconds; no debounce).
+- **Fields with a default** (CG 35, additional drag index 0, RCR 23 / 18) show it as the placeholder; an empty field
+  means the default. Every other empty field shows its placeholder (none), no underline, and its dependent cells
+  show "—" with no reason line: empty is not an error.
+- **RCR** is one field, "dry / wet", as in the mockup: split at `/`, each part trimmed; an empty part takes its
+  default. It writes `rcrDry` and `rcrWet` (two hash keys).
+- **Wind** is typed "230 / 08 G15" (mockup); the page normalises it to the core's `230/08G15` (spaces removed) before
+  parsing, and stores it as typed.
+- **Thousands separators** in a typed number are accepted ("37,240" means 37240): the page strips `,` before
+  `parseNumber`. Stored as typed.
+- **A filled field that does not parse**, or fails a physical limit in `deriveInputs`, gets the grey dotted
+  underline. The page decides this from `deriveInputs`' result for the field (never `parseNumber` alone).
+- **The derived line** under section II: pressure altitude, slope, headwind or tailwind, crosswind, and the gust,
+  as in the mockup; a value that does not compute is left out.
+- **Cells:** exact regular, conservative bold. Speeds exact with one decimal, conservative whole; distances whole
+  with thousands separators; runway used % with one decimal, from the cell's distance and the runway length. A
+  cell that does not compute shows "—". A rule mark makes that cell red (exact and conservative on their own) and
+  boxes it in print.
+- **Rule lines:** one grey line per distinct (rule, column) under its table, texts in `rule-lines.ts`:
+  - `mil-roll-50`: "MIL roll 97.5 % of runway: over 50 %, afterburner takeoff required (para. 3.6.6)"
+  - `takeoff-roll-80`: "MAX AB roll 84.2 % of runway: over 80 % (para. 3.6.3)"
+  - `landing-roll-80`: "Landing roll, heavyweight wet, 83.0 % of runway: over 80 % (para. 3.18)"
+  - `landing-rcr-10`: "RCR 8 at the landing field: below 10 (para. 3.18)", shown once, and the RCR input red.
+  - `b7-2-limit`: "Landing, heavyweight dry: beyond the maximum brake energy limit (Fig. B7-2 sh. 1)", with the
+    line's label from the data.
+  A conservative-only mark says "conservative" after the column name. The percentage is the exact one when the
+  exact cell is marked, else the conservative one.
+- **Reason lines:** one per distinct reason per table (`Reason` from the column), the figure name a link to its
+  view:
+  - "B2-3: gross weight 52,000 lb outside the drawn range 20,000–48,000 lb"
+  - "B2-6 sh. 2: conservative gross weight 37,300 lb outside the drawn range 20,000–37,250 lb"
+  - "B7-2 sh. 1: temperature 50 °C outside the drawn chart" (`drawnRange` null)
+  - "B2-6 sh. 3: tailwind 20 kt outside the drawn range 0–18.75 kt": wind and slope get their side back from the
+    inputs (headwind/tailwind, uphill/downhill), since the core gives magnitudes.
+  Names come from the panel quantity's `name` with `_` as a space; values in 1000 lb or 1000 ft are shown in lb or
+  ft; a quantity the table does not know is shown with its own name and unit. An unparsed cell gives no reason
+  line (its field is underlined). Units: `°C`, `KIAS`, `kt`, `%`, `ft`, `lb`.
+- **Acceleration check label** from the exact cells' `checkDistanceFt`: "at 2,000 ft", or "at 2,000 / 1,000 ft" when
+  MIL and MAX AB differ. A conservative cell checked at the other distance adds a grey line under the table: "MAX
+  AB conservative: checked at 2,000 ft".
+- **The drag index builder** follows the 29 Oct decisions and the approved mockup (menu of allowed stores grouped by
+  heading, filtered by typing, arrow keys and Enter; suspension list; count limited by capacity; split and join).
+  A row with a loadout problem gets the dotted underline on its store and a grey line naming the problem. The total
+  shows "—" while the additional drag index does not parse; with no tip missiles it shows both values ("142 / 150").
+- **"Fig." links** go to `figure.html#<state>&fig=<figure>&view=<view>`, `fig` the figure without its sheet
+  (`B2-5`), `view` one of `takeoff` (MIL and MAX AB together), `normal`, `heavy`.
+
+**The figure page (S).** One view per figure and takeoff or landing weight: the page image (greyscale PNG) with the
+exact paths drawn over it in SVG, MIL solid 1.8, MAX AB dashed 1.6 (5 3); landing dry solid, wet dashed. Circled
+letters Ⓐ to Ⓖ mark each panel's entry in chain order, with a key listing each letter's quantity and value. A figure
+with several sheets in a chain (B7-2 sh. 1 above sh. 2; refusal B2-5 sh. 1 above sh. 3 for a dry RCR between 8 and
+16) stacks them in chain order. An input from another figure (Ⓐ takeoff factor from B2-1) links to that figure's
+view. A path that stopped shows the reason line under the image. The figure page has the same title block, a link
+back to the TOLD page with the same state, and prints on one page. The old board `docs/mockups/perf-figure.html` is
+replaced by the real page, which the human approves from screenshots (light and dark) in place of a separate board.
+
+**The Limitations page (S).** Static HTML: the notes listed under "Notes carried" in 1.2 (step 0, plan 1, plan 2),
+the 29 Oct list (per-point rounding, the conservative step leaving the chart, B2-3 under 1,000 ft, hot-day pressure
+altitude, RCR below 10, II.3 to II.5), in plain sentences for a pilot, numbered I, II, III by topic. Data version
+from the manifest and app version from `version.ts` (a test keeps it equal to `package.json`, which goes to 0.1.0).
+
+**Print (S).** `print.css`: one A4 or Letter page, black on white, inputs as plain values, no controls, empty
+stations hidden, problem values boxed; the footer carries data version, app version and the date.
+
+**Testing and CI (S).**
+
+- Node unit tests for `path/` (marks per figure match the trace; tracePaths on each chain), `state/hash.ts` (round
+  trip of every field and a loadout with a split pair; `v=2` refused; bad rows dropped; unknown store kept),
+  `format.ts`, `reasons.ts` and `rule-lines.ts` (every rule and the four reason forms), `figure/geometry.ts`
+  (a mark through a known transform lands on the right pixel), `version.ts` against `package.json`.
+- One Playwright spec, `e2e/smoke.spec.ts`, against `scripts/serve.ts`: load, enter the B2-3 sample problem, check
+  a cell, a bad field's underline, reload keeps the state, a `v=2` link's note, open a figure, print to PDF on A4
+  and Letter and assert one page each, light and dark load. Chromium only, one worker. `npm run e2e`.
+- CI: the test job gains `npx playwright install --with-deps chromium` and `npm run e2e`. The image build and the
+  deploy stay plan 4.
+- The coverage floor stays on `src/core/` (90 % lines); `src/core/path/` is held at 100 % like the rest.
+
+**Process (S).** Lanes in `../sourcedcs-told-p3-t<N>` worktrees off `perf-told-p3`, all on Opus, at most 4 agents at
+once, a task review per lane, lanes run only their own test files, the supervisor runs the gates (`nice -n 19`) and
+merges. The supervisor answers the questions a questioner would (the human asked for it); each ruling is written
+into the plan's ledger section.
+
 ## Step 2: Performance
 
 Step 2 adds stand-alone calculations from Parts 3 to 6, each answering one planning question with the aircraft from section I.

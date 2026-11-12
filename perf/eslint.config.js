@@ -4,7 +4,7 @@ import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  { ignores: ['node_modules/', 'web/js/', 'data/', 'extraction/'] },
+  { ignores: ['node_modules/', 'web/js/', 'data/', 'extraction/', 'test-results/', 'playwright-report/'] },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {
@@ -48,6 +48,18 @@ export default defineConfig(
           name,
           message: 'src/core/ has no DOM, no I/O and no process: pass the data in.',
         })),
+      ],
+    },
+  },
+  {
+    // src/web/: only load.ts fetches (TOLD 1.8); the rest takes data passed in.
+    files: ['src/web/**'],
+    ignores: ['src/web/load.ts'],
+    rules: {
+      'no-restricted-globals': ['error', { name: 'fetch', message: 'Only src/web/load.ts fetches (TOLD 1.8).' }],
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ group: ['node:*'], message: 'src/web/ runs in the browser: no Node imports.' }] },
       ],
     },
   },
