@@ -69,8 +69,8 @@ All are written into TOLD.md 1.7 or 5.2 and the plan. These are the ones most li
 **Step 1 plan 3: UI and state.** The figure board first, then the three pages (`/f16/`, `/f16/figure.html#…`, the
 Limitations page), the URL hash, localStorage and the Playwright smoke spec. TOLD.md 1.2 items 4 and 5, 1.3, 1.4, 1.5,
 section 10 and the decisions of 29 Oct 2026 (the approved mockup) hold the design; "Notes carried from plan 2" lists
-what plan 2 left for it (the Limitations notes, and UI items such as calm wind typed `360/00`, the physical limits
-living in `deriveInputs`, one `landing-rcr-10` mark and one reason per rejected cell).
+what plan 2 left for it (the Limitations notes, and UI items such as the physical limits living in `deriveInputs`,
+showing one `landing-rcr-10` mark, each acceleration check cell's own check distance).
 
 Run plan 3 as plans 1 and 2 ran: `superpowers:brainstorming` on what TOLD.md leaves open (what the figure board shows
 of a trace, how a reason line is worded from an `OutOfChart`, the loadout editor, the hash format), then a spec section
@@ -80,7 +80,6 @@ commit until the human has the domain and certificate.
 
 How plan 2 ran, for reuse: one lane worktree per task (`../sourcedcs-told-p2-t<N>` on `lane/told-p2-t<N>` off
 `perf-told`), at most 4 agents at once including a questioner, all on Opus, and a task review after each lane. Lanes
-ran only their own test files; the supervisor ran the full gates once at the end (`nice -n 19`) and merged. The
-close-out lane (`../sourcedcs-told-p2-t8`) goes once it is merged into `perf-told`, with the other plan 2 lane
-worktrees and branches. The session ledger and task reports are uncommitted scratch; what matters from them is copied
+ran only their own test files; the supervisor ran the full gates once at the end (`nice -n 19`) and merged. Every
+plan 2 lane worktree and branch is removed. The session ledger and task reports are uncommitted scratch; what matters from them is copied
 into the plan and TOLD.md.
