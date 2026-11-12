@@ -1,6 +1,6 @@
 {
   "name": "perf",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "F-16 TOLD calculator: the HAF supplement's Appendix B charts, computed in the browser",
   "type": "module",
@@ -9,16 +9,19 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "serve": "node scripts/serve.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "test": "node --test --experimental-test-coverage --test-coverage-include='src/core/**' --test-coverage-lines=90 'tests/**/*.test.ts'",
     "types:gen": "node scripts/gen-types.ts",
     "types:check": "node scripts/gen-types.ts --check",
-    "data:check": "node scripts/data-check.ts"
+    "data:check": "node scripts/data-check.ts",
+    "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@types/node": "~22.20.5",
     "ajv": "^8.20.0",
     "eslint": "^10.13.0",

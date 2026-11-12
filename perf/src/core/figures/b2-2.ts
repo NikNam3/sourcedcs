@@ -19,16 +19,18 @@ const ROTATION_AB_KT = 15;
 
 /**
  * Reads `b2-2.vto35` (the chart, in KIAS); the corrections are applied exactly to the read value and are not rounding
- * points. An out-of-chart gross weight gives every output its OutOfChart.
+ * points. An out-of-chart gross weight gives every output its OutOfChart. Marks `speed` after its read.
  */
 export function takeoffSpeed(
   ctx: Ctx,
   fig: FigureFile,
   i: { grossWeightLb: number; cgPct: number; pitch8: boolean },
 ): { vto35Kias: Read<number>; vtoKias: Read<number>; vrMilKias: Read<number>; vrAbKias: Read<number> } {
-  const chart = singleCurve(panel(fig, 'speed', 'single_curve'), fig.id, i.grossWeightLb / 1000);
+  const gw = i.grossWeightLb / 1000;
+  const chart = singleCurve(panel(fig, 'speed', 'single_curve'), fig.id, gw);
   if (!chart.ok) return { vto35Kias: chart, vtoKias: chart, vrMilKias: chart, vrAbKias: chart };
   const vto35 = ctx.read('b2-2.vto35', chart.value, STEPS.speedKt);
+  ctx.mark({ kind: 'single_curve', figure: fig.id, panel: 'speed', input: gw, output: chart.value });
   const atCg = vto35 - KT_PER_CG_PCT * (i.cgPct - CG_BASELINE_PCT);
   const vto = i.pitch8 ? atCg * PITCH_8_FACTOR : atCg;
   return {

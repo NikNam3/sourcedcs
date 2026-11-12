@@ -2,7 +2,8 @@
  * The paper copy, through the browser's print dialog (TOLD.md 1.2 item 4): exactly one A4 or Letter page, always
  * black on white, inputs as plain values, no controls; the footer carries data version, app version and date.
  *
- * Black on white needs nothing here: tokens.css applies its dark values on screen only.
+ * Black on white: tokens.css applies its dark values on screen only, and a problem value (.alert) prints in ink,
+ * boxed, never red (ruling R3).
  * The 1280 px page prints without its screen padding (the @page margin replaces it) and at 0.6, so its 1120 px of
  * content fit the printable width of both A4 (186 mm, 703 px) and Letter (192 mm, 725 px) at 12 mm margins.
  */
@@ -58,5 +59,14 @@
 
   a:hover {
     opacity: 1;
+  }
+
+  /* Always black on white (1.2 item 4, ruling R3): a problem value is ink, boxed, never red on paper. The input
+     selector matches told.css's more specific screen rule. */
+  .alert,
+  .field input.alert {
+    color: var(--ink);
+    outline: 1px solid var(--ink);
+    outline-offset: -3px;
   }
 }
