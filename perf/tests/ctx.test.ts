@@ -32,6 +32,9 @@ function spied<K extends string, S>(chain: Chain<K, S>): { chain: Chain<K, S>; s
       chain({
         read: (id, value, step) => record(id, ctx.read(id, value, step)),
         input: (id, value, step) => record(id, ctx.input(id, value, step)),
+        mark: (m) => {
+          ctx.mark(m);
+        },
       }),
   };
 }
@@ -626,7 +629,7 @@ function randomChain(rng: () => number): RandomChain {
   };
 
   // Put the threshold inside the selector's rounding interval, so rounding it switches the branch.
-  const exactCtx: Ctx = { read: (_id, value) => value, input: (_id, value) => value.exact };
+  const exactCtx: Ctx = { read: (_id, value) => value, input: (_id, value) => value.exact, mark: () => undefined };
   const v = reads(exactCtx)[selector] ?? 0;
   const step = specs[selector]?.step ?? 1;
   const lo = roundTo(v, step, 'down');
@@ -733,7 +736,8 @@ function signedFeedingChain(rng: () => number): RandomChain {
     });
     return values;
   };
-  const v = reads({ read: (_id, value) => value, input: (_id, value) => value.exact })[selector] ?? 0;
+  const v =
+    reads({ read: (_id, value) => value, input: (_id, value) => value.exact, mark: () => undefined })[selector] ?? 0;
   const step = specs[selector]?.step ?? 1;
   const lo = roundTo(v, step, 'down');
   const hi = roundTo(v, step, 'up');

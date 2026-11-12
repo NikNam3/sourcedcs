@@ -7,6 +7,7 @@ import { STEPS } from '../ctx.ts';
 import type { Ctx } from '../ctx.ts';
 import { panel } from '../data/panel.ts';
 import type { FigureFile } from '../data/types.ts';
+import { guidelineMark } from '../path/mark.ts';
 import { curveFamily } from '../read/curve-family.ts';
 import { guidelinePanel } from '../read/guideline-panel.ts';
 import { ok } from '../result.ts';
@@ -22,7 +23,8 @@ const FT_PER_CHART_UNIT = 1000;
  * picks the family (uphill / downhill, headwind / tailwind) and the panel reads `Math.abs` (ruling R8). A zero slope
  * or wind skips its panel but still reads its id. The first panel out of chart stops the figure: the distance is its
  * OutOfChart and no later id is read. A distance under the guideline panels' lowest line (1,000 ft) is out of chart
- * at the next panel that moves it (ruling R11). x 1.18 at 8 deg is a correction, not a rounding point.
+ * at the next panel that moves it (ruling R11). x 1.18 at 8 deg is a correction, not a rounding point. Marks each
+ * panel it reads after its read, in order (TOLD 1.8): a skipped panel is not marked, nor one out of chart.
  */
 export function takeoffDistance(
   ctx: Ctx,
@@ -37,9 +39,18 @@ export function takeoffDistance(
     pitch8: boolean;
   },
 ): { distanceFt: Read<number> } {
-  const chart = curveFamily(panel(fig, 'gw', 'curve_family'), fig.id, i.takeoffFactor, i.grossWeightLb / 1000);
+  const gw = i.grossWeightLb / 1000;
+  const chart = curveFamily(panel(fig, 'gw', 'curve_family'), fig.id, i.takeoffFactor, gw);
   if (!chart.ok) return { distanceFt: chart };
   let ft = ctx.read('b2-3.gw', chart.value * FT_PER_CHART_UNIT, STEPS.distanceFt);
+  ctx.mark({
+    kind: 'curve_family',
+    figure: fig.id,
+    panel: 'gw',
+    input: i.takeoffFactor,
+    param: gw,
+    output: chart.value,
+  });
 
   const steps: readonly { id: string; panel: string; family: string; target: number; skip: boolean }[] = [
     { id: 'b2-3.cg', panel: 'cg', family: 'all', target: i.cgPct, skip: false },
@@ -62,8 +73,10 @@ export function takeoffDistance(
   for (const step of steps) {
     if (!step.skip) {
       const p = panel(fig, step.panel, 'guideline_panel');
-      const moved = guidelinePanel(p, fig.id, step.family, ft / FT_PER_CHART_UNIT, step.target);
+      const entry = ft / FT_PER_CHART_UNIT;
+      const moved = guidelinePanel(p, fig.id, step.family, entry, step.target);
       if (!moved.ok) return { distanceFt: moved };
+      ctx.mark(guidelineMark(fig.id, p, step.family, entry, step.target, moved.value));
       ft = moved.value * FT_PER_CHART_UNIT;
     }
     ft = ctx.read(step.id, ft, STEPS.distanceFt);

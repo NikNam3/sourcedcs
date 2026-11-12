@@ -9,6 +9,7 @@ import { STEPS } from '../ctx.ts';
 import type { Ctx } from '../ctx.ts';
 import { panel } from '../data/panel.ts';
 import type { FigureFile } from '../data/types.ts';
+import { guidelineMark } from '../path/mark.ts';
 import { curveFamily } from '../read/curve-family.ts';
 import { guidelinePanel } from '../read/guideline-panel.ts';
 import { beyondLimit } from '../read/limit-line.ts';
@@ -44,6 +45,9 @@ const LIMIT_PANELS: Readonly<Record<keyof LimitVerdicts, string>> = Object.freez
  * `limits` judges this run's carried position and its read roll (after `ctx.read`), so a verdict is computable for
  * every run, the conservative ones included; `evaluate` does not surface a conservative run's verdicts yet (TOLD.md
  * 1.2, "For plan 2"). It is null when the roll is out of chart.
+ *
+ * Marks `temp`, then `gw`, each after its read (TOLD 1.8); the limit lines are judged, not crossed, and are not marked.
+ * A carried position the GW curves do not reach keeps the `temp` mark: the path stops at the GW curves.
  */
 export function groundRollUncorrected(
   ctx: Ctx,
@@ -52,13 +56,23 @@ export function groundRollUncorrected(
 ): { rollFt: Read<number>; limits: LimitVerdicts | null } {
   const carry = curveFamily(panel(fig, 'temp', 'curve_family'), fig.id, i.paFt, i.tempC);
   if (!carry.ok) return { rollFt: carry, limits: null };
+  ctx.mark({ kind: 'curve_family', figure: fig.id, panel: 'temp', input: i.paFt, param: i.tempC, output: carry.value });
   const gw = panel(fig, 'gw', 'curve_family');
-  const chart = curveFamily(gw, fig.id, carry.value, i.grossWeightLb / 1000);
+  const grossWeight = i.grossWeightLb / 1000;
+  const chart = curveFamily(gw, fig.id, carry.value, grossWeight);
   if (!chart.ok) {
     const rollFt = chart.error.input === gw.input.name ? outOfChart(fig.id, 'temperature', i.tempC, null) : chart;
     return { rollFt, limits: null };
   }
   const ft = ctx.read('b7-2.sh1.roll', chart.value * FT_PER_CHART_UNIT, STEPS.distanceFt);
+  ctx.mark({
+    kind: 'curve_family',
+    figure: fig.id,
+    panel: 'gw',
+    input: carry.value,
+    param: grossWeight,
+    output: chart.value,
+  });
   const judge = (key: keyof LimitVerdicts): boolean | null =>
     beyondLimit(panel(fig, LIMIT_PANELS[key], 'limit_line'), carry.value, ft / FT_PER_CHART_UNIT);
   return {
@@ -77,7 +91,8 @@ export function groundRollUncorrected(
  * - Wind and slope are drawn as magnitudes: the sign picks the family (headwind / tailwind, uphill / downhill) and the
  *   panel reads `Math.abs` (ruling R8). A zero wind or slope skips its panel but still reads its id.
  *
- * The first panel out of chart stops the figure: the roll is its OutOfChart and no later id is read.
+ * The first panel out of chart stops the figure: the roll is its OutOfChart and no later id is read. Marks the RCR
+ * panel (`rcr_dry` or `rcr_wet`), then each guideline panel it reads, after its read; a skipped one is not marked.
  */
 export function groundRollCorrected(
   ctx: Ctx,
@@ -85,9 +100,18 @@ export function groundRollCorrected(
   i: { uncorrectedFt: number; rcr: number; wet: boolean; headwindKt: number; slopePct: number },
 ): { rollFt: Read<number> } {
   const rcr = panel(fig, i.wet ? 'rcr_wet' : 'rcr_dry', 'curve_family');
-  const chart = curveFamily(rcr, fig.id, i.uncorrectedFt / FT_PER_CHART_UNIT, i.rcr);
+  const uncorrected = i.uncorrectedFt / FT_PER_CHART_UNIT;
+  const chart = curveFamily(rcr, fig.id, uncorrected, i.rcr);
   if (!chart.ok) return { rollFt: chart };
   let ft = ctx.read('b7-2.sh2.rcr', chart.value * FT_PER_CHART_UNIT, STEPS.distanceFt);
+  ctx.mark({
+    kind: 'curve_family',
+    figure: fig.id,
+    panel: rcr.id,
+    input: uncorrected,
+    param: i.rcr,
+    output: chart.value,
+  });
 
   const steps: readonly { id: string; panel: string; family: string; target: number; skip: boolean }[] = [
     {
@@ -108,8 +132,10 @@ export function groundRollCorrected(
   for (const step of steps) {
     if (!step.skip) {
       const p = panel(fig, step.panel, 'guideline_panel');
-      const moved = guidelinePanel(p, fig.id, step.family, ft / FT_PER_CHART_UNIT, step.target);
+      const entry = ft / FT_PER_CHART_UNIT;
+      const moved = guidelinePanel(p, fig.id, step.family, entry, step.target);
       if (!moved.ok) return { rollFt: moved };
+      ctx.mark(guidelineMark(fig.id, p, step.family, entry, step.target, moved.value));
       ft = moved.value * FT_PER_CHART_UNIT;
     }
     ft = ctx.read(step.id, ft, STEPS.distanceFt);

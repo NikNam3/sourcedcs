@@ -79,7 +79,7 @@ interface UncorrectedInputs {
 const SH1_SAMPLE: UncorrectedInputs = { paFt: 2000, tempC: 40, grossWeightLb: 28000 };
 
 /** The exact pass: every read exact. */
-const exactCtx: Ctx = { read: (_id, value) => value, input: (_id, value) => value.exact };
+const exactCtx: Ctx = { read: (_id, value) => value, input: (_id, value) => value.exact, mark: () => undefined };
 
 /** The roll in runExact (its trace) and the exact pass's limit verdicts. */
 const uncorrected = (i: UncorrectedInputs) => ({
@@ -114,7 +114,7 @@ describe('B7-2 sheet 1 uncorrected ground roll', () => {
   });
 
   test('the limits judge the roll the run reports, after ctx.read', () => {
-    const fixed = (ft: number): Ctx => ({ read: () => ft, input: () => ft });
+    const fixed = (ft: number): Ctx => ({ read: () => ft, input: () => ft, mark: () => undefined });
     assert.equal(groundRollUncorrected(fixed(20000), b72s1, SH1_SAMPLE).limits?.brakeEnergy, true);
     assert.equal(groundRollUncorrected(fixed(1000), b72s1, SH1_SAMPLE).limits?.brakeEnergy, false);
   });
