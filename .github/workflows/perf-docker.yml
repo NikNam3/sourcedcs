@@ -1,16 +1,24 @@
 name: Build and Push perf Docker Image
 
-# The test job only: lint, format, types, build, data check, unit tests, then the Playwright smoke spec
-# (perf/e2e/, TOLD.md 1.8). Step 1 plan 4 adds build-and-push (main, dev, v* tags); deploy.yml will listen to
-# this workflow's name. CI never runs the extractor: the manual PDF is not in the repo.
+# test: lint, format, types, build, data check, unit tests, then the Playwright smoke spec (perf/e2e/, TOLD.md 1.8),
+# on every push touching perf/. build-and-push: only on main, dev and v* tags, like the other docker-image services;
+# deploy.yml listens to this workflow's name. CI never runs the extractor: the manual PDF is not in the repo.
 # crc-sync/src/altimetry.js is in the path filter for the pressure-altitude parity test (ADR 0148).
 on:
   push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
     paths:
       - 'perf/**'
       - 'crc-sync/src/altimetry.js'
       - '.github/workflows/perf-docker.yml'
   workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/perf
 
 jobs:
   test:
@@ -65,3 +73,54 @@ jobs:
       - name: Smoke spec (Playwright, Chromium)
         working-directory: perf
         run: npm run e2e
+
+  build-and-push:
+    needs: test
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # R3-37: a v* release tag must be on main.
+      - name: Refuse a tag whose commit is not on main
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "::error title=Release refused::${GITHUB_REF_NAME} (${GITHUB_SHA}) is not on main. Merge to main first, then tag from main."
+            exit 1
+          }
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./perf
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

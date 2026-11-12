@@ -4,7 +4,7 @@ The F-16 performance calculator of the SOURCE tool suite. Step 1 is TOLD: takeof
 
 perf is a static app: all calculation runs in the browser, the server only serves files. It is public, without login. The plan is `docs/wip/TOLD.md`; the decisions are ADRs 0148 to 0153 in `docs/adr/`.
 
-Status: step 0 (foundations) is done. Step 1 (TOLD) is cut into four plans (`docs/wip/TOLD.md` 1.6); plan 1, the data and one figure function per chart for B2-4, B2-5, B2-6, B7-1 and B7-2 sheets 1 and 2, is done. Plan 2, the core (`computeTold`: the chains, runway rules, drag index builder and input parsing; `docs/wip/TOLD.md` 1.7), is done. Plan 3, the UI and state (the three pages, the URL hash and localStorage, the figure paths and the Playwright smoke spec; `docs/wip/TOLD.md` 1.8), is built on branch `perf-told-p3` and awaits the human's review. Plan 4 (deployment) is next.
+Status: step 0 (foundations) is done. Step 1 (TOLD) is cut into four plans (`docs/wip/TOLD.md` 1.6); plan 1, the data and one figure function per chart for B2-4, B2-5, B2-6, B7-1 and B7-2 sheets 1 and 2, is done. Plan 2, the core (`computeTold`: the chains, runway rules, drag index builder and input parsing; `docs/wip/TOLD.md` 1.7), is done. Plan 3, the UI and state (the three pages, the URL hash and localStorage, the figure paths and the Playwright smoke spec; `docs/wip/TOLD.md` 1.8), is done. Plan 4, the deployment (the Docker image and `https://perf.sourcedcs.page/f16/`; see Deployment below), is built.
 
 ## Data flow
 
@@ -115,4 +115,12 @@ The manifest records the commit that last produced the data (`git rev-parse --sh
 
 ## CI
 
-`.github/workflows/perf-docker.yml` runs on every push touching `perf/**` or `crc-sync/src/altimetry.js`: `npm ci`, then `lint`, `format:check`, `typecheck`, `build`, `types:check`, `data:check` and `test`, then `npx playwright install --with-deps chromium` and `npm run e2e`. CI never extracts: it has no PDF, and it checks the committed data instead. Plan 4 adds the Docker image build and the deploy.
+`.github/workflows/perf-docker.yml` runs on every push touching `perf/**` or `crc-sync/src/altimetry.js`: `npm ci`, then `lint`, `format:check`, `typecheck`, `build`, `types:check`, `data:check` and `test`, then `npx playwright install --with-deps chromium` and `npm run e2e`. CI never extracts: it has no PDF, and it checks the committed data instead. On `main`, `dev` and `v*` tags a second job, after the tests, builds `perf/Dockerfile` and pushes `ghcr.io/niknam3/sourcedcs/perf` (tags as the other images: branch, `sha-<7>`, `latest` on `main`, `dev` on `dev`); `.github/workflows/deploy.yml` listens to it.
+
+## Deployment
+
+`Dockerfile`: `node:22-alpine` runs `npm ci` and `npm run build`; `nginx:alpine` serves `web/` (without `components.html`) at `/f16/` and `data/` at `/f16/data/`, the same paths as `scripts/serve.ts`, with `nginx/default.conf`: `/` and `/f16` redirect to `/f16/` (relative redirects, the container sits behind the TLS proxy), `Cache-Control: no-cache` with ETags so code and data never mix across a deploy, gzip, GET and HEAD only, 404 for anything else. It listens on port 80 inside the `web` network only.
+
+In the stack (`infra/`): the `perf` service in `docker-compose.yml` and the `PERF_DOMAIN` vhost in `nginx/templates/default.conf.template`, which terminates TLS and proxies to `perf:80`. Production is `https://perf.sourcedcs.page/f16/`. A new domain needs its DNS record and certificate before the infra change reaches the server (`infra/RUNBOOK.md`, "perf: domain, certificate and first deploy").
+
+To try the image locally: `docker build -t perf-local . && docker run --rm -p 8080:80 perf-local`, then `http://localhost:8080/f16/`.
