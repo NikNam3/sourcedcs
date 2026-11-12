@@ -4,7 +4,7 @@ import { test } from 'node:test';
 
 import { DEFAULT_INPUTS } from '../src/core/inputs/inputs.ts';
 import type { Inputs } from '../src/core/inputs/inputs.ts';
-import { blankDefaults, computeInputs, joinRcr, plainNumber, plainWind, splitRcr } from '../src/web/told/field-text.ts';
+import { blankDefaults, computeInputs, joinRcr, plainNumber, plainWind, splitRcr } from '../src/web/inputs.ts';
 
 const EMPTY: Inputs = {
   takeoffGwLb: '',

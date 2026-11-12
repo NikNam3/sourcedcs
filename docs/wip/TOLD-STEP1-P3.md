@@ -315,3 +315,10 @@ Found in Task 7:
 - The figure page passed the typed state to the chains, so a link from the TOLD page with "33,000", a spaced wind or
   an empty defaulted field (CG, RCR) drew no path. Fixed in Task 7 (`figure/main.ts` gives the chains
   `computeInputs`' copy, as the TOLD page does); the smoke spec's "Fig." test covers it.
+
+Parked after the final review (`final-review.md`; I1, I2, M1, M3, M4, M6, M8 to M11 fixed on lane/told-p3-t8):
+
+- M2: the reason line and the figure key name some quantities differently ("distance" against "Takeoff distance"); one shared name table later.
+- M5: a conservative-only out-of-chart reason links to a figure view that does not mention it; show conservative reasons as text lines there later.
+- M7: the Limitations page prints on two pages and has no date; decide whether the one-page rule covers it.
+- M12: `web/css/told.css` is 302 lines; the builder rules could move to `css/dragindex.css`.

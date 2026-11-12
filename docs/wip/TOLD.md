@@ -860,7 +860,8 @@ those decisions is marked **(S)** below for the morning review.
   the image's `clipPt` and `pxPerPt`. A guideline mark is drawn along the bracketing lines, sampled between
   baseline and target, the way `guidelinePanel` interpolates them.
 
-**Module layout (part 1).** One job per file, each well under 300 lines.
+**Module layout (part 1).** One job per file, each well under 300 lines. The block below is the part-1 design;
+`perf/README.md` ("src/web/ layout") lists the files that exist.
 
 ```
 src/core/path/      mark.ts (PathMark), trace.ts (tracePaths)
@@ -888,7 +889,11 @@ unit tests; the views are covered by the smoke spec.
   with `URLSearchParams`.
 - **Loadout encoding:** rows joined by `;`, each `stations:storeKey:suspension:count` with stations joined by `-`,
   each part through `encodeURIComponent`, a null store or suspension as an empty part (`3-7:<key>::2`). A
-  `noTipMissile` row is the literal `noTipMissile`. Rows are kept in order, so a split pair round-trips.
+  `noTipMissile` row is an ordinary four-part row with the literal `noTipMissile` as its store part
+  (`1-9:noTipMissile::2`), so it keeps its stations and count. Rows are kept in order, so a split pair round-trips.
+  Every station no decoded row covers gets its default empty row from `DEFAULT_LOADOUT`, in the default order (a
+  pair with one half covered gets the other half as a single row next to it), and `lo=` is the default loadout:
+  the builder cannot add a station row back (final review I2).
 - **Refusal:** a hash whose `v` is not `1` is refused with the grey note "This link is from another version of the
   calculator and was not loaded." under the title, and loading continues from storage. A hash with `v=1` but a row
   that does not decode (wrong part count, a count that is not an integer from 1 to 3 per station of the row (a pair on TERs carries 6), an unknown station) drops that
@@ -955,7 +960,10 @@ exact paths drawn over it in SVG, MIL solid 1.8, MAX AB dashed 1.6 (5 3); landin
 letters Ⓐ to Ⓖ mark each panel's entry in chain order, with a key listing each letter's quantity and value. A figure
 with several sheets in a chain (B7-2 sh. 1 above sh. 2; refusal B2-5 sh. 1 above sh. 3 for a dry RCR between 8 and
 16) stacks them in chain order. An input from another figure (Ⓐ takeoff factor from B2-1) links to that figure's
-view. A path that stopped shows the reason line under the image. The figure page has the same title block, a link
+view. A path that stopped shows the reason line under the image. A drawn column that did not compute because of
+its inputs gets one grey line under the first sheet, "No path: <the TOLD page's field names> not entered or not
+readable.", or for a loadout problem "No path: the loadout has a problem (see the drag index builder)." A refused
+link (another `v`) shows its note and the back link only, no view. The figure page has the same title block, a link
 back to the TOLD page with the same state, and prints on one page. The old board (`perf-figure.html`, deleted) is
 replaced by the real page `perf/web/figure.html`, which the human approves from screenshots (light and dark) in place
 of a separate board.

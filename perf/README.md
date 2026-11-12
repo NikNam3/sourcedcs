@@ -45,21 +45,24 @@ The state is the inputs as typed and the loadout, in the URL hash (`#v=1&…`, s
 ```
 load.ts             the only fetch: the manifest, then every figure file it lists
 format.ts           numbers, units, "—"
+inputs.ts           typed text -> Inputs (computeInputs, blankDefaults, the RCR field), for both pages
+figure-ref.ts       a figure view's name: the View union and figureOf ('B2-6.sh2' -> 'B2-6')
+browser-storage.ts  the page's localStorage, or null (state/storage.ts takes it as an argument)
 scale.ts            fit the 1280 px page to the window (--page-scale)
 reasons.ts          OutOfChart -> reason line
 rule-lines.ts       RuleMark -> rule line
-version.ts          APP_VERSION (a test keeps it equal to package.json)
-state/              hash.ts (state <-> hash), loadout-code.ts (the loadout part), storage.ts, initial.ts (load order)
-told/               main.ts (the page), inputs-view.ts, field-text.ts (typed text -> Inputs), field-check.ts
-                    (underlines), derived-line.ts, tables.ts, table-cells.ts, table-lines.ts, links.ts,
+version.ts          APP_VERSION (a test keeps it equal to package.json) and the footer's version line
+state/              hash.ts (state <-> hash), loadout-code.ts (the loadout part), loadout-layout.ts (stations a
+                    decoded loadout lacks get their default empty rows), storage.ts, initial.ts (load order)
+told/               main.ts (the page), inputs-view.ts, field-check.ts (underlines), derived-line.ts, tables.ts, table-cells.ts, table-lines.ts, links.ts,
                     dragindex-view.ts, dragindex-rows.ts, dragindex-text.ts, loadout-edit.ts, store-menu.ts
-figure/             main.ts (the page), views.ts (which paths a view draws), geometry.ts (marks -> page polylines),
-                    letters.ts, sheet.ts (one sheet in SVG), frames.ts and edges.ts (panel frames, copied from the
+figure/             main.ts (the page), views.ts (which paths a view draws), missing.ts (the "No path" line),
+                    geometry.ts (marks -> page polylines), letters.ts, sheet.ts (one sheet in SVG), frames.ts and edges.ts (panel frames, copied from the
                     extraction specs under a parity test), dom.ts
 limitations/        main.ts (versions and the back link)
 ```
 
-Dependencies run one way: `src/web/` imports `src/core/`, never the reverse, and only `load.ts` fetches (lint enforces both). The pure modules (`format`, `reasons`, `rule-lines`, `state/*`, the `told/` models, `figure/geometry`, `figure/views`, `figure/letters`) have node unit tests; the views are covered by the smoke spec.
+Dependencies run one way: `src/web/` imports `src/core/`, never the reverse, and only `load.ts` fetches (lint enforces both: `src/core/**` may not import `**/web/**` nor use `document`, `window`, `localStorage`, `location`, `history`, `navigator` or `fetch`). The pure modules (`format`, `inputs`, `reasons`, `rule-lines`, `state/*`, the `told/` models, `figure/geometry`, `figure/views`, `figure/missing`, `figure/letters`) have node unit tests; the views are covered by the smoke spec.
 
 ## npm scripts
 

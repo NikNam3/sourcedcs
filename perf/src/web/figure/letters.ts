@@ -8,8 +8,9 @@ import type { Quantity } from '../../core/data/types.ts';
 
 import { DASH, formatThousands } from '../format.ts';
 
+import { near } from './geometry.ts';
 import type { Px, Run, Station } from './geometry.ts';
-import { figureOf } from './views.ts';
+import { figureOf } from '../figure-ref.ts';
 
 export interface Letter {
   /** 'A', 'B', … */
@@ -91,9 +92,6 @@ export function valueText(s: Station): string {
 
 /** The stations of a path on one sheet, every run in order. */
 const stationsOf = (runs: readonly Run[]): Station[] => runs.flatMap((run) => [...run.stations]);
-
-/** Equal up to float noise. */
-const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
 
 /** The same value read at the same place: two runs from one axis point (B7-1's two speeds from one gross weight). */
 const sameReading = (a: Station, b: Station): boolean =>

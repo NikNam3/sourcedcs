@@ -2,7 +2,7 @@
  * The smoke spec (TOLD 1.8 "Testing and CI"): the three pages load in light and dark, the manual's B2-3 sample typed
  * into the TOLD page gives its MIL takeoff distance, a bad field is underlined, a reload keeps the state, a link from
  * another version is refused with its note, a "Fig." link opens the figure view with its paths, and the TOLD page
- * prints on exactly one A4 and one Letter page. No page logs a console error or throws.
+ * and a three-sheet figure view each print on exactly one A4 and one Letter page. No page logs a console error or throws.
  */
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
@@ -113,6 +113,23 @@ test('the TOLD page prints on exactly one A4 page and one Letter page', async ({
   await openTold(page);
   await typeSample(page);
   await field(page, 'landingGwLb').fill('28000');
+  for (const format of ['A4', 'Letter'] as const) {
+    const pdf = await page.pdf({ format, printBackground: true });
+    expect(pageCount(pdf), `${format} pages`).toBe(1);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('a figure view with three stacked sheets prints on exactly one A4 page and one Letter page', async ({ page }) => {
+  const errors = watchErrors(page);
+  await openTold(page);
+  await typeSample(page);
+  // A dry RCR of 12 lies between the refusal chart's RCR 16 and 8 sheets: B2-5 draws three sheets, the tight case.
+  await field(page, 'rcr').fill('12');
+  const state = new URL(page.url()).hash.slice(1);
+  await page.goto(`${TOLD}figure.html#${state}&fig=B2-5&view=takeoff`);
+  await expect(page.locator('#figure-view svg polyline').first()).toBeVisible();
+  await expect(page.locator('#figure-view img.figure-image')).toHaveCount(3);
   for (const format of ['A4', 'Letter'] as const) {
     const pdf = await page.pdf({ format, printBackground: true });
     expect(pageCount(pdf), `${format} pages`).toBe(1);

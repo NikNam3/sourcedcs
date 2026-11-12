@@ -2,16 +2,16 @@
  * The TOLD tables in the DOM (TOLD 1.8): the rows `table-cells.ts` models, each with its "Fig." links, and the grey
  * lines `table-lines.ts` gives under the table, a reason's figure a link to its view. Rebuilt on every change.
  */
-import type { FigureView } from './links.ts';
+import type { View } from '../figure-ref.ts';
 import type { RowModel } from './table-cells.ts';
 import type { LineModel } from './table-lines.ts';
 
-export type HrefOf = (figureId: string, view: FigureView) => string;
+export type HrefOf = (figureId: string, view: View) => string;
 
 /** A table section: its rows and the figure view their links open. */
 export interface RowGroup {
   readonly rows: readonly RowModel[];
-  readonly view: FigureView;
+  readonly view: View;
 }
 
 const COLUMNS = 6;
@@ -33,7 +33,7 @@ function figureLink(label: string, href: string): HTMLAnchorElement {
   return a;
 }
 
-function rowElement(r: RowModel, view: FigureView, hrefOf: HrefOf): HTMLTableRowElement {
+function rowElement(r: RowModel, view: View, hrefOf: HrefOf): HTMLTableRowElement {
   if (r.kind === 'subheading') {
     const cell = el('td', '', `${r.title} · `, r.weight ?? el('span', 'no-value', '—'));
     cell.colSpan = COLUMNS;

@@ -37,6 +37,21 @@ test('a value in 1000 lb is shown in lb, with the drawn range', () => {
   });
 });
 
+test('a drawn range in lb or ft is rounded inward to whole numbers; other units keep their decimals', () => {
+  assert.equal(
+    reasonText(reason('B7-1', 'gross_weight', 50, [17, 48.0042]), FIGURES, NO_SIGNS).text,
+    'gross weight 50,000 lb outside the drawn range 17,000–48,004 lb',
+  );
+  assert.equal(
+    reasonText(reason('B7-1', 'gross_weight', 10, [16.9996, 48]), FIGURES, NO_SIGNS).text,
+    'gross weight 10,000 lb outside the drawn range 17,000–48,000 lb',
+  );
+  assert.equal(
+    reasonText(reason('B2-3', 'gross_weight', 52, [0.3, 48]), FIGURES, NO_SIGNS).text,
+    'gross weight 52,000 lb outside the drawn range 300–48,000 lb',
+  );
+});
+
 test('a conservative reason says "conservative" before the name; the sheet as "sh. n"', () => {
   assert.deepEqual(
     reasonText(reason('B2-6.sh2', 'gross_weight', 37.3, [20, 37.25], 'conservative'), FIGURES, NO_SIGNS),

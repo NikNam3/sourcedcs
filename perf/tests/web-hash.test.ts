@@ -27,12 +27,16 @@ const INPUTS: Inputs = {
 };
 
 const STORE = '3|PYLONS|AIM-120 & co; x:y|3,7';
+/** Covers every station, so decoding adds no default row. */
 const LOADOUT: Loadout = [
   { stations: ['1', '9'], storeKey: 'noTipMissile', suspension: null, count: 2 },
   { stations: ['3'], storeKey: STORE, suspension: 'LAU-129/A: one', count: 1 },
   { stations: ['7'], storeKey: null, suspension: null, count: 1 },
-  { stations: ['3', '7'], storeKey: 'k', suspension: 'TER (16S1750) + WEAPON PYLON*', count: 6 },
+  { stations: ['2', '8'], storeKey: 'k', suspension: 'TER (16S1750) + WEAPON PYLON*', count: 6 },
+  { stations: ['4', '6'], storeKey: null, suspension: null, count: 2 },
+  { stations: ['5'], storeKey: null, suspension: null, count: 1 },
   { stations: ['5L'], storeKey: 'unknown|key', suspension: null, count: 1 },
+  { stations: ['5R'], storeKey: null, suspension: null, count: 1 },
 ];
 
 function decodedOk(text: string): { state: AppState; droppedRows: number } {
@@ -72,7 +76,7 @@ test('every Inputs field and the loadout round-trip, with or without #', () => {
   assert.deepEqual(decodeState(`#${text}`), { kind: 'ok', state, droppedRows: 0 });
 });
 
-test('each field round-trips on its own, including the default loadout and an empty one', () => {
+test('each field round-trips on its own, including the default loadout; an empty one decodes as the default', () => {
   for (const key of Object.keys(DEFAULT_INPUTS) as (keyof Inputs)[]) {
     const inputs = { ...DEFAULT_INPUTS, [key]: 'x &=# y' };
     assert.deepEqual(decodedOk(encodeState({ inputs, loadout: DEFAULT_LOADOUT })).state.inputs, inputs);
@@ -81,10 +85,10 @@ test('each field round-trips on its own, including the default loadout and an em
     decodedOk(encodeState({ inputs: DEFAULT_INPUTS, loadout: DEFAULT_LOADOUT })).state.loadout,
     DEFAULT_LOADOUT,
   );
-  assert.deepEqual(decodedOk(encodeState({ inputs: DEFAULT_INPUTS, loadout: [] })).state.loadout, []);
+  assert.deepEqual(decodedOk(encodeState({ inputs: DEFAULT_INPUTS, loadout: [] })).state.loadout, DEFAULT_LOADOUT);
 });
 
-test('a split pair keeps its order, and the noTipMissile row its literal store part', () => {
+test('a split pair keeps its order, and the noTipMissile row is a normal row with its literal store part', () => {
   const text = encodeState({ inputs: DEFAULT_INPUTS, loadout: LOADOUT });
   const lo = new URLSearchParams(text).get('lo') ?? '';
   assert.ok(lo.startsWith('1-9:noTipMissile::2;3:'));
@@ -130,9 +134,15 @@ test('rows that do not decode are dropped and counted; an unknown store key is k
   ];
   const d = decodedOk(`v=1&lo=${encodeURIComponent(rows.join(';'))}`);
   assert.equal(d.droppedRows, 12);
+  const [p19, p28, , p46, s5, s5l] = DEFAULT_LOADOUT;
   assert.deepEqual(d.state.loadout, [
+    p19,
+    p28,
     { stations: ['3', '7'], storeKey: 'k', suspension: null, count: 2 },
     { stations: ['3', '7'], storeKey: 'k', suspension: 'TER (16S1750) + WEAPON PYLON*', count: 6 },
+    p46,
+    s5,
+    s5l,
     { stations: ['5R'], storeKey: 'never-heard-of-it', suspension: null, count: 1 },
   ]);
 });

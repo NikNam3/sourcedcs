@@ -6,7 +6,7 @@
  */
 import type { InputField, Inputs } from '../../core/inputs/inputs.ts';
 
-import { joinRcr, splitRcr } from './field-text.ts';
+import { joinRcr, splitRcr } from '../inputs.ts';
 
 export interface InputsView {
   /** Every field as typed. */
