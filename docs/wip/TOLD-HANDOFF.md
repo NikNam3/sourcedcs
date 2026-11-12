@@ -1,4 +1,4 @@
-# TOLD: handoff (2026-11-12, plan 3 merged)
+# TOLD: handoff (2026-11-12, step 1 deployed)
 
 Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf`. Never switch the branch of the main checkout
 `/home/nklx/dev/personal/sourcedcs` (a crc session works there on `main`).
@@ -27,9 +27,6 @@ Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf`. Never switch the 
 
 ## Next
 
-**Step 1 plan 4 (deployment) is built** on `perf-told` (12 Nov 2026): `perf/Dockerfile` and `perf/nginx/default.conf`
-(the image passes the smoke spec), build-and-push in `perf-docker.yml`, then one infra commit (the `perf` compose
-service, the `PERF_DOMAIN` vhost, `.env.example`, `deploy.yml`, `infra/tests/`, `infra/RUNBOOK.md`, CLAUDE.md). The
-domain resolves and its certificate is issued. Before the PR to `main` merges, the server's `infra/.env` needs
-`PERF_DOMAIN=perf.sourcedcs.page` (RUNBOOK "perf: domain, certificate and first deploy"). When it is deployed and
-`https://perf.sourcedcs.page/f16/` shows the data version, TOLD.md 1.5's last box closes step 1.
+**Step 1 is done** (12 Nov 2026). Plan 4 merged by PR #150 (96e8cc6a) and deployed: `https://perf.sourcedcs.page/f16/`
+serves the app with data version 8, and the Playwright smoke spec passes against production. The server's `infra/.env`
+carries `PERF_DOMAIN` (the human edits that file, never an agent). Next is step 2 in `docs/wip/TOLD.md`.
