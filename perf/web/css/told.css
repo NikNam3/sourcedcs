@@ -7,6 +7,9 @@
  *                     .count, .empty (an empty station), .unparsed (a row with a loadout problem), .variant (the
  *                     grey tank variant line), .suspension (the suspension row), .station-start, .empty-station,
  *                     .station-action (split, join), .store-menu (the menu of Fig. B1-1 stores)
+ * Page                .page's window scale (--page-scale, set by scale.ts; screen only, print.css sets its own),
+ *                     .header-link (Limitations, in the header), .page-note (a grey note under the title), .fig
+ *                     (the figure column), .field input.alert (an input that breaks a rule: RCR below 10)
  */
 
 /* The drag index table's fixed columns. */
@@ -238,4 +241,48 @@
   .data-table.drag-index input:focus-visible {
     outline: none;
   }
+}
+
+/* The page: the fixed 1280 px paper scaled to the window (scale.ts sets --page-scale). Screen only: print.css
+   gives the printed page its own fixed scale. */
+@media screen {
+  .page {
+    zoom: var(--page-scale, 1);
+  }
+}
+
+/* Sections wait for the chart data; an author display rule would otherwise beat the hidden attribute. */
+[hidden] {
+  display: none !important;
+}
+
+.header-link {
+  margin-left: 24px;
+}
+
+/* A refused link or dropped loadout rows (#v= other than 1): grey notes under the title. */
+.page-notes {
+  margin: -18px 0 0;
+}
+
+.page-notes:empty {
+  display: none;
+}
+
+.page-note {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--grey);
+}
+
+/* The figure column: every row names its figure and links to the figure view, which draws the row's paths. */
+.data-table .fig {
+  width: 92px;
+  font-size: 14px;
+}
+
+/* The input that breaks a rule (RCR below 10) is marked like a problem value. */
+.field input.alert {
+  color: var(--alert);
 }

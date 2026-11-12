@@ -59,4 +59,10 @@
   a:hover {
     opacity: 1;
   }
+
+  /* Red is lost on a mono printer: a problem value is also boxed on paper. */
+  .alert {
+    outline: 1px solid var(--ink);
+    outline-offset: -3px;
+  }
 }
