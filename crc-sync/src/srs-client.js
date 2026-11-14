@@ -18,14 +18,32 @@ const MSG_SYNC              = 2;
 const MSG_RADIO_UPDATE      = 3;
 const MSG_CLIENT_DISCONNECT = 5;
 
+/** One SRS client's key: its ClientGuid, or its name when a message carries none. */
+function clientKey(client) { return client.ClientGuid || `name:${client.Name}`; }
+
+/** squawkStatus 0 is off; undefined (the legacy Transponder block) counts as on, as in transponder.js. */
+function isOn(rec) { return rec.entry.squawkStatus !== 0; }
+
+/** Is record `a` the better answer for a shared name than `b`: on beats off, then the lower seat, then the newer update. */
+function betterRecord(a, b) {
+  if (isOn(a) !== isOn(b)) return isOn(a);
+  if (a.seat !== b.seat) return a.seat < b.seat;
+  return a.seq > b.seq;
+}
+
 class SrsClient extends EventEmitter {
   /** @param {{env?:object}} [opts] the environment (default process.env): `CRCSYNC_SRS_HOST` ?? `SRS_HOST`, `CRCSYNC_SRS_PORT` ?? `SRS_PORT` */
   constructor(opts = {}) {
     super();
     this._env          = opts.env || process.env;
     this._state        = 'disconnected';
-    this._transponders = new Map(); // player name → {squawk, squawkStatus, mode4}
-    this._identLatch   = new Map(); // player name → expiry timestamp (ms) for ident latch
+    // SRS client (ClientGuid, else its name) → {name, seat, seq, entry: {squawk, squawkStatus, mode4}}. Keyed by client,
+    // not by name: in a multicrew aircraft every crew member's client sends radio updates under the same name (seen on
+    // an F-14: the RIO's client reports the pilot's name with the transponder off), so a name-keyed map let the back
+    // seat's update wipe the pilot's code until the pilot's next update (an ident) put it back.
+    this._transponders = new Map();
+    this._identLatch   = new Map(); // client key → expiry timestamp (ms) for ident latch
+    this._seq          = 0;
     this._socket       = null;
     this._buf          = '';
     this._reconnTimer  = null;
@@ -36,11 +54,17 @@ class SrsClient extends EventEmitter {
     this._doConnect();
   }
 
-  // Returns {squawk, squawkStatus, mode4} or null
+  // Returns {squawk, squawkStatus, mode4} or null. When several SRS clients report this name (a multicrew aircraft),
+  // the transponder is on if any of them reports it on; among equals, the lowest seat, then the latest update.
   getTransponder(playerName) {
     if (!playerName) return null;
-    const entry = this._transponders.get(playerName);
-    if (!entry) return null;
+    let best = null;
+    for (const [key, rec] of this._transponders) {
+      if (rec.name !== playerName) continue;
+      if (!best || betterRecord(rec, best.rec)) best = { key, rec };
+    }
+    if (!best) return null;
+    const entry = best.rec.entry;
 
     // The ident latch is normally reconciled in _applyClient when a fresh SRS
     // message arrives, but this getter is polled once per gRPC tick — much
@@ -52,9 +76,9 @@ class SrsClient extends EventEmitter {
     // expiry here too so it clears on its own once the 5s grace period
     // elapses, regardless of whether SRS sends anything more.
     if (entry.squawkStatus === 2) {
-      const until = this._identLatch.get(playerName);
+      const until = this._identLatch.get(best.key);
       if (!until || Date.now() >= until) {
-        this._identLatch.delete(playerName);
+        this._identLatch.delete(best.key);
         entry.squawkStatus = 1;
       }
     }
@@ -128,9 +152,12 @@ class SrsClient extends EventEmitter {
         if (msg.Client) this._applyClient(msg.Client);
         break;
       case MSG_CLIENT_DISCONNECT:
-        if (msg.Client && msg.Client.Name) {
-          this._transponders.delete(msg.Client.Name);
-          this._identLatch.delete(msg.Client.Name);
+        if (msg.Client && msg.Client.ClientGuid) {
+          this._transponders.delete(msg.Client.ClientGuid);
+          this._identLatch.delete(msg.Client.ClientGuid);
+        } else if (msg.Client && msg.Client.Name) {
+          this._transponders.delete(clientKey(msg.Client));
+          this._identLatch.delete(clientKey(msg.Client));
         }
         break;
     }
@@ -138,6 +165,7 @@ class SrsClient extends EventEmitter {
 
   _applyClient(client) {
     if (!client || !client.Name) return;
+    const key = clientKey(client);
     // SRS uses RadioInfo.IFF (uppercase) in current versions; fall back to lowercase
     const ri  = client.RadioInfo;
     const iff = ri && (ri.IFF || ri.iff);
@@ -145,7 +173,7 @@ class SrsClient extends EventEmitter {
       // Older SRS versions expose a top-level Transponder block (PascalCase)
       const t = client.Transponder;
       if (!t) return;
-      this._transponders.set(client.Name, {
+      this._setRecord(key, client, {
         squawk:       t.Mode3 != null ? t.Mode3 : undefined,
         squawkStatus: undefined,
         mode4:        t.Mode4 != null ? t.Mode4 : undefined,
@@ -163,20 +191,24 @@ class SrsClient extends EventEmitter {
     const squawkStatus = status != null ? Number(status) : undefined;
     if (squawkStatus === 2) {
       // Ident received — latch for 5 s so gRPC ticks can't miss a brief ident pulse
-      this._identLatch.set(client.Name, Date.now() + 5000);
+      this._identLatch.set(key, Date.now() + 5000);
       entry.squawkStatus = 2;
     } else if (squawkStatus != null) {
       // Non-ident status: honour the latch if it hasn't expired
-      const until = this._identLatch.get(client.Name);
+      const until = this._identLatch.get(key);
       if (until && Date.now() < until) {
         entry.squawkStatus = 2;
       } else {
-        this._identLatch.delete(client.Name);
+        this._identLatch.delete(key);
         entry.squawkStatus = squawkStatus;
       }
     }
 
-    this._transponders.set(client.Name, entry);
+    this._setRecord(key, client, entry);
+  }
+
+  _setRecord(key, client, entry) {
+    this._transponders.set(key, { name: client.Name, seat: Number(client.Seat) || 0, seq: ++this._seq, entry });
   }
 
   _scheduleReconnect() {

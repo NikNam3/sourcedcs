@@ -76,3 +76,58 @@ test('getTransponder for an unknown player returns null', () => {
   const c = new SrsClient();
   assert.equal(c.getTransponder('Nobody'), null);
 });
+
+// Multicrew (seen on prod, an F-14 with pilot and RIO): both crew run SRS, both report the same unit, and the RIO's
+// radio updates carry the pilot's name, with the transponder reported off. The pilot's code must survive the RIO's update.
+function crewUpdate(guid, name, seat, mode3, status) {
+  return { ClientGuid: guid, Name: name, Seat: seat, RadioInfo: { unitId: 16777480, IFF: { mode3, status } } };
+}
+
+test('a multicrew back-seater reporting the transponder off under the pilot\'s name does not wipe the pilot\'s code', () => {
+  const c = new SrsClient();
+  c._handleMsg({ MsgType: 3, Client: crewUpdate('pilot', 'TRIDENT 140', 0, 1234, 1) });
+  c._handleMsg({ MsgType: 3, Client: crewUpdate('rio', 'TRIDENT 140', 1, -1, 0) });
+  const t = c.getTransponder('TRIDENT 140');
+  assert.equal(t.squawk, 1234);
+  assert.equal(t.squawkStatus, 1);
+});
+
+test('the crew\'s transponder reads on when the back seat\'s client is the one that reports it on', () => {
+  const c = new SrsClient();
+  c._handleMsg({ MsgType: 3, Client: crewUpdate('pilot', 'TRIDENT 140', 0, -1, 0) });
+  c._handleMsg({ MsgType: 3, Client: crewUpdate('rio', 'TRIDENT 140', 1, 1234, 1) });
+  assert.equal(c.getTransponder('TRIDENT 140').squawk, 1234);
+});
+
+test('with every crew client reporting off, the transponder is off', () => {
+  const c = new SrsClient();
+  c._handleMsg({ MsgType: 3, Client: crewUpdate('pilot', 'TRIDENT 140', 0, 1234, 1) });
+  c._handleMsg({ MsgType: 3, Client: crewUpdate('rio', 'TRIDENT 140', 1, -1, 0) });
+  c._handleMsg({ MsgType: 3, Client: crewUpdate('pilot', 'TRIDENT 140', 0, 1234, 0) });
+  assert.equal(c.getTransponder('TRIDENT 140').squawkStatus, 0);
+});
+
+test('a back-seater disconnecting does not delete the pilot\'s code (disconnect is by client, not by name)', () => {
+  const c = new SrsClient();
+  c._handleMsg({ MsgType: 3, Client: crewUpdate('pilot', 'TRIDENT 140', 0, 1234, 1) });
+  c._handleMsg({ MsgType: 3, Client: crewUpdate('rio', 'TRIDENT 140', 1, -1, 0) });
+  c._handleMsg({ MsgType: 5, Client: { ClientGuid: 'rio', Name: '[SRC-BA] Sirenhead' } });
+  assert.equal(c.getTransponder('TRIDENT 140').squawk, 1234);
+  c._handleMsg({ MsgType: 5, Client: { ClientGuid: 'pilot', Name: 'TRIDENT 140' } });
+  assert.equal(c.getTransponder('TRIDENT 140'), null);
+});
+
+test('a client whose later updates carry a new name no longer answers for its old one', () => {
+  const c = new SrsClient();
+  c._handleMsg({ MsgType: 3, Client: { ClientGuid: 'g1', Name: 'Old', Seat: 0, RadioInfo: { IFF: { mode3: 1234, status: 1 } } } });
+  c._handleMsg({ MsgType: 3, Client: { ClientGuid: 'g1', Name: 'New', Seat: 0, RadioInfo: { IFF: { mode3: 1234, status: 1 } } } });
+  assert.equal(c.getTransponder('Old'), null);
+  assert.equal(c.getTransponder('New').squawk, 1234);
+});
+
+test('an UPDATE without RadioInfo (SRS 2.4 sends these between radio updates) leaves the code alone', () => {
+  const c = new SrsClient();
+  c._handleMsg({ MsgType: 3, Client: crewUpdate('pilot', 'TRIDENT 140', 0, 1234, 1) });
+  c._handleMsg({ MsgType: 0, Client: { ClientGuid: 'pilot', Name: 'TRIDENT 140', Seat: 0 } });
+  assert.equal(c.getTransponder('TRIDENT 140').squawk, 1234);
+});
