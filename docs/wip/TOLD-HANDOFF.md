@@ -1,49 +1,35 @@
-# TOLD: handoff (2026-10-29, after step 0)
+# TOLD: handoff (2026-11-12, plan 3 merged)
 
-Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf` (branch `perf-told`). Never switch the branch of the
-main checkout `/home/nklx/dev/personal/sourcedcs` (a crc session works there on `main`).
+Work in the worktree `/home/nklx/dev/personal/sourcedcs-perf`. Never switch the branch of the main checkout
+`/home/nklx/dev/personal/sourcedcs` (a crc session works there on `main`).
 
 ## State
 
-- **Step 0 (Foundations) is done** on `perf-told`, pushed and open as a PR into `main`. Gates on the tip:
-  184 tests (100 % lines on `src/core/`), typecheck, lint, format, `types:check`, `data:check` (0 problems), build.
-  A full re-extraction is byte-identical. The manual's 13 sample answers for B2-1 to B2-3 pass within 2 % (largest
-  0.77 %). A trial merge into `main` was clean; `main` has no ADR above 0147 (perf claims 0148–0153).
-- Spec: `docs/wip/TOLD.md`. Step 0 plan, with its rulings R1–R14 and the data contract: `docs/wip/TOLD-STEP0.md`.
-  The questioner's page evidence: `docs/wip/TOLD-STEP0-EVIDENCE.md`. Commands and layout: `perf/README.md`.
+- **Step 0 (Foundations)** is merged into `main` (PR #146).
+- **Step 1 plans 1 (data and figure functions) and 2 (core)** are merged into `main` by PR #147 (merge commit
+  1d7205e7, 12 Nov 2026).
+- **Step 1 plan 3 (UI and state)** was approved by the human on 12 Nov 2026 and merged into `perf-told`, then into
+  `main` by a PR with a real merge commit.
+  - Core: `src/core/path/` (`PathMark`, `ctx.mark` in every figure function, `tracePaths`).
+  - Web: `src/web/` (layout in `perf/README.md`), the pages `web/index.html` (TOLD), `web/figure.html` (one figure
+    view with the exact paths) and `web/limitations.html`, `css/told.css`, `figure.css`, `limitations.css`, print.
+  - State in the URL hash (`#v=1&…`) and localStorage (`perf.f16.v1`); `scripts/serve.ts` (`npm run serve`).
+  - The Playwright smoke spec `e2e/smoke.spec.ts` (`npm run e2e`, 7 tests, Chromium, one worker), also in CI
+    (`.github/workflows/perf-docker.yml`).
+  - App version 0.1.0 (`perf/CHANGELOG.md`).
+- **Where things are:**
+  - Spec: `docs/wip/TOLD.md` 1.8 (plan 3's spec, with its status line). 1.7 and 1.6 are plans 2 and 1.
+  - Plan: `docs/wip/TOLD-STEP1-P3.md`, with the supervisor's rulings R1 to R6 and the parked review findings in its
+    "Ledger: supervisor rulings" section.
+  - Commands and layout: `perf/README.md`.
 - The manual PDF is at `/home/nklx/dev/other/HAF-F16-Supplement.pdf` (SHA-256 verified against the pin). Export it as
-  `PERF_PDF`. Python runs inside `nix develop` from the worktree root.
-
-## Answered by the human (2026-10-29)
-
-1. **Landing:** `perf-told` lands in `main` through a GitHub PR, merged with a real merge commit (never squash or
-   rebase): the manifest's `extractorCommit` and the comments naming the prototype's removal commit need those
-   commits reachable.
-2. **B1-1 comparison (Task 8 step 5):** the human compared `perf/extraction/out/B1-1-tables.txt` with printed pages
-   B1-6 to B1-12 and found it correct. No change to the spec or the data.
-
-## Decisions taken in step 0 that the human may want to revisit
-
-All are written into TOLD.md or the plan; the two most likely to come back:
-
-- **Conservative value = the pilot's per-point rounding** (TOLD.md 5.2, ADR 0149). Each reading is tested rounded down
-  and up, the worse direction kept per output, then one final run. The exhaustive all-combinations maximum is only a
-  test oracle: equal where every reading is monotone or readings do not feed each other (B2-3 is pinned equal),
-  otherwise within the sum of single-point effects. Decided by the supervisor after the Task 4 review; the human was
-  told and may reverse it.
-- **R11, under 1,000 ft:** a B2-3 roll under 1,000 ft is out of chart at the next guideline panel that moves it (the
-  lowest guideline starts at 1,000 ft); with CG 35, DI 0, no slope and no wind it is returned as drawn.
+  `PERF_PDF`; Python runs inside `nix develop` from the worktree root.
 
 ## Next
 
-Step 1 (TOLD, the MVP). Its design is already in TOLD.md (step 1, "Decisions of 28 Oct 2026", and "Notes carried from
-step 0", which lists what step 0 left for it). Per TOLD.md 10.3, step 1 starts with the mockup: update the approved
-boards (`docs/mockups/perf-*.html`) for anything step 0 changed (the grey reason line, a non-colour print cue for red,
-the dotted underline), get approval, then `superpowers:writing-plans` for step 1. The infra commit (`PERF_DOMAIN`,
-compose, nginx, `deploy.yml`) stays its own final commit until the human has the domain and certificate
-(rollout order in TOLD.md "Deployment and operations").
-
-How step 0 ran, for reuse: one lane worktree per task (`../sourcedcs-told-t<N>` on `lane/told-t<N>` off `perf-told`),
-at most 4 agents at once including a questioner, all on Opus, a task review after each lane, the supervisor running
-the gates (`nice -n 19`) and merging. All lane worktrees and branches are removed. An untracked `perf-handoff.zip` in
-the main checkout root is the old planning handoff; its contents are committed, so it can go once the human agrees.
+**Step 1 plan 4 (deployment) is built** on `perf-told` (12 Nov 2026): `perf/Dockerfile` and `perf/nginx/default.conf`
+(the image passes the smoke spec), build-and-push in `perf-docker.yml`, then one infra commit (the `perf` compose
+service, the `PERF_DOMAIN` vhost, `.env.example`, `deploy.yml`, `infra/tests/`, `infra/RUNBOOK.md`, CLAUDE.md). The
+domain resolves and its certificate is issued. Before the PR to `main` merges, the server's `infra/.env` needs
+`PERF_DOMAIN=perf.sourcedcs.page` (RUNBOOK "perf: domain, certificate and first deploy"). When it is deployed and
+`https://perf.sourcedcs.page/f16/` shows the data version, TOLD.md 1.5's last box closes step 1.

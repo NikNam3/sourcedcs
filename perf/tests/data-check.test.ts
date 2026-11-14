@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { checkDataset } from '../scripts/data-check.ts';
+import type { FigureFile, Quantity } from '../src/core/data/types.ts';
+import { checkDataset, panelQuantities } from '../scripts/data-check.ts';
+import { DATASET_DIR, loadFigure } from './helpers/data.ts';
 
 const perfDir = fileURLToPath(new URL('..', import.meta.url));
 const fixture = (name: string): string => join(perfDir, 'tests', 'fixtures', name);
@@ -38,6 +40,10 @@ describe('checkDataset on the fixture datasets', () => {
     assert.match(problems[0] ?? '', /not in the manifest/);
   });
 
+  test('a dataset with an unscaled axis and a limit line is clean', () => {
+    assert.deepEqual(checkDataset(fixture('data-ok-limit')), []);
+  });
+
   test('a manifest entry with no file gives one problem naming the entry', () => {
     const problems = checkDataset(fixture('data-bad-missing'));
     assert.equal(problems.length, 1, problems.join('\n'));
@@ -55,14 +61,15 @@ after(() => {
   rmSync(scratch, { recursive: true, force: true });
 });
 
-function editedDataset(
+function editedCopy(
+  source: { fixture: string; file: string },
   name: string,
   edit: (figure: Record<string, unknown>) => void,
   editManifest: (manifest: Record<string, unknown>) => void = () => undefined,
 ): string {
   const dir = join(scratch, name);
-  cpSync(fixture('data-ok'), dir, { recursive: true });
-  const figurePath = join(dir, 'X1-1.json');
+  cpSync(fixture(source.fixture), dir, { recursive: true });
+  const figurePath = join(dir, source.file);
   const figure = JSON.parse(readFileSync(figurePath, 'utf8')) as Record<string, unknown>;
   edit(figure);
   const bytes = JSON.stringify(figure) + '\n';
@@ -70,10 +77,18 @@ function editedDataset(
   const manifestPath = join(dir, 'manifest.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { dataset: string; files: Record<string, string> };
   manifest.dataset = name;
-  manifest.files['X1-1.json'] = createHash('sha256').update(bytes).digest('hex');
+  manifest.files[source.file] = createHash('sha256').update(bytes).digest('hex');
   editManifest(manifest);
   writeFileSync(manifestPath, JSON.stringify(manifest) + '\n');
   return dir;
+}
+
+function editedDataset(
+  name: string,
+  edit: (figure: Record<string, unknown>) => void,
+  editManifest?: (manifest: Record<string, unknown>) => void,
+): string {
+  return editedCopy({ fixture: 'data-ok', file: 'X1-1.json' }, name, edit, editManifest);
 }
 
 function firstPanel(figure: Record<string, unknown>): Record<string, unknown> {
@@ -205,6 +220,120 @@ describe('checkDataset beyond the schema', () => {
   });
 });
 
+describe('checkDataset: one unit per quantity name (TOLD 1.7 ruling 3)', () => {
+  test('a name with two units in two figures is one problem listing each unit with its files', () => {
+    const dir = editedCopy({ fixture: 'data-ok', file: 'X1-1.json' }, 'two-units', () => undefined);
+    const second = JSON.parse(readFileSync(join(dir, 'X1-1.json'), 'utf8')) as Record<string, unknown>;
+    second['id'] = 'X1-2';
+    second['figure'] = 'X1-2';
+    second['image'] = { ...(second['image'] as Record<string, unknown>), file: 'pages/X1-2.png' };
+    const panel = firstPanel(second);
+    panel['input'] = { name: 'pressure_altitude', unit: 'ft' };
+    const bytes = JSON.stringify(second) + '\n';
+    writeFileSync(join(dir, 'X1-2.json'), bytes);
+    cpSync(join(dir, 'pages', 'X1-1.png'), join(dir, 'pages', 'X1-2.png'));
+    const manifestPath = join(dir, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { files: Record<string, string> };
+    manifest.files['X1-2.json'] = createHash('sha256').update(bytes).digest('hex');
+    manifest.files['pages/X1-2.png'] = createHash('sha256')
+      .update(readFileSync(join(dir, 'pages', 'X1-2.png')))
+      .digest('hex');
+    writeFileSync(manifestPath, JSON.stringify(manifest) + '\n');
+    const problems = checkDataset(dir);
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(
+      problems[0] ?? '',
+      /two-units: quantity "pressure_altitude" has more than one unit: "1000 ft" \(X1-1\) \/ "ft" \(X1-2\)/,
+    );
+  });
+
+  test('a name with two units in one figure is a problem', () => {
+    const problems = checkDataset(
+      editedDataset('two-units-one-figure', (figure) => {
+        figure['panels'] = [
+          firstPanel(figure),
+          {
+            id: 'stores',
+            type: 'table',
+            columns: [{ name: 'distance', unit: 'ft' }],
+            rows: [[1]],
+          },
+        ];
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /quantity "distance" has more than one unit: "1000 ft" \(X1-1\) \/ "ft" \(X1-1\)/);
+  });
+});
+
+describe('checkDataset: unscaled axes and limit lines', () => {
+  const limitDataset = (name: string, edit: (limit: Record<string, unknown>) => void): string =>
+    editedCopy({ fixture: 'data-ok-limit', file: 'X1-4.json' }, name, (figure) => {
+      const limit = (figure['panels'] as Record<string, unknown>[]).find((p) => p['type'] === 'limit_line');
+      assert.ok(limit !== undefined);
+      edit(limit);
+    });
+
+  test('an edited copy of data-ok-limit with nothing changed is still clean', () => {
+    assert.deepEqual(
+      checkDataset(
+        limitDataset('limit-unchanged', () => {
+          /* no change */
+        }),
+      ),
+      [],
+    );
+  });
+
+  test('unscaled: false is a schema problem (an unscaled axis says so, a scaled one omits the key)', () => {
+    const problems = checkDataset(
+      limitDataset('unscaled-false', (limit) => {
+        (limit['axes'] as Record<string, Record<string, unknown>>)['carry'] = {
+          page: 'x',
+          a: 1,
+          b: 0,
+          unscaled: false,
+        };
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /X1-4\.json: \/panels\/1\/axes\/carry\/unscaled must be equal to constant/);
+  });
+
+  test('a limit line with a beyond other than above or below is a schema problem', () => {
+    const problems = checkDataset(
+      limitDataset('beyond-left', (limit) => {
+        limit['beyond'] = 'left';
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /\/panels\/1\/beyond/);
+  });
+
+  test('limit line points out of input order are a problem naming the panel', () => {
+    const problems = checkDataset(
+      limitDataset('limit-order', (limit) => {
+        limit['points'] = [
+          [160, 4.2],
+          [120, 3.5],
+        ];
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /panel "brake_energy" points are not in ascending input order/);
+  });
+
+  test('a limit line with no points is a problem', () => {
+    const problems = checkDataset(
+      limitDataset('limit-empty', (limit) => {
+        limit['points'] = [];
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /panel "brake_energy" has no points/);
+  });
+});
+
 describe('checkDataset: the PDF pin and empty or malformed panels', () => {
   const noChange = (): void => undefined;
   const only = (name: string, edit: (figure: Record<string, unknown>) => void, pattern: RegExp): void => {
@@ -317,6 +446,25 @@ describe('checkDataset: the PDF pin and empty or malformed panels', () => {
     );
   });
 
+  test('a guideline param below 0 within the edge tolerance is calibration noise, not a sign (R1)', () => {
+    const problems = checkDataset(
+      editedDataset('guideline-noise', (figure) => {
+        figure['panels'] = [
+          guidelinePanel({
+            uphill: [line(1)],
+            downhill: [
+              [
+                [-0.0002, 1.2],
+                [2, 1],
+              ],
+            ],
+          }),
+        ];
+      }),
+    );
+    assert.deepEqual(problems, []);
+  });
+
   test('a guideline panel with no families is a problem', () => {
     only(
       'guideline-no-families',
@@ -371,6 +519,66 @@ describe('checkDataset: the PDF pin and empty or malformed panels', () => {
         figure['panels'] = [tablePanel(['store', 'drag_index', 'store'], [['AIM-9', 0, 'x']])];
       },
       /panel "stores" has column "store" more than once/,
+    );
+  });
+});
+
+describe('quantity names across the extracted figures (TOLD 1.7 ruling 3)', () => {
+  const figures: FigureFile[] = readdirSync(DATASET_DIR)
+    .filter((f) => f.endsWith('.json') && f !== 'manifest.json')
+    .sort()
+    .map((f) => loadFigure(f.slice(0, -'.json'.length)));
+
+  test('quantity names have one unit across every figure', () => {
+    const units = new Map<string, Map<string, Set<string>>>();
+    for (const figure of figures) {
+      for (const panel of figure.panels) {
+        const quantities = panelQuantities(panel);
+        for (const axis of Object.keys('axes' in panel ? panel.axes : {})) {
+          assert.ok(
+            quantities.some((q) => q.name === axis),
+            `${figure.id} panel "${panel.id}" axis "${axis}" names no quantity of the panel`,
+          );
+        }
+        for (const { name, unit } of quantities) {
+          const byUnit = units.get(name) ?? new Map<string, Set<string>>();
+          units.set(name, byUnit);
+          const files = byUnit.get(unit) ?? new Set<string>();
+          byUnit.set(unit, files);
+          files.add(figure.id);
+        }
+      }
+    }
+    const conflicts = [...units]
+      .filter(([, byUnit]) => byUnit.size > 1)
+      .map(
+        ([name, byUnit]) =>
+          `${name}: ${[...byUnit].map(([unit, files]) => `${JSON.stringify(unit)} (${[...files].join(', ')})`).join(' / ')}`,
+      );
+    assert.deepEqual(conflicts, [], conflicts.join('\n'));
+  });
+
+  test('the renamed quantities', () => {
+    const named = (id: string, name: string): Quantity[] =>
+      loadFigure(id)
+        .panels.flatMap(panelQuantities)
+        .filter((q) => q.name === name);
+    assert.deepEqual(named('B7-2.sh1', 'altitude'), []);
+    assert.ok(named('B7-2.sh1', 'pressure_altitude').every((q) => q.unit === 'ft'));
+    assert.ok(named('B7-2.sh1', 'pressure_altitude').length > 0);
+    for (const id of ['B2-5.sh1', 'B2-5.sh2', 'B2-5.sh3', 'B2-6.sh1', 'B2-6.sh2', 'B2-6.sh3']) {
+      const speeds = named(id, 'refusal_speed');
+      assert.ok(speeds.length > 0, id);
+      assert.ok(
+        speeds.every((q) => q.unit === 'KIAS'),
+        `${id} refusal_speed is ${JSON.stringify(speeds)}`,
+      );
+    }
+    const temperature = named('B2-1', 'temperature');
+    assert.ok(temperature.length > 0);
+    assert.ok(
+      temperature.every((q) => q.unit === '°C'),
+      JSON.stringify(temperature),
     );
   });
 });

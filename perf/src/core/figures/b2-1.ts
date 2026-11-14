@@ -14,7 +14,7 @@ import type { Read } from '../result.ts';
 /**
  * Reads `b2-1.tofMil`, then `b2-1.tofAb`: the AB scale beside the unrounded MIL reading, read as a rounding point of
  * its own. A MIL reading out of chart gives both outputs its OutOfChart and reads nothing; a MIL reading beyond the
- * drawn AB scale gives tofAb alone an OutOfChart.
+ * drawn AB scale gives tofAb alone an OutOfChart. Marks `pa`, then `ab`, each after its read.
  */
 export function takeoffFactor(
   ctx: Ctx,
@@ -24,7 +24,10 @@ export function takeoffFactor(
   const mil = curveFamily(panel(fig, 'pa', 'curve_family'), fig.id, i.tempC, i.paFt);
   if (!mil.ok) return { tofMil: mil, tofAb: mil };
   const tofMil = ok(ctx.read('b2-1.tofMil', mil.value, STEPS.takeoffFactor));
+  ctx.mark({ kind: 'curve_family', figure: fig.id, panel: 'pa', input: i.tempC, param: i.paFt, output: mil.value });
   const ab = scalePair(panel(fig, 'ab', 'scale_pair'), fig.id, mil.value);
   if (!ab.ok) return { tofMil, tofAb: ab };
-  return { tofMil, tofAb: ok(ctx.read('b2-1.tofAb', ab.value, STEPS.takeoffFactor)) };
+  const tofAb = ok(ctx.read('b2-1.tofAb', ab.value, STEPS.takeoffFactor));
+  ctx.mark({ kind: 'scale_pair', figure: fig.id, panel: 'ab', from: mil.value, to: ab.value });
+  return { tofMil, tofAb };
 }

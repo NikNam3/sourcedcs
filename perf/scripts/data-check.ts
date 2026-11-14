@@ -14,7 +14,8 @@ import { fileURLToPath } from 'node:url';
 
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 
-import type { FigureFile, Manifest, Panel, Pt } from '../src/core/data/types.ts';
+import type { FigureFile, Manifest, Panel, Pt, Quantity } from '../src/core/data/types.ts';
+import { drawnRange, edgeTolerance, unionRange } from '../src/core/read/interp.ts';
 
 const schemaPath = fileURLToPath(new URL('../schema/charts.schema.json', import.meta.url));
 const dataDir = fileURLToPath(new URL('../data/', import.meta.url));
@@ -95,24 +96,32 @@ function panelProblems(panel: Panel): string[] {
       }
       break;
     case 'single_curve':
+    case 'limit_line':
       needAxes(panel.axes, [panel.input.name, panel.output.name]);
       if (panel.points.length === 0) problems.push(`${name} has no points`);
       if (!isAscending(inputs(panel.points))) problems.push(`${name} points are not in ascending input order`);
       break;
-    case 'guideline_panel':
+    case 'guideline_panel': {
       needAxes(panel.axes, [panel.input.name, panel.output.name]);
       if (Object.keys(panel.families).length === 0) problems.push(`${name} has no families`);
+      // Params are magnitudes (R8): a signed quantity (slope, wind) picks its family by sign. A line that starts a hair
+      // below 0, within the readers' edge tolerance of the panel's param span (R1), is calibration noise, not a sign.
+      const drawn = Object.values(panel.families)
+        .flat()
+        .filter((line) => line.length > 0)
+        .map((line) => drawnRange(line));
+      const signTolerance = drawn.length > 0 ? edgeTolerance(unionRange(drawn)) : 0;
       for (const [family, lines] of Object.entries(panel.families)) {
         if (lines.length === 0) problems.push(`${name} family "${family}" has no lines`);
         lines.forEach((line, i) => {
           const where = `${name} family "${family}" line ${String(i)}`;
           if (line.length === 0) problems.push(`${where} has no points`);
           if (!isAscending(inputs(line))) problems.push(`${where} is not in ascending param order`);
-          // Params are magnitudes (R8): a signed quantity (slope, wind) picks its family by sign.
-          if (inputs(line).some((param) => param < 0)) problems.push(`${where} has a negative param`);
+          if (inputs(line).some((param) => param < -signTolerance)) problems.push(`${where} has a negative param`);
         });
       }
       break;
+    }
     case 'scale_pair':
       needAxes(panel.axes, [panel.from.name, panel.to.name]);
       if (!(panel.range[0] < panel.range[1])) {
@@ -138,11 +147,51 @@ function panelProblems(panel: Panel): string[] {
   return problems;
 }
 
-function figureProblems(dir: string, file: string): string[] {
+/** Every named quantity of a panel: its input, output, param, scale ends and table columns. */
+export function panelQuantities(panel: Panel): Quantity[] {
+  switch (panel.type) {
+    case 'curve_family':
+      return [panel.input, panel.output, panel.param];
+    case 'single_curve':
+    case 'limit_line':
+    case 'guideline_panel':
+      return [panel.input, panel.output];
+    case 'scale_pair':
+      return [panel.from, panel.to];
+    case 'table':
+      return panel.columns;
+  }
+}
+
+/**
+ * One name, one unit across every figure of a dataset (TOLD 1.7 ruling 3): one problem per name with more than one
+ * unit, listing each unit with the figures that use it. It runs per dataset, one aircraft folder at a time: two
+ * datasets may use one name in different units.
+ */
+function quantityUnitProblems(figures: readonly FigureFile[]): string[] {
+  const units = new Map<string, Map<string, Set<string>>>();
+  for (const figure of figures) {
+    for (const { name, unit } of figure.panels.flatMap(panelQuantities)) {
+      const byUnit = units.get(name) ?? new Map<string, Set<string>>();
+      units.set(name, byUnit);
+      const ids = byUnit.get(unit) ?? new Set<string>();
+      byUnit.set(unit, ids);
+      ids.add(figure.id);
+    }
+  }
+  return [...units]
+    .filter(([, byUnit]) => byUnit.size > 1)
+    .map(([name, byUnit]) => {
+      const list = [...byUnit].map(([unit, ids]) => `${JSON.stringify(unit)} (${[...ids].join(', ')})`).join(' / ');
+      return `quantity "${name}" has more than one unit: ${list}`;
+    });
+}
+
+function figureProblems(dir: string, file: string): { problems: string[]; figure?: FigureFile } {
   const read = readJson(join(dir, file));
-  if ('problem' in read) return [read.problem];
+  if ('problem' in read) return { problems: [read.problem] };
   const validate = getValidators().figure;
-  if (!validate(read.value)) return (validate.errors ?? []).map(describeError);
+  if (!validate(read.value)) return { problems: (validate.errors ?? []).map(describeError) };
   const figure = read.value;
   const problems: string[] = [];
   const stem = file.slice(0, -'.json'.length);
@@ -151,7 +200,7 @@ function figureProblems(dir: string, file: string): string[] {
   if (figure.image.file !== image) problems.push(`image.file "${figure.image.file}" is not "${image}"`);
   else if (!existsSync(join(dir, image))) problems.push(`image.file "${image}": no such file`);
   for (const panel of figure.panels) problems.push(...panelProblems(panel));
-  return problems;
+  return { problems, figure };
 }
 
 /** The data files on disk: every .json but the manifest, and every pages/*.png. */
@@ -209,9 +258,13 @@ export function checkDataset(dir: string): string[] {
     }
   }
 
+  const figures: FigureFile[] = [];
   for (const file of files.filter((f) => f.endsWith('.json'))) {
-    for (const problem of figureProblems(dir, file)) report(file, problem);
+    const checked = figureProblems(dir, file);
+    for (const problem of checked.problems) report(file, problem);
+    if (checked.figure !== undefined) figures.push(checked.figure);
   }
+  for (const problem of quantityUnitProblems(figures)) problems.push(`${dataset}: ${problem}`);
   return problems;
 }
 

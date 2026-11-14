@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import type { FigureSet } from '../../src/core/data/figure-set.ts';
 import type { FigureFile } from '../../src/core/data/types.ts';
 
 /** `perf/data/f16c-f110-129/`, from this file rather than the working directory. */
@@ -17,4 +18,9 @@ export function loadFigure(id: string): FigureFile {
   const figure = JSON.parse(readFileSync(`${DATASET_DIR}${id}.json`, 'utf8')) as FigureFile;
   if (figure.id !== id) throw new Error(`${id}.json holds figure ${figure.id}`);
   return figure;
+}
+
+/** The figure set (as the app passes it to core) holding each of `ids`, loaded from the dataset. */
+export function loadFigureSet(ids: readonly string[]): FigureSet {
+  return Object.fromEntries(ids.map((id) => [id, loadFigure(id)]));
 }

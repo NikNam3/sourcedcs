@@ -6,8 +6,9 @@ import { drawnRange, edgeTolerance, interpWithin, unionRange } from './interp.ts
  * The family's output at `input` for `param`, linear in param between the two bracketing curves
  * (the last pair when param equals the last value). A param exactly on a curve reads that curve
  * alone. A param outside the curves gives OutOfChart on the param; an input a curve it needs does
- * not draw (with the edge tolerance of the whole family's input span) gives OutOfChart on the
- * input, with that curve's range, or the two curves' common range when it interpolates.
+ * not draw gives OutOfChart on the input, with that curve's range, or the two curves' common range
+ * when it interpolates. The edge tolerance (of the whole family's input span) applies only at a
+ * curve end on the family's input span ends; a curve stopping inside it gets none (ruling 4).
  */
 export function curveFamily(p: CurveFamily, figure: string, input: number, param: number): Read<number> {
   const first = p.curves[0];
@@ -27,15 +28,16 @@ export function curveFamily(p: CurveFamily, figure: string, input: number, param
     if (param <= hi.param) break;
   }
 
-  const tolerance = edgeTolerance(unionRange(p.curves.map((curve) => drawnRange(curve.points))));
+  const span = unionRange(p.curves.map((curve) => drawnRange(curve.points)));
+  const tolerance = edgeTolerance(span);
   // A param exactly on a curve reads that curve alone: its neighbour may be drawn shorter.
   const exact = param === lo.param ? lo : param === hi.param ? hi : undefined;
   if (exact !== undefined) {
-    const value = interpWithin(exact.points, input, tolerance);
+    const value = interpWithin(exact.points, input, tolerance, span);
     return value === undefined ? outOfChart(figure, p.input.name, input, drawnRange(exact.points)) : ok(value);
   }
-  const atLo = interpWithin(lo.points, input, tolerance);
-  const atHi = interpWithin(hi.points, input, tolerance);
+  const atLo = interpWithin(lo.points, input, tolerance, span);
+  const atHi = interpWithin(hi.points, input, tolerance, span);
   if (atLo === undefined || atHi === undefined) {
     const [loRange, hiRange] = [drawnRange(lo.points), drawnRange(hi.points)];
     const common: [number, number] = [Math.max(loRange[0], hiRange[0]), Math.min(loRange[1], hiRange[1])];

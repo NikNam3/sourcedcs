@@ -1,0 +1,8 @@
+/*
+ * The Limitations page: perf.css classes only, plus the window scale (scale.ts sets --page-scale; print.css, linked
+ * after this file, resets the zoom for paper).
+ */
+
+.page {
+  zoom: var(--page-scale, 1);
+}

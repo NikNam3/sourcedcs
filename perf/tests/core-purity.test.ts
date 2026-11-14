@@ -24,13 +24,14 @@ const forbidden: readonly [string, RegExp][] = [
   ['window', /\bwindow\b/],
   ['fetch(', /\bfetch\s*\(/],
   ['localStorage', /\blocalStorage\b/],
+  ['an import from src/web/', /from\s+['"][^'"]*\/web\//],
 ];
 
 test('src/core/ has .ts files to check', () => {
   assert.ok(coreFiles(coreDir).length > 0);
 });
 
-test('no file under src/core/ uses node:, the DOM, fetch or localStorage', () => {
+test('no file under src/core/ uses node:, the DOM, fetch or localStorage, or imports src/web/', () => {
   const problems: string[] = [];
   for (const file of coreFiles(coreDir)) {
     const source = readFileSync(file, 'utf8');

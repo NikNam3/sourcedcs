@@ -1,0 +1,6 @@
+- inputs: {takeoff_factor: 3.0, gross_weight_lb: 30000, runway_ft: 8000, headwind_kt: 0, slope_pct: 0}
+  expected: {refusal_rcr23_kias: 131}
+  tolerance_kias: 2
+  source: hand
+  read_by: fixture
+  date: 2026-10-30

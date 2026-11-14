@@ -13,6 +13,7 @@ import { takeoffDistance } from '../src/core/figures/b2-3.ts';
 import type { Read } from '../src/core/result.ts';
 
 import { planCtx, singlePointBound } from './helpers/bound.ts';
+import { exactOf, plain } from './helpers/chain.ts';
 import { loadFigure } from './helpers/data.ts';
 import { evaluateExhaustive } from './helpers/exhaustive.ts';
 
@@ -40,7 +41,7 @@ function traced(trace: readonly { id: string; value: number }[], id: string): nu
   return point.value;
 }
 
-const tof = (tempC: number, paFt: number) => runExact((ctx) => takeoffFactor(ctx, b21, { tempC, paFt }));
+const tof = (tempC: number, paFt: number) => exactOf((ctx) => takeoffFactor(ctx, b21, { tempC, paFt }));
 
 describe('B2-1 takeoff factor', () => {
   test('reads tofMil then tofAb', () => {
@@ -96,7 +97,7 @@ describe('B2-1 takeoff factor', () => {
 
 describe('B2-2 takeoff speed', () => {
   const speed = (grossWeightLb: number, cgPct: number, pitch8: boolean) =>
-    runExact((ctx) => takeoffSpeed(ctx, b22, { grossWeightLb, cgPct, pitch8 }));
+    exactOf((ctx) => takeoffSpeed(ctx, b22, { grossWeightLb, cgPct, pitch8 }));
 
   test('reads vto35 once; the corrections are exact', () => {
     const { outputs, trace } = speed(33000, 37, false);
@@ -162,7 +163,7 @@ const MIL_SAMPLE: DistanceInputs = {
 const BASELINES = { cgPct: 35, dragIndex: 0, slopePct: 0, headwindKt: 0, pitch8: false };
 const TRACE_IDS = ['b2-3.gw', 'b2-3.cg', 'b2-3.di', 'b2-3.slope', 'b2-3.wind'];
 
-const distance = (i: DistanceInputs) => runExact((ctx) => takeoffDistance(ctx, b23, i));
+const distance = (i: DistanceInputs) => exactOf((ctx) => takeoffDistance(ctx, b23, i));
 const distanceFt = (i: DistanceInputs): number => valueOf(distance(i).outputs.distanceFt);
 
 describe('B2-3 takeoff distance', () => {
@@ -277,7 +278,7 @@ type OracleSet = Omit<DistanceInputs, 'pitch8'>;
 
 /** B2-3 with its six inputs read as rounding points, as a takeoff chain reads them. */
 function distanceChain(set: OracleSet): Chain<'distanceFt'> {
-  return (ctx) =>
+  return plain((ctx) =>
     takeoffDistance(ctx, b23, {
       takeoffFactor: ctx.read('input.takeoffFactor', set.takeoffFactor, STEPS.takeoffFactor),
       grossWeightLb: ctx.read('input.grossWeightLb', set.grossWeightLb, STEPS.grossWeightLb),
@@ -286,7 +287,8 @@ function distanceChain(set: OracleSet): Chain<'distanceFt'> {
       slopePct: ctx.read('input.slopePct', set.slopePct, STEPS.slopePct),
       headwindKt: ctx.read('input.headwindKt', set.headwindKt, STEPS.windKt),
       pitch8: false,
-    });
+    }),
+  );
 }
 
 const SETS = 50;
@@ -315,7 +317,7 @@ test('B2-3 conservative distance: never shorter than exact, within the single-po
     };
     const chain = distanceChain(set);
     const exact = runExact(chain);
-    if (!exact.outputs.distanceFt.ok) continue;
+    if (!exact.run.outputs.distanceFt.ok) continue;
     sets++;
     seen.slope.add(Math.sign(set.slopePct));
     seen.wind.add(Math.sign(set.headwindKt));
@@ -331,7 +333,7 @@ test('B2-3 conservative distance: never shorter than exact, within the single-po
       errored++;
       continue;
     }
-    const exactFt = exact.outputs.distanceFt.value;
+    const exactFt = exact.run.outputs.distanceFt.value;
     assert.ok(conservative.value >= exactFt, `conservative ${String(conservative.value)} < exact ${String(exactFt)}`);
     const gap = Math.abs(exhaustive.value - conservative.value);
     const bound = singlePointBound(

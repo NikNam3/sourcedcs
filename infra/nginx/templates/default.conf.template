@@ -1,5 +1,5 @@
 # Rendered by the nginx image's envsubst step (templates/*.template -> conf.d/).
-# Only ${WIKI_DOMAIN} ${AUTH_DOMAIN} ${DOMAIN} ${ATOBRIEF_DOMAIN} ${CRCSYNC_DOMAIN} are substituted;
+# Only ${WIKI_DOMAIN} ${AUTH_DOMAIN} ${DOMAIN} ${ATOBRIEF_DOMAIN} ${CRCSYNC_DOMAIN} ${PERF_DOMAIN} are substituted;
 # nginx's own $variables pass through untouched.
 resolver 127.0.0.11 valid=10s ipv6=off;
 client_max_body_size 350M;
@@ -140,5 +140,26 @@ server {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection $connection_upgrade;
+    proxy_set_header X-Forwarded-Proto https; }
+}
+# perf (F-16 TOLD calculator): static files from the perf container. Its certificate must exist before this block
+# reaches the server, or nginx refuses the whole config (infra/RUNBOOK.md, "perf: domain, certificate and first deploy").
+server {
+  listen 80;
+  server_name ${PERF_DOMAIN};
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
+}
+server {
+  listen 443 ssl;
+  server_name ${PERF_DOMAIN};
+  ssl_certificate /etc/letsencrypt/live/${PERF_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${PERF_DOMAIN}/privkey.pem;
+  location / {
+    set $upstream perf;
+    proxy_pass http://$upstream:80;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https; }
 }

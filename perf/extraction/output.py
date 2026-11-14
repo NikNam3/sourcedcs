@@ -77,15 +77,17 @@ DIRECTION_COLOUR = {'rises': RED, 'falls': BLUE, 'any': GREEN}
 
 
 def overlay_png(page, spec, axes, panels):
-    """The whole page with every extracted line drawn over it: curves in red, guide lines by their
-    family's declared direction (rises red, falls blue, any green), a scale pair's measured range
-    as a green bar along its scale line, and every fitted tick position as a short red mark across
-    its label band."""
+    """The whole page with every extracted line drawn over it: curves and limit lines in red,
+    guide lines by their family's declared direction (rises red, falls blue, any green), a scale
+    pair's measured range as a green bar along its scale line, and every fitted tick position as a
+    short red mark across its label band (an unscaled axis has none)."""
     pm = page.get_pixmap(matrix=pymupdf.Matrix(PX_PER_PT, PX_PER_PT), alpha=False)
     im = Image.frombytes('RGB', (pm.width, pm.height), pm.samples)
     draw = ImageDraw.Draw(im)
     for name in sorted(spec['axes']):
         ax_spec = spec['axes'][name]
+        if ax_spec.get('unscaled') is True:
+            continue
         band = ax_spec['label_band']
         for t in ax_spec['ticks']:
             pos = geom.to_page(axes[name], t) * PX_PER_PT
@@ -100,7 +102,7 @@ def overlay_png(page, spec, axes, panels):
             inp, out = panel['input']['name'], panel['output']['name']
             for c in panel['curves']:
                 _polyline(draw, [_xy(panel, inp, out, a, b) for a, b in c['points']], RED)
-        elif kind == 'single_curve':
+        elif kind in ('single_curve', 'limit_line'):
             inp, out = panel['input']['name'], panel['output']['name']
             _polyline(draw, [_xy(panel, inp, out, a, b) for a, b in panel['points']], RED)
         elif kind == 'guideline_panel':

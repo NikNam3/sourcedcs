@@ -13,7 +13,7 @@ image_clip: [60, 108, 560, 702]
 axes:
   tof_mil:     {unit: "", page: x, label_band: [645, 652], range: [160, 520], ticks: [1, 2, 3, 4, 5, 6, 7], title: TAKEOFF FACTOR, edge: bottom}
   tof_ab:      {unit: "", page: x, label_band: [681, 688], range: [140, 470], ticks: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5], snap: false, title: TAKEOFF FACTOR, edge: bottom}
-  temperature: {unit: deg C, page: y, label_band: [148, 160], range: [120, 640], ticks: [-40, -30, -20, -10, 0, 10, 20, 30, 40, 50], title: RUNWAY TEMPERATURE, edge: left}
+  temperature: {unit: "°C", page: y, label_band: [148, 160], range: [120, 640], ticks: [-40, -30, -20, -10, 0, 10, 20, 30, 40, 50], title: RUNWAY TEMPERATURE, edge: left}
 panels:
   - id: pa
     type: curve_family
