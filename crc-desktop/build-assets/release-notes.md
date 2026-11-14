@@ -3,6 +3,9 @@
 - **Global PTT:** RADIO → SETUP → Global PTT keys the radio from any program while CRC is in the background. Choose the input with PRESS A KEY (Windows, X11) or CONFIGURE (Wayland). Off by default in full CRC, on in radio-only. Only that one input is watched; nothing is logged
 - **Fixed: a relayed pilot no longer cuts out for a moment.** When one direct packet was late, crc-sync's relayed copy played as a second transmission and its end tone sounded while the pilot kept talking
 - PTT never keys a guard by itself: choose the radio or group it transmits on
+- **Conflict alert: the orange closest-point circle is off by default.** Settings → RADAR → Show closest-point marker brings it back; the data block's CA is unchanged
+- **Fewer nuisance alerts around airfields:** a VFR flight with no beacon code (not on flight following) gets no CA and counts as untracked; no MCI for an intruder inside Class D; no SAA for an untracked contact in a MOA or warning area
+- **Fixed: a two-seat aircraft's transponder code no longer disappears until the pilot idents** (the back seat's SRS client reported the transponder off under the pilot's name)
 
 ### Fixed in 2.1.5
 - **MARSHAL: TYPE and FUEL are boxes again** on every row the Marshal holds: type and press Enter (fuel in thousands, 4.8; Escape puts it back)
