@@ -15,6 +15,7 @@ const { TofiRegimeMonitor } = require('../efsp/tofi-regime-monitor');
 const { AirspaceEntryAlertMonitor } = require('../efsp/airspace-entry-alert');
 const { ConflictAlertMonitor, mciFloorFt } = require('../conflict-alert');
 const { trackControlPositions } = require('../efsp/track-control');
+const { isVfrFlight } = require('../efsp/vfr');
 const { ATC_CLASSES } = require('../efsp/position-coverage');
 const { loadAlertingConfig } = require('../alerting-config');
 const { indicatedAltFt } = require('../altimetry');
@@ -183,6 +184,13 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     // A transponder that replies is Mode C here (surveillance/transponder.js); the soak's seam answers with a code.
     reportsAltitude: trackSeams.beacon ? ((track) => trackSeams.beacon(track) != null) : ((track) => !!transponders.transponderOf(track)),
     mciShownAt: (intruder, facilityId, positionId) => mciShownAt(intruder, facilityId, positionId),
+    // No MCI inside Class D (conflict-alert.js header). The registry's limits are indicated feet (I4), as app.js's locateTrack.
+    mciInhibited: (track) => {
+      if (!Number.isFinite(track.lat) || !Number.isFinite(track.lon) || !Number.isFinite(track.alt)) return false;
+      const altFt = indicatedAltFt(track.alt, grpcClient.getWeather(), theaterContext.transitionAltFt());
+      const j = efsp.airspaceStore.jurisdictionAt({ lat: track.lat, lon: track.lon, altFt });
+      return !!j && j.airspaceClass === 'D';
+    },
     // docs/adr/0145: only an ATC Position is shown CA, so only one suppresses it; the suppression is stamped in mission time.
     isAtcPosition: (positionId) => ATC_CLASSES.has(facilityConfig.getPositionClass(positionId)),
     clock: missionClock,
@@ -191,6 +199,11 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     // Alert text names each aircraft the way identity does (docs/adr/0059).
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
     isCarrierFlight: (flightDataId) => identity.isCarrierFlight(flightDataId),
+    // A VFR flight whose Strip has no code is not on flight following: it alerts as untracked (conflict-alert.js header).
+    alertsAsTracked: (flightDataId) => {
+      const fd = efsp.flightDataStore.getFlightData(flightDataId);
+      return !!(fd && fd.identity && fd.identity.beaconAssigned) || !isVfrFlight(stripsOfFlight(flightDataId).map(s => s.strip));
+    },
   });
   /** Every Strip of one flight on every Facility's Board, with its Facility (docs/adr/0147's track control reads them). */
   function stripsOfFlight(flightDataId) {

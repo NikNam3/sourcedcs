@@ -13,9 +13,11 @@
 //     alerts: VFR aircraft are not denied access (JO 7400.2R para 25-1-6 a, 24-1-3 d). A tracked IFR aircraft without an
 //     approved entry alerts (ours: the FAA routes IFR through by LOA, para 25-1-6 a-b, and an unapproved one is a
 //     nonparticipant ATC separates from the area, para 9-3-2).
-//   - An UNTRACKED contact inside any ACTIVE area alerts (H134 LT-Q5 a; supervisor's reading of H136), but only one that
-//     reports altitude: the MCI rule (H136 VQ8 a), and an airspace has vertical limits a primary-only target cannot be
-//     placed against by the controller (ours). An uncorrelated wingman of a tracked formation is that flight's
+//   - An UNTRACKED contact inside an ACTIVE RESTRICTED or PROHIBITED area alerts (H134 LT-Q5 a; supervisor's reading of
+//     H136), but only one that reports altitude: the MCI rule (H136 VQ8 a), and an airspace has vertical limits a
+//     primary-only target cannot be placed against by the controller (ours). Inside a MOA or WARNING area it never
+//     alerts (live test 2026-11-14): an aircraft nobody works is, to ATC, a VFR one entering at its own discretion
+//     (7400.2R 25-1-6 a), and it alerted all the time. An uncorrelated wingman of a tracked formation is that flight's
 //     (conflict-alert.js's formation members, ADR 0118), never an intruder.
 //   - A ROUTE (MTR) never alerts: it is no area an aircraft is denied (ours).
 //
@@ -76,7 +78,7 @@ const ENTRY_TYPES = new Set([...RESTRICTED_LIKE, ...JOINT_USE]);
  * @param {{tracked:boolean, approved?:boolean, vfr?:boolean}} aircraft
  */
 function alertsIn(airspace, { tracked, approved = false, vfr = false }) {
-  if (!tracked) return true;
+  if (!tracked) return !JOINT_USE.has(airspace.type); // VFR at its own discretion in a MOA or warning area
   if (approved) return false;
   if (JOINT_USE.has(airspace.type)) return !vfr;
   return RESTRICTED_LIKE.has(airspace.type);

@@ -225,3 +225,38 @@ test('docs/adr/0156: two carrier flights raise no conflict alert; a carrier flig
   intruder.tick(NOW);
   assert.equal(intruder.getAll()[0].kind, 'MCI', 'an uncorrelated intruder into the stack still alerts');
 });
+
+// ── A VFR aircraft not on flight following (live test 2026-11-14): its Strip carries no beacon code ──
+// P/CG CONFLICT ALERT is between tracked targets (known IFR or VFR aircraft); a VFR aircraft squawking 1200 with no
+// services is an unknown, untracked target. Its Strip (a TAG, a pattern strip) is bookkeeping, not radar service, so it
+// alerts as untracked: no CA, nothing against another one, an MCI against a tracked aircraft where Mode C lets it.
+
+test('a correlated VFR flight with no code is untracked for alerting: no CA, but an MCI against a tracked aircraft', () => {
+  const noCode = new Set(['fB']);
+  const m = monitorFor(headOn(), { 1: 'fA', 2: 'fB' }, { alertsAsTracked: (fd) => !noCode.has(fd) });
+  m.tick(NOW);
+  const [c] = m.getAll();
+  assert.equal(c.kind, 'MCI');
+  assert.equal(c.intruder, '2');
+});
+
+test('two correlated VFR flights with no code raise nothing (pattern traffic around a field)', () => {
+  const m = monitorFor(headOn(), { 1: 'fA', 2: 'fB' }, { alertsAsTracked: () => false });
+  m.tick(NOW);
+  assert.deepEqual(m.getAll(), []);
+});
+
+// ── No MCI inside Class D (live test 2026-11-14): the STARS CA/MCI inhibit area over an airport's surface area ──
+
+test('an intruder inside Class D airspace raises no MCI; outside it does; a CA is unaffected', () => {
+  const inClassD = (t) => t.id === 2;
+  const m = monitorFor(headOn(), { 1: 'fA' }, { mciInhibited: inClassD });
+  m.tick(NOW);
+  assert.deepEqual(m.getAll(), [], 'intruder 2 is in Class D');
+  const outside = monitorFor(headOn(), { 1: 'fA' }, { mciInhibited: () => false });
+  outside.tick(NOW);
+  assert.equal(outside.getAll()[0].kind, 'MCI');
+  const ca = monitorFor(headOn(), { 1: 'fA', 2: 'fB' }, { mciInhibited: () => true });
+  ca.tick(NOW);
+  assert.equal(ca.getAll()[0].kind, 'CA');
+});

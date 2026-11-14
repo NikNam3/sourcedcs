@@ -119,9 +119,9 @@ test('shown only to who may approve entry: the using agency and the controlling 
 });
 
 test('an untracked contact is not listed: it has no Strip to approve on (ADR 0119 stands)', () => {
-  const { monitor } = world({ tracks: [track(9)], inside: { 9: ['MOA-1'] } });
+  const { monitor } = world({ tracks: [track(9)], inside: { 9: ['R-1'] } });
   monitor.tick();
-  assert.equal(monitor.getAll().length, 1, 'it still alerts');
+  assert.equal(monitor.getAll().length, 1, 'it still alerts (a restricted area: in a MOA it would not)');
   assert.deepEqual(monitor.getTraffic(), []);
 });
 

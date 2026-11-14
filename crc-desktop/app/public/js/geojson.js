@@ -95,14 +95,15 @@ function buildAlertTag(trackId, flightData) {
 /**
  * Each short-term conflict drawn on the scope: both predicted paths, the line
  * between their closest points, and a marker there with the countdown. The
- * paths and the line are a per-controller switch (Settings → RADAR, T30); the
- * marker and the data block's CA are the alert and always drawn.
+ * paths and the line (T30) and the marker are per-controller switches (Settings
+ * → RADAR); the data block's CA is the alert and always drawn.
  */
 export function buildConflictAlertOverlay() {
   const features = [];
   const conflicts = getAllEfspConflicts();
   const now = (id) => tracks.get(String(id)) || latestFromServer.get(String(id));
   const paths = settings.conflictAlertPaths !== false;
+  const marker = settings.conflictAlertMarker === true;
   for (const c of conflicts) {
     // crc-sync's docs/adr/0145: a suppressed alert draws nothing on the scope; its grey tag is on the labels.
     if (isConflictSuppressed(c)) continue;
@@ -111,6 +112,7 @@ export function buildConflictAlertOverlay() {
     if (a) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[a.lon, a.lat], [c.aAt.lon, c.aAt.lat]] }, properties: { kind: 'path' } });
     if (b) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[b.lon, b.lat], [c.bAt.lon, c.bAt.lat]] }, properties: { kind: 'path' } });
     if (paths) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[c.aAt.lon, c.aAt.lat], [c.bAt.lon, c.bAt.lat]] }, properties: { kind: 'cpa-line' } });
+    if (!marker) continue;
     const clock = `${Math.floor(c.timeToCpaSec / 60)}:${String(c.timeToCpaSec % 60).padStart(2, '0')}`;
     features.push({
       type: 'Feature',

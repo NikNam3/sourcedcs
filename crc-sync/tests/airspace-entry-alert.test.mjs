@@ -42,7 +42,7 @@ function world({ tracks, inside, flights = {}, members = {}, flightData = {}, st
 const track = (id, extra = {}) => ({ id, category: 1, lat: 37, lon: 35, alt: 3000, groundSpeed: 250 * MS_PER_KT, firstSeenAt: 1, ...extra });
 const at = (facilityId, positionId) => [{ facilityId, positionId }];
 
-test('the rule by type: restricted-like alerts any unapproved tracked aircraft; a MOA spares a tracked VFR one; an untracked one alerts everywhere', () => {
+test('the rule by type: restricted-like alerts any unapproved tracked aircraft; a MOA spares a tracked VFR one and an untracked one', () => {
   for (const type of ['RESTRICTED', 'PROHIBITED']) {
     assert.equal(alertsIn({ type }, { tracked: true, vfr: true }), true, `${type}: VFR needs permission too (14 CFR 73.13)`);
     assert.equal(alertsIn({ type }, { tracked: true, approved: true }), false);
@@ -52,7 +52,10 @@ test('the rule by type: restricted-like alerts any unapproved tracked aircraft; 
     assert.equal(alertsIn({ type }, { tracked: true, vfr: false }), true, `${type}: IFR without approval (ours)`);
     assert.equal(alertsIn({ type }, { tracked: true, approved: true }), false);
   }
-  assert.equal(alertsIn({ type: 'MOA' }, { tracked: false }), true);
+  assert.equal(alertsIn({ type: 'MOA' }, { tracked: false }), false, 'untracked: VFR at its own discretion (live test 2026-11-14)');
+  assert.equal(alertsIn({ type: 'WARNING' }, { tracked: false }), false);
+  assert.equal(alertsIn({ type: 'RESTRICTED' }, { tracked: false }), true);
+  assert.equal(alertsIn({ type: 'PROHIBITED' }, { tracked: false }), true);
 });
 
 test('a tracked IFR flight entering a restricted area unapproved: one alert, to CTR (controlling) and AP (working), retracted on leaving', () => {
@@ -110,13 +113,19 @@ test('a tracked VFR flight (worked on a VFR strip, docs/adr/0146) in an active M
   assert.equal(monitor.deliverableTo(monitor.getAll()[0], at('INCIRLIK', 'AP')), true, 'the range\'s controlling Position');
 });
 
-test('an untracked contact reporting altitude alerts in any active area, to the controlling Position only; a primary-only one does not', () => {
-  const { monitor } = world({ tracks: [track(7), track(8)], inside: { 7: ['MOA-1'], 8: ['MOA-1'] }, transponders: [7] });
+test('an untracked contact reporting altitude alerts in an active restricted area, to the controlling Position only; a primary-only one does not', () => {
+  const { monitor } = world({ tracks: [track(7), track(8)], inside: { 7: ['R-1'], 8: ['R-1'] }, transponders: [7] });
   monitor.tick();
   const all = monitor.getAll();
-  assert.deepEqual(all.map(a => [a.id, a.flightDataId]), [['T:7:MOA-1', null]]);
+  assert.deepEqual(all.map(a => [a.id, a.flightDataId]), [['T:7:R-1', null]]);
   assert.equal(monitor.deliverableTo(all[0], at('CENTER', 'CTR')), true);
   assert.equal(monitor.deliverableTo(all[0], at('INCIRLIK', 'AP')), false);
+});
+
+test('an untracked contact reporting altitude in an active MOA: nothing (VFR at its own discretion, live test 2026-11-14)', () => {
+  const { monitor } = world({ tracks: [track(7)], inside: { 7: ['MOA-1'] }, transponders: [7] });
+  monitor.tick();
+  assert.deepEqual(monitor.getAll(), []);
 });
 
 test('a formation: the uncorrelated wingman is the flight, one alert named by the lead; approved, neither alerts', () => {

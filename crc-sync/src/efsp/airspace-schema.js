@@ -9,7 +9,7 @@
 // taxonomy at all. `type`, `workingFrequencyMhz` and `controlFrequencyMhz` are this squadron's operating practice,
 // not FAA or DoD doctrine, and must never be presented as such (defect D11). `type` picks no separation regime (D14,
 // ADR 0038): the governing agreement does. Since docs/adr/0119 it is read for one behaviour, the airspace-entry alert
-// (efsp/airspace-entry-alert.js): a tracked VFR aircraft in an active MOA or warning area does not alert, as the FAA.
+// (efsp/airspace-entry-alert.js): a tracked VFR aircraft or an untracked contact in an active MOA or warning area does not alert, as the FAA.
 
 const fs = require('fs');
 const { statePaths } = require('../state-paths');

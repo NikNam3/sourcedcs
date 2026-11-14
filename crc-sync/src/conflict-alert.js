@@ -28,6 +28,12 @@
 //                                     are the receiving Position's Facility's (JO 7210.3EE para 12-6-12 b/d, 8-2-5 b),
 //                                     applied at delivery (`deliverableTo`), because they differ per Facility;
 //   - two untracked:                  nothing.
+// A VFR flight whose Strip has no beacon code is not on flight following (live test 2026-11-14): it squawks 1200 and
+// gets no radar service, an unknown VFR aircraft in the P/CG's words, so it alerts as UNTRACKED even when correlated (its
+// Strip is the tower's or a TAG's bookkeeping, not a track under service). Pattern traffic then raises nothing against
+// itself, and an MCI against tracked traffic only above the Facility's MCI base altitude (`alertsAsTracked`).
+// No MCI for an intruder inside Class D airspace (live test 2026-11-14): STARS adapts CA/MCI inhibit areas over an
+// airport's surface area, and the tower's Class D is that area here (`mciInhibited`, any JURISDICTION area of class D).
 //
 // GROUPS (docs/adr/0118, T16, research Q7): the effect of a standing ERAM Group Suppression / STARS inhibit (JO 7110.65BB
 // para 5-13-1 c.1(b), 5-14-6 c.2). No alert between aircraft of one formation, nor between the participants of an active
@@ -146,11 +152,13 @@ function pairKind(ra, rb) {
  * @param {(track:object) => {role:'TRACKED'|'MEMBER'|'UNTRACKED', group:string|null}} [opts.roleOf] default: every
  *   track tracked and in a group of its own (the geometry alone)
  * @param {(track:object) => boolean} [opts.reportsAltitude] whether an untracked target reports Mode C (MCI needs it)
+ * @param {(track:object) => boolean} [opts.mciInhibited] whether an intruder is where MCI is inhibited (Class D)
  * @param {(track:object) => string|null} [opts.callsignFor] the correlated Strip's callsign, if any
  */
 function findConflicts(tracks, cfg, now = Date.now(), opts = {}) {
   const roleOf = opts.roleOf || ((t) => ({ role: TRACKED, group: `T:${t.id}` }));
   const reportsAltitude = opts.reportsAltitude || (() => true);
+  const mciInhibited = opts.mciInhibited || (() => false);
   const callsignFor = opts.callsignFor || (() => null);
   const eligible = tracks.filter(t => isEligible(t, now, cfg));
   const roles = new Map(eligible.map(t => [t, roleOf(t)]));
@@ -170,6 +178,7 @@ function findConflicts(tracks, cfg, now = Date.now(), opts = {}) {
       if (!kind) continue;
       const intruder = kind === 'MCI' ? (ra.role === UNTRACKED ? a : b) : null;
       if (intruder && !reportsAltitude(intruder)) continue; // H136 VQ8 a: no MCI for a primary-only target
+      if (intruder && mciInhibited(intruder)) continue; // inside Class D (header)
       const c = predictConflict(a, b, cfg);
       if (!c) continue;
       const [first, second] = String(a.id) < String(b.id) ? [a, b] : [b, a];
@@ -246,6 +255,9 @@ class ConflictAlertMonitor {
    * @param {(flightDataId:string) => object|null} [deps.activeMarsaFor] the flight's ACTIVE MARSA relation
    * @param {(flightDataId:string) => number} [deps.flightSizeOf] the formation's size (identity.flightSize)
    * @param {(flightDataId:string) => boolean} [deps.isCarrierFlight] a live carrier Strip holds the flight (docs/adr/0156)
+   * @param {(track:object) => boolean} [deps.mciInhibited] no MCI for an intruder there (inside Class D, the header)
+   * @param {(flightDataId:string) => boolean} [deps.alertsAsTracked] false for a correlated flight that alerts as untracked
+   *   (a VFR flight with no beacon code, the header). Absent: every correlated flight is tracked
    * @param {(track:object) => boolean} [deps.reportsAltitude] the target replies Mode C (its transponder is on)
    * @param {(track:object) => string|null} [deps.callsignFor]
    * @param {(intruder:object, facilityId:string, positionId:string) => boolean} [deps.mciShownAt] whether an MCI with this
@@ -341,13 +353,14 @@ class ConflictAlertMonitor {
 
   /** The role of every track this tick (the header's "Which pairs" and "Groups"). */
   _roles(tracks) {
-    const { trackedFlights, activeMarsaFor, flightSizeOf, isCarrierFlight } = this._d;
+    const { trackedFlights, activeMarsaFor, flightSizeOf, isCarrierFlight, alertsAsTracked } = this._d;
     if (!trackedFlights) return null;
     const flights = trackedFlights();
     const leads = new Map();
     for (const t of tracks) {
       const flightDataId = flights.get(String(t.id));
       if (!flightDataId) continue;
+      if (alertsAsTracked && !alertsAsTracked(flightDataId)) continue; // a VFR flight with no code: untracked (header)
       const relation = activeMarsaFor ? activeMarsaFor(flightDataId) : null;
       // docs/adr/0156: no strip in the CCA gets a conflict alert against another: every carrier flight is one group.
       const group = isCarrierFlight && isCarrierFlight(flightDataId) ? 'CV' : relation ? `M:${relation.marsaId}` : `F:${flightDataId}`;
@@ -367,12 +380,13 @@ class ConflictAlertMonitor {
 
   /** @returns {boolean} whether anything changed (any conflict present counts: its countdown moves) */
   tick(now = Date.now()) {
-    const { trackStore, config, callsignFor, reportsAltitude } = this._d;
+    const { trackStore, config, callsignFor, reportsAltitude, mciInhibited } = this._d;
     const tracks = trackStore.getAll();
     const roles = this._roles(tracks);
     const next = findConflicts(tracks, config, now, {
       roleOf: roles ? (t) => roles.get(t) : undefined,
       reportsAltitude,
+      mciInhibited,
       callsignFor: callsignFor || (() => null),
     });
     const byId = new Map(tracks.map(t => [String(t.id), t]));

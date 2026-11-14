@@ -460,9 +460,14 @@ function initColorSettings() {
     $shipsEn.addEventListener('change', () => { settings.shipsEnabled = $shipsEn.checked; saveSettings(); markEfspChanged('map'); });
   }
 
-  if ($caPaths) { // T30: the conflict alert's paths only; the alert itself is never decluttered (H115-H119)
+  if ($caPaths) { // T30: the conflict alert's paths only; the data block's CA is never decluttered (H115-H119)
     $caPaths.checked = settings.conflictAlertPaths !== false;
     $caPaths.addEventListener('change', () => { settings.conflictAlertPaths = $caPaths.checked; saveSettings(); markEfspChanged('map'); });
+  }
+  const $caMarker = document.getElementById('set-ca-marker');
+  if ($caMarker) { // the closest-point circle and its countdown
+    $caMarker.checked = settings.conflictAlertMarker === true;
+    $caMarker.addEventListener('change', () => { settings.conflictAlertMarker = $caMarker.checked; saveSettings(); markEfspChanged('map'); });
   }
 
   const $extCenterlineNm = document.getElementById('set-ext-centerline-nm');

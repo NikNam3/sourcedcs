@@ -1015,13 +1015,13 @@ airspace type:
 | Type | A flight with a Strip and no approved entry | A VFR flight with a Strip | A contact with no Strip |
 |---|---|---|---|
 | `RESTRICTED`, `PROHIBITED` (always in force) | alerts | alerts | alerts |
-| `MOA`, `WARNING` | alerts (ours: an IFR flight goes through only by agreement) | **never** (VFR is not denied a MOA) | alerts |
+| `MOA`, `WARNING` | alerts (ours: an IFR flight goes through only by agreement) | **never** (VFR is not denied a MOA) | **never** (to ATC it is VFR, entering at its own discretion) |
 | a route (MTR) | never | never | never |
 
 - **VFR** here means the flight has no assigned altitude and no assigned heading: there is no flight-rules field (§8C2).
 - **Approved** means the flight is working that airspace (`Airspace…` → Approve entry, above), or the military unit it
   was handed to by TOFI has the airspace active. Approving entry, or the aircraft leaving, ends the alert.
-- A contact with no Strip alerts only when its transponder reports altitude; a formation's wingmen are the flight (one
+- A contact with no Strip alerts only in a restricted or prohibited area, and only when its transponder reports altitude; a formation's wingmen are the flight (one
   alert per flight and airspace). Nothing alerts below 50 kt or in a track's first 10 s (`alerting.json`
   `airspaceEntry`, ours, as Conflict Alert). It looks at where the aircraft is now; there is no look-ahead.
 - **Who sees it:** the airspace's controlling Position and every Position holding a Strip of the flight (a contact
@@ -1445,16 +1445,20 @@ missed approach is checked again against what is then assigned (§8L).
 
 On the scope, a Conflict Alert (CA) draws each aircraft's predicted path to the closest point and a line
 between them there. **Settings → RADAR → Conflict Alert → Show predicted paths** (on by default, yours only) hides the
-dashed paths and the line; the CA in the data block and the closest-point marker with its countdown always show. **Who alerts against whom** (`adr/0118`, the FAA model, P/CG CONFLICT ALERT and MODE C
+dashed paths and the line, and **Show closest-point marker** (off by default) draws the orange circle with its
+countdown; the CA in the data block always shows. **Who alerts against whom** (`adr/0118`, the FAA model, P/CG CONFLICT ALERT and MODE C
 INTRUDER ALERT):
 
-- **CA** is only between two **tracked** aircraft: each correlated to a Strip.
-- **MCI** (Mode C Intruder) is a tracked aircraft against one with no Strip that **reports altitude**, above the
+- **CA** is only between two **tracked** aircraft: each correlated to a Strip. A **VFR Strip with no code** is not
+  flight following (the aircraft squawks 1200 and gets no service), so that aircraft counts as untracked: no CA, and
+  nothing against another one like it, which keeps pattern traffic quiet. Give it a code (**CODE**) and it is tracked.
+- **MCI** (Mode C Intruder) is a tracked aircraft against one with no Strip (or a VFR Strip with no code) that **reports altitude**, above the
   Facility's base altitude: 500 ft above the ground at Incirlik and the carrier, 5,000 ft MSL at CENTER (1,500 ft above
   the ground where the ground is higher). Where the ground is not known (no terrain data) it counts as sea level. The
   data block tag is `MCI` (a CA wins when a pair is both); an MCI you acknowledged stays acknowledged if the pair
-  becomes a CA. A Facility can inhibit MCI for chosen Positions in its facility file (`modeCIntruder`); there is no
-  switch for the controller.
+  becomes a CA. **No MCI for an intruder inside Class D airspace** (the LTAG control zone at Incirlik): pattern traffic
+  around the field does not alert. A Facility can inhibit MCI for chosen Positions in its facility file
+  (`modeCIntruder`); there is no switch for the controller.
 - **Nothing** between two aircraft without Strips.
 - **Never inside one group:** two aircraft of one flight (one flight data), or in one active MARSA relation, never alert
   against each other. An uncorrelated wingman within 1 NM and 1,000 ft of a tracked formation (size above 1) is one of
