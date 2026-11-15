@@ -166,6 +166,9 @@ export function _sendFromPopover(popover, button, send) {
   return !!sent;
 }
 
+/** Is any Strip popover open? strip-reveal.js does not switch Bay under one (docs/wip/STRIP-JUMP.md). */
+export function hasOpenPopover() { return _openPopovers.size > 0; }
+
 /** Does any open popover belong to this Strip? The portalled replacement for six `el.contains(...)` checks. */
 export function _stripHasOpenPopover(stripId) {
   if (!stripId) return false;
