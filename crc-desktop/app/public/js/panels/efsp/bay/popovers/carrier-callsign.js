@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../../../force-caps.js';
 import { openPopover } from '../popover-portal.js';
 import { sendEfspMutation } from '../../efsp-ws.js';
 
@@ -15,6 +16,7 @@ export function openCarrierCallsignPopover(strip, anchorEl, actingPositionId) {
   input.maxLength = 7;
   input.placeholder = 'Callsign';
   input.className = 'efsp-carrier-callsign-input';
+  forceCaps(input);
   const ok = document.createElement('button');
   ok.className = 'efsp-coordinate-submit';
   ok.textContent = 'Set';

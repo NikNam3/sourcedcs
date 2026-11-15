@@ -2,10 +2,14 @@
 import { NM_M, haversineM, kinematics, projectPos, verticalFpm } from './geo.js';
 import { getIff, iffColor } from './iff.js';
 import {
-  emergencyColor, infoLine, isAir, shouldLabel, trackCodeTag, trackEmergency, trackIsIdent, trackName
+  assignedPreviewText, emergencyColor, infoLine, isAir, remarksColor, remarksLabelText, shouldLabel, trackCodeTag, trackEmergency, trackIsIdent, trackName
 } from './track-label.js';
+import { boxEdgeDistPx, labelBoxPx, labelNudgePx } from './label-box.js';
+import { trackRemarks } from './panels/efsp/track-remarks.js';
+import { withAltPreview } from './scope-gestures/alt-preview.js';
 import { atcDisplay, atcPalette } from './atc-scope.js';
 import { losVisibleRangeM } from './los.js';
+import { isAltitudeLimit } from './altitude-limit.js';
 import {
   conformanceAlertsForFlightData, getAllEfspConflicts, getEfspFlightData, getEfspStrip, conflictAlertsForTrack, isConflictSuppressed, stripIdsForTrackId, refuelingAlertText, airspaceEntryAlertsForTrack
 } from './panels/efsp/efsp-state.js';
@@ -60,14 +64,17 @@ export function _flightDataForTrack(trackId) {
 }
 
 /** "A180 H050": the flight's assigned altitude (hundreds of feet) and heading, when it has them. */
-function buildAssignedLine(flightData) {
+function buildAssignedLine(flightData, trackId) {
   if (!flightData || !flightData.clearance) return '';
   const active = (cell) => cell && cell.entries.find(e => e.status === 'ACTIVE');
   const alt = active(flightData.clearance.altitude);
   const hdg = active(flightData.clearance.heading);
   const parts = [];
   const h = (ft) => String(Math.round(ft / 100)).padStart(3, '0');
-  if (alt && alt.block) parts.push(`A${h(alt.block.lowFt)}B${h(alt.block.highFt)}`);
+  const preview = withAltPreview(trackId, null); // docs/adr/0164: an Alt+wheel preview stands in for the altitude
+  if (preview) parts.push(assignedPreviewText(preview));
+  else if (alt && isAltitudeLimit(alt.block)) parts.push(String(alt.value || '')); // '<080', crc-sync docs/adr/0163
+  else if (alt && alt.block) parts.push(`A${h(alt.block.lowFt)}B${h(alt.block.highFt)}`);
   else if (alt && Number.isFinite(alt.parsed)) parts.push('A' + h(alt.parsed));
   if (hdg && Number.isFinite(hdg.parsed)) parts.push('H' + String(hdg.parsed).padStart(3, '0'));
   return parts.join(' ');
@@ -144,9 +151,10 @@ function sweepOpacity(id, baseOp) {
 // A contact sent with `scheme: 'ATC'` is drawn in the STARS layout. What it
 // shows is atc-scope.js's; this only turns it into features. One display per
 // contact per frame, shared by the dots, the block and its leader.
-// [SOURCE-DEFINED] (docs/adr/0088, H41/H71) — 16 is an engineering bound, not STARS: the
-// number of text-segment layers map-setup.js pre-creates for one block.
-export const ATC_MAX_SEGMENTS = 16;
+// [SOURCE-DEFINED] (docs/adr/0088, H41/H71) — an engineering bound, not STARS: the number of
+// text segments map-layers-tracks.js's `format` carries for one block. 24 since docs/adr/0165:
+// the remarks line adds two (its line break and its text) to a worst case that already passed 16.
+export const ATC_MAX_SEGMENTS = 24;
 const ATC_TRANSPARENT = 'rgba(0,0,0,0)';
 let _atcFrame = null;
 
@@ -175,6 +183,21 @@ function _atcSegmentProps(d) {
     props[`c${i}`] = seg && seg.blink && !_pulseBright ? ATC_TRANSPARENT : color;
   }
   return props;
+}
+
+/** Each drawn block's estimated box and sideways nudge, from buildLabels, for buildLeaders (docs/adr/0165). */
+const _labelBoxes = new Map(); // id → { halfW, halfH, nudgePx }
+
+/** The block's box, and the nudge that keeps its track-facing side where a base-width block's would be. */
+function _noteLabelBox(id, lines, iconPx, anchorPx, textSizePx) {
+  const box = labelBoxPx(lines, textSizePx);
+  const nudgePx = labelNudgePx(box.halfW, getLabelHalfW(), anchorPx.x - iconPx.x);
+  _labelBoxes.set(id, { ...box, nudgePx });
+  return [nudgePx / textSizePx, 0]; // text-offset is in ems
+}
+
+function _atcLineTexts(d) {
+  return d.lines.map(line => line.map(seg => seg.text).join(''));
 }
 
 // Track dots
@@ -325,14 +348,18 @@ function buildLeaders() {
     const at = atc ? { lat: atc.lat, lon: atc.lon } : t;
     const iconPx  = map.project([at.lon, at.lat]);
     const labelPx = map.project([at.lon + dLon, at.lat + dLat]);
+    // docs/adr/0165: aim at the drawn block's centre (its nudge) and stop at its edge when it is bigger than the base.
+    const box = _labelBoxes.get(id);
+    if (box) labelPx.x += box.nudgePx;
     const dx  = labelPx.x - iconPx.x;
     const dy  = labelPx.y - iconPx.y;
     const len = Math.hypot(dx, dy);
-    if (len < iconGapPx + labelGapPx + 2) continue; // too close to draw
-
     const ux = dx / len, uy = dy / len;
+    const gapPx = box ? Math.max(labelGapPx, boxEdgeDistPx(ux, uy, box.halfW, box.halfH) + LABEL_EDGE_MARGIN) : labelGapPx;
+    if (!(len >= iconGapPx + gapPx + 2)) continue; // too close to draw
+
     const startPx = [iconPx.x  + ux * iconGapPx,  iconPx.y  + uy * iconGapPx];
-    const endPx   = [labelPx.x - ux * labelGapPx, labelPx.y - uy * labelGapPx];
+    const endPx   = [labelPx.x - ux * gapPx, labelPx.y - uy * gapPx];
 
     const start = map.unproject(startPx);
     const end   = map.unproject(endPx);
@@ -388,13 +415,15 @@ function getDeclutteredIds() {
 // All labels use geo-anchored positions so leader lines are zoom-stable.
 // Non-dragged tracks: geo offset computed from em-offset at first render, stored in labelOffsets.
 // Dragged tracks: labelOffsets already holds the geo offset set by the drag interaction.
-// The rendered text uses textOffset [0,0] so MapLibre places it at the geo coordinate directly.
+// The rendered text is placed at the geo coordinate directly; its textOffset is only the sideways nudge that
+// keeps a wide block's track-facing side in place (label-box.js, docs/adr/0165), [0,0] for a base-width block.
 export function buildLabels() {
   if (!mapReady) return { type: 'FeatureCollection', features: [] };
   const features    = [];
   const baseOp      = trackOpacity();
   const textSizePx  = getTextSizePx();
   const decluttered = getDeclutteredIds();
+  _labelBoxes.clear();
 
   for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.domain === 'SEA') continue;
@@ -414,13 +443,15 @@ export function buildLabels() {
     }
 
     const relOff     = labelOffsets.get(id);
-    const textOffset = [0, 0]; // label is placed at its geo coordinate
+    // The label is placed at its geo coordinate; text-offset only nudges a wide block away from its track (ADR 0165).
     if (atc) {
       // docs/adr/0088: the STARS block, from atc-scope.js / track-label.js.
       const blink = atc.view.blinkBlock && !_pulseBright ? 0.15 : 1;
+      const anchor = [atc.lon + relOff[1], atc.lat + relOff[0]];
+      const textOffset = _noteLabelBox(id, _atcLineTexts(atc), map.project([atc.lon, atc.lat]), map.project(anchor), textSizePx);
       features.push({
         type: 'Feature',
-        geometry: { type: 'Point', coordinates: [atc.lon + relOff[1], atc.lat + relOff[0]] },
+        geometry: { type: 'Point', coordinates: anchor },
         properties: {
           id, scheme: 'ATC', textOffset,
           opacity: sweepOpacity(id, baseOp) * atc.view.opacity * blink,
@@ -444,16 +475,24 @@ export function buildLabels() {
     const flightData = air ? _flightDataForTrack(id) : null;
     const code     = trackCodeTag(t, flightData && flightData.identity ? flightData.identity.beaconAssigned : null);
     const { tag: alertTag, color: alertColor } = buildAlertTag(id, flightData);
-    const asgnLine = csOnly ? '' : buildAssignedLine(flightData);
+    const asgnLine = csOnly ? '' : buildAssignedLine(flightData, id);
+    const strips   = air ? stripIdsForTrackId(id).map(getEfspStrip) : [];
+    const acting   = air ? getActingPositions() : [];
+    // docs/adr/0165: the owned Strip's remarks, the label's last line in their own colour.
+    const rmkLine  = air ? remarksLabelText(trackRemarks(strips, acting, getEfspFlightData)) : '';
+    const callsign = trackName(t);
+    const lines = [`${alertTag ? `${alertTag} ` : ''}${callsign}`, infoLine, code.text, asgnLine, rmkLine].filter(Boolean);
+    const textOffset = _noteLabelBox(id, lines, map.project([t.lon, t.lat]), map.project(coords), textSizePx);
 
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: coords },
       properties: {
-        id, scheme: 'TACTICAL', callsign: trackName(t), infoLine,
-        csColor: (air && trackHighlightColor(stripIdsForTrackId(id).map(getEfspStrip), getActingPositions())) || color,
+        id, scheme: 'TACTICAL', callsign, infoLine,
+        csColor: (air && trackHighlightColor(strips, acting)) || color,
         sqTag: code.text, sqColor: code.color || color,
         color, opacity, textOffset, alertTag, alertColor, asgnLine,
+        rmkLine, rmkColor: remarksColor(),
       },
     });
   }

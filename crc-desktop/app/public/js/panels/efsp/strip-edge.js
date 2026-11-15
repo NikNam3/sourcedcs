@@ -1,5 +1,6 @@
 'use strict';
 import { OBLIGATION_LABELS } from './control-release-rules.js';
+import { highlightName } from './highlight-colour.js';
 
 // What the Strip's left edge is saying (H168). The edge is a border, and seven
 // classes paint it; a controller saw a bright yellow bar (their own Highlight)
@@ -52,7 +53,7 @@ export function stripEdgeMarkers({ classes, highlight = null, obligation = null,
   const out = [];
   for (const key of EDGE_PRECEDENCE) {
     if (key === 'highlight') {
-      if (highlight) out.push({ key, text: `Highlight: ${highlight} (your marker). Right-click to change, Ctrl+click cycles (yellow, cyan, lime, off).` });
+      if (highlight) out.push({ key, text: `Highlight: ${highlightName(highlight)} (your marker). Right-click to change, Ctrl+click cycles the swatches, then off.` });
       continue;
     }
     if (!has.has(key)) continue;

@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../force-caps.js';
 import { conflictAlertsForTrack, conflictTag, getEfspFlightData, getEfspStrip, stripIdsForTrackId } from './efsp-state.js';
 import { conflictSuppressTargets, suppressConflict } from './conflict-suppress.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
@@ -9,7 +10,7 @@ import { carrierCheckIn } from './carrier-checkin.js';
 import { carrierCaseValue } from './carrier-state.js';
 import { getLatestTrack } from '../../picture.js';
 import {
-  acceptVfrHandoff, assignCode, canAssignCode, canRecallVfrHandoff, canTagTrack, canTerminateRadarService, recallVfrHandoff,
+  acceptVfrHandoff, assignCode, canAssignCode, canCancelFlightFollowing, canRecallVfrHandoff, cancelFlightFollowing, canTagTrack, canTerminateRadarService, recallVfrHandoff,
   tagProblem, tagTrack, terminateRadarService, initiateVfrHandoff, vfrTagPositions, vfrTagPosition, pickVfrTagPosition,
   vfrHandoffAcceptAs, vfrHandoffTargets,
 } from './flight-following.js';
@@ -135,6 +136,7 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo, carrier 
     input.className = 'label-menu-input';
     input.dataset.field = cell.field;
     input.dataset.blockId = cell.blockId;
+    forceCaps(input); // SF-Q1
     input.value = before;
     input.autocomplete = 'off';
     input.spellcheck = false;
@@ -150,6 +152,7 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo, carrier 
     }
     if (canRecallVfrHandoff(strip)) _action('label-menu-recall', `RECALL ${strip.vfrHandoff.toPositionId}`, 'take the unanswered handoff back', () => recallVfrHandoff(strip));
     if (canAssignCode(strip, flightData)) _action('label-menu-code', 'CODE', 'a discrete beacon code for this flight', () => assignCode(strip));
+    if (canCancelFlightFollowing(strip, flightData)) _action('label-menu-cancel-ff', 'CANCEL FF', 'squawk VFR: the code is released, the strip and the track stay', () => cancelFlightFollowing(strip));
     if (canTerminateRadarService(strip)) _action('label-menu-terminate', 'RADAR SVC TERM', 'drop the strip: code released, track untagged', () => terminateRadarService(strip));
   }
 
@@ -193,6 +196,7 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo, carrier 
       input.className = 'label-menu-input';
       input.dataset.field = field;
       input.maxLength = max;
+      forceCaps(input);
       input.autocomplete = 'off';
       input.spellcheck = false;
       row.append(name, input);
@@ -219,6 +223,7 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo, carrier 
     sideInput.className = 'label-menu-input';
     sideInput.dataset.field = 'checkin-side';
     sideInput.maxLength = 8;
+    forceCaps(sideInput);
     sideInput.autocomplete = 'off';
     sideInput.spellcheck = false;
     row.append(name, sideInput);

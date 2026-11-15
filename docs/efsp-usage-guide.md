@@ -376,11 +376,21 @@ A Strip has three columns:
   items are grouped (Start, Flight, Formation, Final, Strip), each heading once. Something you cannot do right now is still listed, greyed, with the
   reason; something your Position can never do is left out. **▼** opens the rest of the Blocks. **✕**
   drops the Strip.
-- **RMKS, the last row**, when the flight has remarks (below).
+- **RMKS**, when the flight has remarks (below), and under it **RTE**, the route, on every Strip that shows it.
 
-**A long value is cut, never spilled.** A value longer than its cell (a long route, say) ends in "…"
-inside the cell; hover it for the whole value, click it to edit as usual. The same on every strip type
-and in the `▼` view.
+**A long value is cut, never spilled.** A value longer than its cell ends in "…" inside the cell; hover it
+for the whole value, click it to edit as usual. The same on every strip type and in the `▼` view. The route
+is the exception (below).
+
+**The route.** On every Strip that shows the route (RTE: a departure at OPS, CD, AP and CTR, an overflight at
+AP and CTR), it is the bottom row, under the remarks, and always the whole route: a long route wraps over more
+lines and the Strip grows. Click it to edit; the box wraps too. Enter saves, Esc cancels; the route stays one
+line (a pasted line break becomes a space). In the `▼` view the route wraps the same way.
+
+**Capitals.** Everything you type that ends up on a Strip is typed in capitals: Block cells, remarks, the
+label menu, New Strip, the TAG VFR fields, the carrier and Marshal fields and the dot-command line. You do not
+need Caps Lock. An old value in small letters (a flight plan filed that way) stays as it is until you type
+into it.
 
 **Remarks.** When a flight has remarks, the Strip's last row shows them (RMKS), on every strip type,
 the carrier's MARSHAL, FINAL and PATTERN Strips included (Block `9E`; `M8` on a mission line). The row
@@ -393,10 +403,18 @@ remarks…**. A refusal keeps the window open with what you typed. (The carrier'
 list, not Strip faces, so a carrier FINAL Strip's remarks are not on screen there. Incirlik's PAR final is
 ordinary Strip faces and shows them.)
 
+**Remarks on the scope** (`adr/0165`). A flight you own shows the first 20 characters of its remarks as the
+last line of its data block (the ATC block and the tactical label), in lavender (Settings → Colours → Track
+Labels → Remarks changes it). The RMKS row and its window have the whole text. A flight another controller
+owns shows none, and neither does a partial block.
+
 **One-input gestures.** **Alt+click** on a Strip toggles OFFSET and **Ctrl/Cmd+click** steps its
-HIGHLIGHT (yellow, cyan, lime, off); both are one input. The `⋯` item and the right-click swatches still
-work (two inputs); a highlighted Strip's swatches end with **×**, which clears it. On macOS Ctrl+click is a
-context click, so use the swatches there. Quick clicks are sent one after another, so stepping through the
+HIGHLIGHT through the eight colours, then off; both are one input. The `⋯` item and the right-click
+swatches still work (two inputs).
+
+**Highlight** (`adr/0165`). Right-click a Strip: eight colours (yellow, cyan, lime, orange, pink, violet,
+white, sky blue), **×** to clear, and a box for any other colour as `#RRGGBB` (Enter). Red is ATTENTION's
+and is refused, near-reds too. On macOS Ctrl+click is a context click, so use the swatches there. Quick clicks are sent one after another, so stepping through the
 colours is never refused as somebody else's change. The colour also shows on the map: the callsign in the
 track's label (both label styles) takes it, for a Strip one of your Positions owns; the target, leader and
 the rest of the block keep their colours.
@@ -497,8 +515,19 @@ transition altitude** and a whole hundred is written as a flight level, anything
 `8000-FL100` at Syria's 10,000 ft or `16000-FL200` elsewhere), and the text follows the theater the
 mission was in when you typed it (it is not rewritten if the theater later changes). What is stored is
 always feet, and `FL100` and `100` both mean 10,000 ft everywhere. A reversed or equal block, a half-written one (`FL220-`) and more than two ends are
-refused with the entry unchanged. The MTR's after-exit altitude takes a block too. Type a heading as
-`050`. Anything else is refused. `HDG` is usually left empty: set it when you vector, and the
+refused with the entry unchanged. The MTR's after-exit altitude takes a block too.
+
+**An altitude limit** (`adr/0163`). Type `<` or `>` before an altitude: `<080` is *maintain at or below
+8,000*, `>FL240` *at or above FL240* (JO 7110.65BB ¶9-2-6 "MAINTAIN AT OR BELOW (altitude)", ¶4-5-7 "AT OR
+ABOVE/BELOW"; the `<`/`>` is ours). Any altitude form works after it (`<080`, `<A080`, `<8000`, `>240`); the
+Strip writes it as you typed it below the transition altitude and as a flight level at and above it, and the
+data block, the label menu and the track panel show the same text. The flight is conforming anywhere on the
+allowed side, climbing, descending or level: the limit is not a level it has to reach. Past the limit by more
+than 500 ft it is a level bust (BUST), and past it while still moving away it is a wrong-way alert (ALT ↑/↓,
+§8E). The data block's arrow appears only when the flight is past the limit. A limit on a block
+(`<FL220-FL240`) is refused: a block is already both limits.
+
+Type a heading as `050`. Anything else is refused. `HDG` is usually left empty: set it when you vector, and the
 conformance check (§8E) only watches a heading once one is assigned.
 
 ### Times: typed as HHMM, and italic estimates
@@ -608,7 +637,7 @@ Strip {
 - `offset` (bool) — visually indents the Strip (⇥ button), no server meaning beyond display.
 - `flipped` (bool) — shows only the callsign (Block 1), hides everything else (double-click to toggle).
 - `removeIndicator` (bool) — set automatically by `DropStrip`; distinct from actual deletion (a `DROPPED` Strip stays on the server, just off the visible Board, until it is archived (§8J)).
-- `highlight` (`null|'yellow'|'cyan'|'lime'`) — right-click swatch popover (× clears) or Ctrl/Cmd+click. Never red — red is reserved for `attention`. The owner's map shows it on the track label's callsign (`panels/efsp/track-highlight.js`). The paper gestures' SetFlag writes go one per Strip in flight (`panels/efsp/flag-writer.js`), so a quick second click is not refused STALE_REV.
+- `highlight` (`null`, a swatch's `#rrggbb`, or any typed `#rrggbb`; an older Strip may still hold `'yellow'`, `'cyan'` or `'lime'`, which still draw) — right-click popover: eight swatches, × clears, a hex box (`adr/0165`); or Ctrl/Cmd+click, which steps the eight then off. Never red — red is reserved for `attention`. The owner's map shows it on the track label's callsign (`panels/efsp/track-highlight.js`). The paper gestures' SetFlag writes go one per Strip in flight (`panels/efsp/flag-writer.js`), so a quick second click is not refused STALE_REV.
 - `attention` (`null|'red'`) — Shift+click. The one saturated-red channel on the Board, per guide §7.7 rule 4.
 
 **`annotations`** — append-only cells for any Block routed `{kind:'annotation'}` in the Block Map (§6). Each cell is a list of `Entry{value, status, at, by}`; `status ∈ ACTIVE|SUPERSEDED|STRUCK|PREPLANNED`. Amending appends a new `ACTIVE` entry and marks the old one `SUPERSEDED` — never overwrites (guide §3.7, FAA JO 7110.65 ¶2-3-1: "do not erase or overwrite any item"). `confirmVacated: true` on a `SetBlock` marks the current `ACTIVE` entry `STRUCK` instead (for altitude-type Blocks — a controller confirming the aircraft has actually left an altitude, never automatic on assignment).
@@ -1254,8 +1283,8 @@ AIC's to change`).
 
 **Flight following** (VFR radar traffic advisories) starts on the contact itself. Signed on as Primary to a Position
 with a VFR Bay, click a contact that has no Strip: its menu offers **AT**, **ACID** and **TYPE**. Type the callsign and,
-optionally, the aircraft type and press **TRACK** (or Enter); TRACK with no ACID opens the track panel, whose **Tag VFR**
-section does the same. Or type `.ff <track number> <CALLSIGN> [TYPE] [@POSITION]`, where the track number is the one the
+optionally, the aircraft type and press **TRACK** (or Enter). (For a tactical controller, TRACK with no ACID opens the
+track panel, whose **Tag VFR** section does the same; an ATC controller never gets the track panel.) Or type `.ff <track number> <CALLSIGN> [TYPE] [@POSITION]`, where the track number is the one the
 data block shows.
 
 **AT is where the strip goes**: one button per Position you work that has a VFR Bay, the lit one taking it. The menu and
@@ -1282,6 +1311,10 @@ the face once set. A cleared `ALT` or `HDG` (the field emptied) is no clearance:
 selected Strip), offered on an overflight Strip or a VFR departure with no clearance that your `AP` or `CTR` owns, and greyed while a
 coordination or TOFI exchange is open on it. The Strip is dropped, the code released, any airspace entry cleared and
 the contact untracked at once. It is not the Strip's next step: that stays **Leaves Sector**, the handoff path.
+
+**Cancelling flight following, keeping the strip** ("squawk VFR"): on a VFR strip with a code, the data block's
+**CANCEL FF**, `⋯` → **Cancel flight following**, or emptying Block 5. The code is released and the flight has none
+again, so it alerts as untracked (no CA); the strip, its cells and the track stay yours. **CODE** gives it a new code.
 
 **A VFR departure** (CD's **VFR…**, §3) reaches `AP` as an ordinary handed-off DEPARTURE with no clearance. `AP`
 keeps flight following on it, or, when it leaves the MTMA or the pilot cancels, `⋯` → **Radar service terminated**. Its
@@ -1558,9 +1591,24 @@ starts with the code it is squawking (`4521 A060↓ H250`), as STARS does (¶5-4
   does), to acknowledge `EM`, `CA`/`MCI` or `SAA`, or to step a block down or expand it.
 - **Click the block** of a flight whose Strip you own to assign it a heading, speed or altitude: a small menu opens
   on **HDG**; type the value and Enter. Tab to **SPEED** and **ALT**; Enter sends every changed value, as if typed in
-  the Strip's cells (same refusals, same "Coordinated with …" line). Esc closes. **TRACK**, or Shift+click on the
-  block, opens the track panel. If you don't own the Strip, or the contact has none, the click opens the track panel.
+  the Strip's cells (same refusals, same "Coordinated with …" line). Esc closes. A click on the target does the same
+  after its STARS gesture. The track info panel is the tactical controller's: signed on to any ATC Position, a click
+  never opens it (no TRACK item, no Shift+click, nothing when there is no menu). A tactical controller gets it where
+  there is no menu, on Shift+click and from **TRACK**.
   A tactical label answers the same click. Acknowledgements and click-downs are local to your scope and are not synced, as on STARS.
+- **Vector by drawing** (`adr/0164`). Hold **Ctrl** and drag with the **right** mouse button from a flight's target,
+  square or data block: a line
+  follows the cursor with the magnetic heading at its end, rounded to 5°. Let go to assign it; it replaces the heading
+  the flight had. **Esc** while dragging cancels; a drag of only a few pixels does nothing. A right drag without Ctrl,
+  or anywhere else, is the measure line as before.
+- **Step the altitude with the wheel** (`adr/0164`). Hold **Alt** and turn the wheel over the flight: each notch moves
+  the assigned altitude 1,000 ft (hold **Shift** as well for 100 ft), up to climb. It starts from the assigned altitude,
+  or from the flight's current altitude if none is assigned; a block (`080B120`) moves as a whole. The data block shows
+  the new value with a `?` while you turn. Release Alt to assign it, once. **Esc** before releasing Alt cancels; so does
+  switching window. You may move off the flight while Alt is held: releasing Alt still sends.
+- Both work only on a flight whose Strip you own (the same flights that get the HDG / SPEED / ALT menu); everywhere
+  else the right drag and the wheel work the map as before. A refused value shows on the refusal banner as if typed on the
+  Strip.
 - A handoff you sent blinks for 5 s once accepted, then stays white until you click it green, then
   partial. It blinks only for something *this scope saw happen*: a reconnect shows the settled picture.
   A same-Facility transfer (LC drags a Strip to AP) blinks at the sender too. `UN` blinks when a
@@ -2283,7 +2331,7 @@ new missions.
 - The airspace frequencies are edited in the airspace editor (§8A), not here. Your SRS radio's own frequencies are in
   crc-desktop's `config.json` and the radio panel; nothing here tunes a radio.
 
-## 8P. Radio only and Global PTT (`adr/0161`)
+## 8P. Radio only, the intercom and Global PTT (`adr/0161`, `0166`)
 
 - **Radio only.** CRC can start as the radio alone, for controllers working in another tool. Press RADIO ONLY on the
   login screen (also in Settings, under CONNECTION SETTINGS); FULL CRC in the radio window goes back. CRC remembers the
@@ -2292,6 +2340,15 @@ new missions.
   but crc-sync relays nothing. Log in to link frequencies; logged in, + RADIO offers the frequency table. Select what PTT
   transmits on first: it never keys a guard by itself. A radio window does not keep your Positions: they are released
   as if you had closed CRC.
+- **Intercom** (`adr/0166`). Every CRC starts with an INTERCOM row, receiving, on the shared intercom. It is the
+  same one SRS uses outside DCS (unit 100000001), so SRS-standalone GCI controllers on intercom 1 are on it too. To use
+  another client's intercom, pick its unit in the row. Remove the row with ×; it stays removed until you press
+  **+ INTERCOM**.
+- **Intercom PTT** (`adr/0166`). In SETUP, *Intercom PTT* → **PRESS A KEY** sets a key that keys only the intercom,
+  whatever group your PTT key keys. **CLEAR** removes it. It cannot be your PTT key. If you hold both keys, the one you
+  pressed first transmits; let it go and the other takes over while you still hold it. With Global PTT on, *Global
+  intercom PTT* sets the input that keys the intercom while CRC is not focused (on Wayland the desktop asks you to
+  approve a second shortcut, "CRC intercom push-to-talk").
 - **Global PTT.** RADIO, SETUP. Tick Global PTT and choose an input: the radio then keys from any program, while CRC is
   in the background. It is off by default in full CRC and on in radio-only, where it does nothing until an input is
   chosen. While it is on, CRC watches the keyboard and mouse for that one input; nothing else is kept, forwarded or logged.

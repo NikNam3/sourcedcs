@@ -37,10 +37,41 @@ function normalizeReleaseNotes(releaseNotes) {
   return null;
 }
 
-function writePendingPatchNotes(filePath, { version, notes }) {
-  const normalized = normalizeReleaseNotes(notes);
+// build-assets/release-notes.md carries every version's section ("### Changed in 2.3.1", "### Fixed in 2.1.5", ...),
+// newest first. What's New shows only the versions this update brings: newer than the one the controller had
+// (`fromVersion`) up to the new one. Without a usable `fromVersion`, only the new version's own sections. Notes with no
+// such headings are shown whole.
+const SECTION_RE = /^#{1,6}\s.*?\bin\s+v?(\d+\.\d+\.\d+)\b.*$/;
+
+function compareVersions(a, b) {
+  const pa = String(a).split('.').map(Number); const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) { const d = (pa[i] || 0) - (pb[i] || 0); if (d) return d; }
+  return 0;
+}
+
+function notesSince(notes, fromVersion, toVersion) {
+  const lines = String(notes).split(/\r?\n/);
+  const sections = [];
+  for (const line of lines) {
+    const m = SECTION_RE.exec(line);
+    if (m) sections.push({ version: m[1], lines: [line] });
+    else if (sections.length) sections[sections.length - 1].lines.push(line);
+  }
+  if (!sections.length) return notes;
+  const valid = (v) => typeof v === 'string' && /^v?\d+\.\d+\.\d+/.test(v);
+  const to = valid(toVersion) ? toVersion.replace(/^v/, '') : null;
+  const from = valid(fromVersion) ? fromVersion.replace(/^v/, '') : null;
+  const keep = sections.filter(sec => (to ? compareVersions(sec.version, to) <= 0 : true)
+    && (from ? compareVersions(sec.version, from) > 0 : (to ? compareVersions(sec.version, to) === 0 : sec === sections[0])));
+  const chosen = keep.length ? keep : [sections[0]];
+  return chosen.map(sec => sec.lines.join('\n').trim()).join('\n\n');
+}
+
+function writePendingPatchNotes(filePath, { version, notes, fromVersion = null }) {
+  const all = normalizeReleaseNotes(notes);
+  const normalized = all && notesSince(all, fromVersion, version);
   if (!version || !normalized) return;
-  fs.writeFileSync(filePath, JSON.stringify({ version, notes: normalized }));
+  fs.writeFileSync(filePath, JSON.stringify({ version, notes: normalized, fromVersion: fromVersion || null }));
 }
 
 function readAndClearPendingPatchNotes(filePath, currentVersion) {
@@ -65,7 +96,8 @@ function readAndClearPendingPatchNotes(filePath, currentVersion) {
   }
 
   if (!parsed || parsed.version !== currentVersion || typeof parsed.notes !== 'string') return null;
-  return parsed;
+  // Trimmed here too: a file written by a version before this rule holds every version's notes.
+  return { version: parsed.version, notes: notesSince(parsed.notes, parsed.fromVersion || null, parsed.version) };
 }
 
 // Separate from the one-shot "pending" file above: this copy is never
@@ -88,10 +120,10 @@ function readLastPatchNotes(filePath) {
   }
 
   if (!parsed || typeof parsed.version !== 'string' || typeof parsed.notes !== 'string') return null;
-  return parsed;
+  return { version: parsed.version, notes: notesSince(parsed.notes, parsed.fromVersion || null, parsed.version) };
 }
 
 module.exports = {
-  normalizeReleaseNotes, writePendingPatchNotes, readAndClearPendingPatchNotes,
+  normalizeReleaseNotes, notesSince, writePendingPatchNotes, readAndClearPendingPatchNotes,
   readLastPatchNotes,
 };

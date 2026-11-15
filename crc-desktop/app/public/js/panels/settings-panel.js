@@ -346,6 +346,7 @@ function initColorSettings() {
     ['col-bra',         'sw-bra',         'braColor',       '#4488cc'],
     ['col-range-ring',  'sw-range-ring',  'colRangeRing',   '#8aaa6a'],
     ['col-navpoint',    'sw-navpoint',    'colNavpoint',    '#3a5a3a'],
+    ['col-remarks',     'sw-remarks',     'colRemarks',     '#c49cff'], // docs/adr/0165: the data block's remarks line
   ];
 
   for (const [inputId, swatchId, key, def] of COLOR_DEFS) {

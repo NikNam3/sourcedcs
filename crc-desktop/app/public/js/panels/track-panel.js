@@ -1,7 +1,9 @@
 'use strict';
+import { forceCaps } from '../force-caps.js';
 import { clearTrackRename, kinematics, setTrackRename, verticalFpm } from '../geo.js';
 import { getLatestTrack } from '../picture.js';
 import { magneticText } from '../magnetic.js';
+import { limitWords } from '../altitude-limit.js';
 import { clearIffOverride, getIff, iffColor, setIffOverride } from '../iff.js';
 import {
   altitudeLong, assignedAltText, assignedBlockText, tagEditable, trackName, typeText
@@ -87,8 +89,8 @@ export function initTrackPanel() {
 
   // Tag a VFR (crc-sync docs/adr/0146): callsign and, optionally, the Block 3 type, one press. The answer shows on the line
   // below; on success the contact is the strip's, so the section goes away with the next refresh.
-  const $ffCallsign = document.getElementById('tp-ff-callsign');
-  const $ffType = document.getElementById('tp-ff-type');
+  const $ffCallsign = forceCaps(document.getElementById('tp-ff-callsign')); // SF-Q1
+  const $ffType = forceCaps(document.getElementById('tp-ff-type'));
   const $ffMsg = document.getElementById('tp-ff-msg');
   const startFf = () => {
     if (_trackPanelId == null || !$ffCallsign || !$ffType) return;
@@ -250,7 +252,7 @@ function _refreshTrackAlerts(trackId) {
   const alt = flightData && flightData.clearance && active(flightData.clearance.altitude);
   const hdg = flightData && flightData.clearance && active(flightData.clearance.heading);
   const parts = [];
-  if (alt && alt.block) parts.push(`ALT ${assignedBlockText(alt.block)}`);
+  if (alt && alt.block) parts.push(`ALT ${assignedBlockText(alt.block, alt.value)}`);
   else if (alt && Number.isFinite(alt.parsed)) parts.push(`ALT ${assignedAltText(alt.parsed)}`);
   if (hdg && Number.isFinite(hdg.parsed)) parts.push(`HDG ${String(hdg.parsed).padStart(3, '0')}`);
   const $key = document.getElementById('tp-asgn-key');
@@ -273,8 +275,8 @@ function _refreshTrackAlerts(trackId) {
     const ar = refuelingAlertText(a); // crc-sync's docs/adr/0118
     if (ar) { lines.push({ bad: true, text: ar.reason }); continue; }
     if (a.kind === 'HEADING') lines.push({ bad: false, text: `Assigned heading ${pad(a.assigned)}, tracking ${pad(a.actual)}.` });
-    if (a.kind === 'WRONG_WAY') lines.push({ bad: true, text: `Assigned ${a.assigned.toLocaleString('en-US')} ft, ${a.fpm < 0 ? 'descending' : 'climbing'} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });
-    if (a.kind === 'LEVEL_BUST') lines.push({ bad: true, text: `Level bust: ${a.deviationFt > 0 ? '+' : '−'}${Math.abs(a.deviationFt)} ft from ${a.assigned.toLocaleString('en-US')} ft.` });
+    if (a.kind === 'WRONG_WAY') lines.push({ bad: true, text: `Assigned ${limitWords(a.block)}${a.assigned.toLocaleString('en-US')} ft, ${a.fpm < 0 ? 'descending' : 'climbing'} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });
+    if (a.kind === 'LEVEL_BUST') lines.push({ bad: true, text: `Level bust: ${a.deviationFt > 0 ? '+' : '−'}${Math.abs(a.deviationFt)} ft from ${limitWords(a.block)}${a.assigned.toLocaleString('en-US')} ft.` });
   }
   // crc-sync's docs/adr/0119: inside an ACTIVE airspace with no approved entry (amber).
   for (const a of airspaceEntryAlertsForTrack(trackId)) lines.push({ bad: false, text: `${airspaceEntryText(a)}: inside, active, no approved entry.` });

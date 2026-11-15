@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../../force-caps.js';
 import { getCurrentEfspRefusal } from '../panel/refusal.js';
 import {
   CONFIRM_VACATED_ELIGIBLE_BLOCKS, blockValueHintFor, editRedirectFor, enumSelectOptionsFor, blockInputPlaceholderFor,
@@ -7,7 +8,9 @@ import {
 } from '../strip-template.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { sendEfspMutation } from '../efsp-ws.js';
+import { isVfrStrip } from '../vfr.js';
 import { _resolveActingPositionId } from './dispatch.js';
+import { isFullRowBlock, oneLine } from '../route-row.js';
 
 
 /**
@@ -116,6 +119,7 @@ function _buildBlockCellInner(strip, blockId) {
   const flightData = getEfspFlightData(strip.flightDataId);
   const span = document.createElement('span');
   span.className = 'efsp-block efsp-block-' + blockId;
+  if (isFullRowBlock(blockId)) span.classList.add('efsp-block-wrap'); // U-STRIP-FACE: the route is shown whole, wrapped
   span.dataset.block = blockId;
   span.textContent = _blockLabel(flightData, strip, blockId);
 
@@ -429,7 +433,7 @@ function _closeOpenBlockEdit() {
  * had typed and does NOT take focus — focus is somewhere else entirely, which
  * is precisely why the Strip was rebuildable at all.
  *
- * @returns {HTMLInputElement} the input, for the caller that has to place it.
+ * @returns {HTMLInputElement|HTMLTextAreaElement} the input, for the caller that has to place it.
  */
 function _startBlockEdit(strip, blockId, span, draft) {
   const restoring = draft !== undefined;
@@ -438,9 +442,23 @@ function _startBlockEdit(strip, blockId, span, draft) {
   // UI-A U4: a redirected cell (TYPE) edits another Block's value.
   const sendBlockId = span.dataset.editBlock || blockId;
   const currentValue = span.dataset.editValue != null ? span.dataset.editValue : span.textContent;
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'efsp-block-input';
+  // U-STRIP-FACE: the route edits in a box that wraps and grows with its text (CSS field-sizing), so the whole route is
+  // in view while it is typed. Still one line of data: Enter commits, and a pasted newline becomes a space.
+  const wraps = isFullRowBlock(sendBlockId);
+  const input = document.createElement(wraps ? 'textarea' : 'input');
+  if (wraps) input.rows = 1; else input.type = 'text';
+  input.className = wraps ? 'efsp-block-input efsp-block-input-wrap' : 'efsp-block-input';
+  forceCaps(input); // SF-Q1: everything on a Strip is typed in capitals
+  if (wraps) {
+    input.spellcheck = false;
+    input.addEventListener('input', () => {
+      const flat = oneLine(input.value);
+      if (flat === input.value) return;
+      const at = input.selectionStart;
+      input.value = flat;
+      if (typeof at === 'number' && input.setSelectionRange) input.setSelectionRange(at, at);
+    });
+  }
   const placeholder = blockInputPlaceholderFor(blockId); // T31 a: the format before a refusal, not after
   if (placeholder) input.placeholder = placeholder;
   // Carry the refusal mark onto the input, not just the span it replaces.
@@ -464,7 +482,7 @@ function _startBlockEdit(strip, blockId, span, draft) {
   };
   const commit = () => {
     if (closed) return;
-    const value = input.value.trim();
+    const value = oneLine(input.value).trim();
     revert();
     // S-L16 W5: retyping a SHOWN ESTIMATE is not a no-op, it accepts the estimate as the actual.
     if (value === currentValue && !span.classList.contains('efsp-block-estimated')) return; // no-op edit, don't send a Mutation for nothing
@@ -477,6 +495,12 @@ function _startBlockEdit(strip, blockId, span, draft) {
     // moved past, and it comes back rejected as STALE_REV even though
     // nothing else touched the Strip in between.
     const currentStrip = getEfspStrip(strip.stripId) || strip;
+    // An emptied Block 5 on a VFR strip is "squawk VFR": flight following ends, the strip stays (CancelFlightFollowing,
+    // crc-sync docs/adr/0146). A code is never emptied on an IFR strip.
+    if (sendBlockId === '5' && value === '' && isVfrStrip(currentStrip)) {
+      sendEfspMutation(actingPositionId, currentStrip, { kind: 'CancelFlightFollowing' });
+      return;
+    }
     sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId: sendBlockId, value });
   };
 

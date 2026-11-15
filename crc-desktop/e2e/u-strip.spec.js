@@ -104,14 +104,38 @@ async function expectRemarksRow(strip, full) {
   return text;
 }
 
-test('U1/U2 DEPARTURE at OPS: a long route stays in its cell (whole on hover); a 300-character remark is one cut line', async ({ page }) => {
+/**
+ * U-STRIP-FACE (SF-Q2 a, SF-Q3 a): the route is a full-width row, the last of the Strip's main column (under the remarks),
+ * the whole text, wrapped, never cut or ellipsised. Returns how many lines it took.
+ */
+async function expectRouteRow(strip, full) {
+  const route = strip.locator('.efsp-strip-route .efsp-block-9');
+  await expect(route).toHaveText(full);
+  const m = await strip.evaluate((el) => {
+    const main = el.querySelector('.efsp-strip-main');
+    const row = main.querySelector(':scope > .efsp-strip-route');
+    const rows = [...main.children].filter(c => !c.classList.contains('efsp-strip-expanded'));
+    const v = row.querySelector('.efsp-block');
+    const lh = parseFloat(getComputedStyle(v).lineHeight) || 16;
+    const mr = main.getBoundingClientRect();
+    const rr = row.getBoundingClientRect();
+    return { last: rows[rows.length - 1] === row, sw: v.scrollWidth, cw: v.clientWidth, sh: v.scrollHeight, ch: v.clientHeight,
+      lines: Math.round(v.getBoundingClientRect().height / lh), fullWidth: rr.width >= mr.width - 20, inStrip: rr.bottom <= el.getBoundingClientRect().bottom + 0.5 };
+  });
+  expect(m.last, 'the route is the bottom row').toBe(true);
+  expect(m.fullWidth, 'the row spans the main column').toBe(true);
+  expect(m.sw, 'not cut sideways').toBeLessThanOrEqual(m.cw);
+  expect(m.sh, 'not cut below').toBeLessThanOrEqual(m.ch + 1);
+  expect(m.inStrip, 'the Strip grows to hold it').toBe(true);
+  return m.lines;
+}
+
+test('U1/U2 DEPARTURE at OPS: a long route is the bottom row, whole; a 300-character remark is one cut line', async ({ page }) => {
   await openPanel(page, { signedOn: ['OPS'] });
   const callsign = uniqueCallsign('RTE');
   const strip = await seedStrip(page, { callsign, flightData: { route: LONG_ROUTE } });
   expect(await overflowingFields(strip)).toEqual([]);
-  const route = strip.locator('.efsp-block-9');
-  await route.hover();
-  await expect(route).toHaveAttribute('title', LONG_ROUTE);
+  await expectRouteRow(strip, LONG_ROUTE);
 
   // No remarks: no row, no space.
   await expect(strip.locator('.efsp-strip-remarks')).toHaveCount(0);
@@ -120,6 +144,12 @@ test('U1/U2 DEPARTURE at OPS: a long route stays in its cell (whole on hover); a
   await expectRemarksRow(stripOf(page, callsign), LONG_REMARK);
   const h1 = await stripOf(page, callsign).evaluate((el) => el.getBoundingClientRect().height);
   expect(h1 - h0, 'the row is one line tall').toBeLessThanOrEqual(24);
+  await expectRouteRow(stripOf(page, callsign), LONG_ROUTE); // still the last row, under the remarks (SF-Q3 a)
+  // A narrow Bay wraps the route over more lines; it is never cut.
+  await page.setViewportSize({ width: 480, height: 1000 });
+  const lines = await expectRouteRow(stripOf(page, callsign), LONG_ROUTE);
+  expect(lines, 'wrapped at 480px').toBeGreaterThan(1);
+  await page.setViewportSize({ width: 1600, height: 1000 });
   await page.screenshot({ path: test.info().outputPath('u1-u2-departure.png') });
 });
 
@@ -244,7 +274,7 @@ test('U1/U2 ARRIVAL at AP: values stay in their cells, the route in the expanded
   await stripOf(page, arr).locator('.efsp-expand-btn').click();
 });
 
-test('U1/U2 OVERFLIGHT at CTR (CENTER): the route stays in its cell; RMKS', async ({ page }) => {
+test('U1/U2 OVERFLIGHT at CTR (CENTER): the route is the bottom row, whole; RMKS', async ({ page }) => {
   await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'u-strip-ctr' });
   const call = uniqueCallsign('OVF');
   await create(page, { positionId: 'CTR', facilityId: 'CENTER', bayId: 'ctr-overflight', stripType: 'OVERFLIGHT',
@@ -255,6 +285,7 @@ test('U1/U2 OVERFLIGHT at CTR (CENTER): the route stays in its cell; RMKS', asyn
   await expect(s.locator('.efsp-block-9')).toHaveText(LONG_ROUTE);
   expect(await overflowingFields(s)).toEqual([]);
   await expectRemarksRow(s, LONG_REMARK);
+  await expectRouteRow(s, LONG_ROUTE);
 });
 
 test('U1/U2 MISSION at TAC_C2 (TACTICAL): a long controlling agency stays in its cell; RMKS (Block M8)', async ({ page }) => {

@@ -28,7 +28,7 @@ async function goBay(page, positionId, bayId) {
 async function fillChip(page, strip, label, value) {
   const chip = strip.locator('.efsp-block-chip', { has: page.locator('.efsp-block-label', { hasText: new RegExp(`^${label}$`) }) });
   await chip.locator('.efsp-block').first().click({ timeout: 5000 });
-  const input = strip.locator('input.efsp-block-input');
+  const input = strip.locator('.efsp-block-input'); // the route edits in a <textarea> (U-STRIP-FACE)
   await input.fill(value);
   await input.press('Enter');
   await expect(chip).toContainText(value);

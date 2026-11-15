@@ -27,7 +27,7 @@ import { handoffSteps } from './control-release-rules.js';
 import { holdsFormationGrant, joinOffer, splitOffer } from './formation-rules.js';
 import { convertStripToArrival, ifrStripTypesAt } from './panel/create-strip.js';
 import {
-  assignCode, canAssignCode, canCancelIfr, canRecallVfrHandoff, canTerminateRadarService, cancelIfr, changeToIfr, initiateVfrHandoff,
+  assignCode, canAssignCode, canCancelFlightFollowing, canCancelIfr, cancelFlightFollowing, canRecallVfrHandoff, canTerminateRadarService, cancelIfr, changeToIfr, initiateVfrHandoff,
   recallVfrHandoff, terminateRadarService, vfrHandoffTargets,
 } from './flight-following.js';
 import { isVfrStrip } from './vfr.js';
@@ -240,6 +240,10 @@ function _stripMenuItems(strip) {
     if (canAssignCode(strip, getEfspFlightData(strip.flightDataId))) {
       items.push({ group: 'Flight', key: 'vfr-code', label: 'Assign code', cls: 'efsp-vfr-code-btn', enabled: true,
         title: 'a discrete beacon code for this flight', run: () => { assignCode(strip); } });
+    }
+    if (canCancelFlightFollowing(strip, getEfspFlightData(strip.flightDataId))) {
+      items.push({ group: 'Flight', key: 'vfr-cancel-ff', label: 'Cancel flight following', cls: 'efsp-vfr-cancel-ff-btn', enabled: true,
+        title: 'squawk VFR: the code is released, the strip and the track stay', run: () => { cancelFlightFollowing(strip); } });
     }
     for (const t of ifrStripTypesAt(strip.ownerPositionId)) {
       items.push({ group: 'Flight', key: `vfr-to-ifr-${t.stripType}`, label: `IFR → ${t.label}`, cls: 'efsp-vfr-ifr-btn',

@@ -56,6 +56,9 @@ const MODULES = {
   mapSetup: '/js/map-setup.js', // crc.mapSetup.basemapState (U-GLYPHS basemap fallback)
   trackPanel: '/js/panels/track-panel.js', // crc.trackPanel.showTrackPanel (crc-sync ADR 0146: tag a VFR on a contact)
   labelMenu: '/js/panels/efsp/label-menu.js', // crc.labelMenu.openLabelMenu (crc-sync ADR 0146: the VFR strip's menu)
+  magnetic: '/js/magnetic.js', // crc.magnetic.applyTheaterFacts (U-SCOPE-GESTURES: a known variation for the heading drag)
+  hdgDrag: '/js/scope-gestures/hdg-drag.js', // crc.hdgDrag.hdgDragState (docs/adr/0164)
+  altWheel: '/js/scope-gestures/alt-wheel.js', // crc.altWheel.altWheelState (docs/adr/0164)
 };
 
 /** Runs after page.goto('/'). Resolves once every module is imported and `window.crc` exists. */

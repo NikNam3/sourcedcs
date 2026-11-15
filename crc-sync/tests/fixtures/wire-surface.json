@@ -1,5 +1,5 @@
 {
-  "protocol": 7,
+  "protocol": 8,
   "surface": {
     "clientToServer": [
       "aptConfigSet",
@@ -67,6 +67,7 @@
       "AIT",
       "ApproveAirspaceEntry",
       "AssignCode",
+      "CancelFlightFollowing",
       "CarrierHandoff",
       "ChangeFlightRules",
       "ClearAirspaceEntry",

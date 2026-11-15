@@ -30,6 +30,9 @@ const { resolveZuluHhmm, resolveTypedTime, formatZuluHhmm } = require('./zulu-ti
 const { setCarrierFlightField } = require('./carrier/flight-record');
 const { WALL_CLOCK } = require('../mission-clock');
 const { defaultTransitionAltFt } = require('../theaters');
+const {
+  parseAltitudeFt, parseAltitude, formatAltitudeBlock, isAltitudeLimit, isMisorderedBlock, altitudeKey,
+} = require('./altitude-band');
 
 const { voidAppendedEntries } = require('./undo/append-only');
 const { normalizeAircraftType, normalizeWakeCategory, parseAircraftData, wakeCategoryForType, isWakeCategory } = require('./aircraft-data');
@@ -314,77 +317,6 @@ function ensureClearance(flightData) {
   return flightData.clearance;
 }
 
-/**
- * An altitude as a strip carries it, in feet. "FL180" / "F180" is a flight
- * level; "A050" and a bare three-or-fewer-digit number are hundreds of feet
- * (the strip convention: "050" is 5,000 ft, "180" is FL180's 18,000 ft); four
- * or more digits are feet. Null when it is not an altitude at all.
- */
-function parseAltitudeFt(text) {
-  const t = String(text == null ? '' : text).trim().toUpperCase().replace(/\s+/g, '');
-  let m = /^F(?:L)?(\d{1,3})$/.exec(t);
-  if (m) return Number(m[1]) * 100;
-  m = /^A(\d{1,3})$/.exec(t);
-  if (m) return Number(m[1]) * 100;
-  m = /^(\d{1,5})$/.exec(t);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return m[1].length <= 3 ? n * 100 : n;
-}
-
-/**
- * A flight level at and above the theater's transition altitude, feet below it,
- * as the canonical block text writes an end. Only the text depends on the
- * transition altitude (docs/wip/TA.md): a stored band is always feet, and
- * parseAltitudeFt() reads "FL100" as 10,000 ft in every theater.
- */
-function formatAltitudeEnd(ft, transitionAltFt) {
-  return ft >= transitionAltFt && ft % 100 === 0 ? `FL${String(ft / 100).padStart(3, '0')}` : String(ft);
-}
-
-/** A block in its one canonical text, `FL220-FL240` / `5000-8000` (docs/adr/0091). `transitionAltFt` is the theater's. */
-function formatAltitudeBlock(band, transitionAltFt) {
-  return `${formatAltitudeEnd(band.lowFt, transitionAltFt)}-${formatAltitudeEnd(band.highFt, transitionAltFt)}`;
-}
-
-/** Splits "FL220B240" / "FL220-FL240" / "220TO240" into its two ends in feet, unordered; null when it is not one. */
-function splitAltitudeBlock(t) {
-  for (let i = 1; i < t.length - 1; i += 1) {
-    for (const sep of ['-', 'B', 'TO']) {
-      if (!t.startsWith(sep, i)) continue;
-      const low = parseAltitudeFt(t.slice(0, i));
-      const high = parseAltitudeFt(t.slice(i + sep.length));
-      if (low != null && high != null) return { lowFt: low, highFt: high };
-    }
-  }
-  return null;
-}
-
-function altitudeKey(text) {
-  return String(text == null ? '' : text).trim().toUpperCase().replace(/\s+/g, '');
-}
-
-/**
- * An assigned altitude as a band in feet (docs/adr/0091): `{ lowFt, highFt }`.
- * A single altitude is a zero-width band (`lowFt === highFt`). A block is two
- * altitudes joined by `-`, `B` or `TO` ("FL220-FL240", "FL220B240", "220B240",
- * "5000-8000"), low first. Null when it is neither, and for a block whose low
- * end is not below its high end.
- */
-function parseAltitude(text) {
-  const t = altitudeKey(text);
-  const single = parseAltitudeFt(t);
-  if (single != null) return { lowFt: single, highFt: single };
-  const block = splitAltitudeBlock(t);
-  return block && block.lowFt < block.highFt ? block : null;
-}
-
-/** True when the text is two readable altitudes in the wrong order (or equal), for a precise refusal. */
-function isMisorderedBlock(text) {
-  const block = splitAltitudeBlock(altitudeKey(text));
-  return !!block && block.lowFt >= block.highFt;
-}
-
 // Typed time Blocks (docs/adr/0062's rule, extended by supervisor fix F4).
 //
 // Every …TimeUtc path a controller writes is epoch ms, like every other …Utc
@@ -464,7 +396,8 @@ function normalizeMtrValue(path, value, nowMs, transitionAltFt = defaultTransiti
     if (band == null) {
       return { ok: false, detail: 'requested altitude after exit must be an altitude or a block, e.g. FL210, 080 or FL210-FL230' };
     }
-    return { ok: true, value: band.lowFt === band.highFt ? text.replace(/\s+/g, '') : formatAltitudeBlock(band, transitionAltFt) };
+    const t = text.replace(/\s+/g, '');
+    return { ok: true, value: band.lowFt === band.highFt ? t : formatAltitudeBlock(band, transitionAltFt, t.slice(1)) };
   }
   return { ok: true, value: text };
 }
@@ -1085,6 +1018,26 @@ class FlightDataStore {
   }
 
   /**
+   * CancelFlightFollowing (docs/adr/0146): the flight's code is released and Block 5 is empty again, as after a VFR tag
+   * with no code. Refused when it has none.
+   * @returns {{ok:true, flightData, code:string}|{ok:false, reason:string, detail?:string}}
+   */
+  releaseAssignedCode(flightDataId, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
+    const code = flightData.identity.beaconAssigned;
+    if (!code) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'it has no code' };
+    if (this._codeAllocator.holderOf(code) === flightDataId) this._codeAllocator.release(code);
+    flightData.identity.beaconAssigned = null;
+    flightData.provenance['identity.beaconAssigned'] = 'CONTROLLER_ENTERED';
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['identity.beaconAssigned']);
+    return { ok: true, flightData, code };
+  }
+
+  /**
    * WP5 (docs/adr/0045) — the code the aircraft is actually squawking, as
    * reported by the correlated surveillance contact.
    *
@@ -1599,11 +1552,12 @@ class FlightDataStore {
               ok: false, reason: 'VALIDATION_ERROR',
               detail: isMisorderedBlock(text)
                 ? `${JSON.stringify(text)} is not a block — write the lower altitude first, e.g. FL220-FL240`
-                : `${JSON.stringify(text)} is not an altitude — write it like 5000, 050, A050, FL180 or a block, FL220-FL240`,
+                : `${JSON.stringify(text)} is not an altitude — write it like 5000, 050, A050, FL180, a block, FL220-FL240, or a limit, <080 or >FL240`,
             };
           }
+          // A limit (docs/adr/0163) keeps `parsed` null: it is a band with one open end, never a level to reach.
           if (band.lowFt === band.highFt) parsed = band.lowFt;
-          else { block = band; shown = formatAltitudeBlock(band, this._transitionAltFt()); }
+          else { block = band; shown = formatAltitudeBlock(band, this._transitionAltFt(), altitudeKey(text).slice(1)); }
         } else if (field === 'speed') {
           const sp = parseSpeed(text);
           if (sp === null) {
@@ -1790,6 +1744,6 @@ module.exports = {
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
-  ensureClearance, parseAltitudeFt, parseAltitude, parseSpeed, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
+  ensureClearance, parseAltitudeFt, parseAltitude, parseSpeed, formatAltitudeBlock, isAltitudeLimit, parseHeadingDeg, activeClearanceEntry,
   normalizeMtrValue, OBSERVED_PATHS, TOFI_MONITOR_PATHS, 
 };

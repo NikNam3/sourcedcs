@@ -5,6 +5,7 @@ import { scrambleAlertsFor } from './scramble.js';
 import { atoAlertsFor } from './ato-strip.js';
 import { runwayStatusAlertsFor } from './runway-status-rules.js';
 import { settings } from '../../settings.js';
+import { limitWords } from '../../altitude-limit.js';
 
 // What a Strip warns about (DESK-SPLIT, split out of strip-view.js): the indicator order and the alert chips _stripAlerts derives.
 
@@ -60,10 +61,10 @@ export function _stripAlerts(strip) {
     } else if (a.kind === 'WRONG_WAY') {
       const down = a.fpm < 0;
       out.push({ key: 'conf', tone: 'bad', legacy: 'efsp-conf-indicator', text: `ALT ${down ? '↓' : '↑'}`,
-        reason: `Assigned ${_fmtAlt(a.assigned)}, ${down ? 'descending' : 'climbing'} through ${_fmtAlt(a.altFt)} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });
+        reason: `Assigned ${limitWords(a.block)}${_fmtAlt(a.assigned)}, ${down ? 'descending' : 'climbing'} through ${_fmtAlt(a.altFt)} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });
     } else if (a.kind === 'LEVEL_BUST') {
       out.push({ key: 'conf', tone: 'bad', legacy: 'efsp-conf-indicator', text: `BUST ${a.deviationFt > 0 ? '+' : '−'}${Math.abs(a.deviationFt)}`,
-        reason: `Reached ${_fmtAlt(a.assigned)}, now at ${_fmtAlt(a.altFt)}.` });
+        reason: `${limitWords(a.block) ? `Limit ${limitWords(a.block)}` : 'Reached '}${_fmtAlt(a.assigned)}, now at ${_fmtAlt(a.altFt)}.` });
     } else if (a.kind === 'GLIDESLOPE') {
       // crc-sync docs/adr/0139: the one alert on a PAR final, after Begin descent, above DA.
       const above = a.side === 'ABOVE';

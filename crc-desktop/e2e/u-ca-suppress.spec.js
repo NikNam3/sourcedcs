@@ -69,6 +69,8 @@ async function labelPoint(page, trackId) {
 }
 
 test('no SUPPRESS on the label menu of a contact with no Strip; SUPPRESS and RESTORE on the track panel', async ({ page }) => {
+  // An ATC controller (CTR) never gets the track info panel from a click; its rows are still tested, opened directly.
+  const openTp = () => page.evaluate(() => crc.trackPanel.showTrackPanel('vqa'));
   const sent = [];
   page.on('websocket', ws => ws.on('framesent', f => {
     try { const m = JSON.parse(f.payload); if (m.type === 'efsp-conflict-suppress') sent.push(m); } catch { /* not JSON */ }
@@ -84,7 +86,9 @@ test('no SUPPRESS on the label menu of a contact with no Strip; SUPPRESS and RES
   // untagged contact may still offer TAG (crc-sync ADR 0146); either way the track panel is one input away.
   const menu = page.locator('.label-menu');
   await expect(menu.locator('.label-menu-suppress')).toHaveCount(0);
-  if (await menu.count()) await menu.locator('.label-menu-track').click();
+  await expect(page.locator('#tp-callsign', { hasText: 'BIRD1' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await openTp();
   const row = page.locator('#tp-alerts .tp-alert[data-conflict-id="vqa|vqb"]');
   await expect(row).toBeVisible();
   await row.locator('.tp-alert-suppress').click();
@@ -95,7 +99,8 @@ test('no SUPPRESS on the label menu of a contact with no Strip; SUPPRESS and RES
   await scene(page, true);
   await page.mouse.click(pt.x, pt.y);
   await expect(menu.locator('.label-menu-suppress')).toHaveCount(0);
-  if (await menu.count()) await menu.locator('.label-menu-track').click();
+  await page.keyboard.press('Escape');
+  await openTp();
   await expect(row).toHaveClass(/tp-alert-off/);
   await expect(row).toContainText('Suppressed.');
   await row.locator('.tp-alert-suppress').click();

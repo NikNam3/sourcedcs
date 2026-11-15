@@ -55,12 +55,17 @@ export function setAtisActive(v) { atisActive = v; }
 export let coverageRadars = [];          // [{id, type, label, lat, lon, elevM, rangeM, sweepMs, sweepStart, grantedBy, ...}]
 export let coverageSignedOnPositions = [];   // [{facilityId, positionId, isPrimary}]
 export let coverageDatalink = false;     // whether a Position we are signed on to is on the datalink
+// Whether a Position we are signed on to is an ATC one (crc-sync's coverage `conflictAlert`, position-coverage.js): an ATC
+// controller works contacts through the data block's menu and never gets the track info panel, which is the tactical one's.
+export let coverageAtc = false;
 
-export function setCoverage(radars, signedOnPositions, datalink) {
+export function setCoverage(radars, signedOnPositions, datalink, atc = false) {
   coverageRadars = radars;
   coverageSignedOnPositions = signedOnPositions;
   coverageDatalink = datalink;
+  coverageAtc = !!atc;
 }
+export function _setCoverageAtc(v) { coverageAtc = !!v; }
 export function _setCoverageRadars(v) { coverageRadars = v; }
 export function _setCoverageDatalink(v) { coverageDatalink = v; }
 export function _setCoverageSignedOnPositions(v) { coverageSignedOnPositions = v; }

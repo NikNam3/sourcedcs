@@ -29,6 +29,7 @@ const MODULES = [
   require('./terminate-radar-service'),
   require('./vfr-handoff'),
   require('./assign-code'),
+  require('./cancel-flight-following'),
   require('./change-flight-rules'),
 ];
 

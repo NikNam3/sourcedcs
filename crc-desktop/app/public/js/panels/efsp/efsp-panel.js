@@ -1,5 +1,6 @@
 'use strict';
-import { _cachePanelElements, _efspPanelRootEl, _mutationErrorEl } from './panel/state.js';
+import { forceCaps } from '../../force-caps.js';
+import { _cachePanelElements, _createStripInputEl, _dotCommandInputEl, _efspPanelRootEl, _mutationErrorEl } from './panel/state.js';
 import { _loadStereoRoutes, _refreshCreateStripAvailability, _wireCreateStrip } from './panel/create-strip.js';
 import { _renderPositionTabs } from './panel/tabs.js';
 import { renderCombination } from './panel/combination.js';
@@ -68,6 +69,9 @@ function _renderCorrelationRate() {
 
 export function initEfspPanel() {
   _cachePanelElements();
+  // SF-Q1: the New Strip callsign and the dot-command line type in capitals (parseDotCommand lowercases the verb).
+  forceCaps(_createStripInputEl);
+  forceCaps(_dotCommandInputEl);
   if (_mutationErrorEl) {
     // Dismissible (F-103). The banner is its own dismiss target rather than
     // growing a ✕ child, because everything that reads it — the e2e helpers,

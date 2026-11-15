@@ -59,7 +59,7 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
     const fd = ctx.flightDataStore.getFlightData(strip.flightDataId);
     for (const field of ASSIGNMENT_FIELDS) {
       const active = fd && activeClearanceEntry(fd, field);
-      if (active && active.parsed != null) ctx.flightDataStore.setClearance(strip.flightDataId, field, { value: '' }, { by });
+      if (active && (active.parsed != null || active.block)) ctx.flightDataStore.setClearance(strip.flightDataId, field, { value: '' }, { by });
     }
   }
 

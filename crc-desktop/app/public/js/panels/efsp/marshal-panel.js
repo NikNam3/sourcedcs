@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../force-caps.js';
 import { missionNow } from '../../mission-clock.js';
 import { registerSettingsTab, getSetting } from '../../settings-registry.js';
 import { carrierBearingText, carrierHhmm, carrierStateOf, getEfspCarrier } from './carrier-state.js';
@@ -132,6 +133,7 @@ function _build() {
   const sideIn = _el('input', 'mb-input mb-create-input');
   sideIn.type = 'text'; sideIn.maxLength = 8; sideIn.placeholder = 'SIDE'; sideIn.autocomplete = 'off';
   sideIn.dataset.marshalInput = 'create-side';
+  forceCaps(sideIn);
   const sqIn = _el('input', 'mb-input mb-create-input');
   sqIn.type = 'text'; sqIn.maxLength = 4; sqIn.placeholder = 'SQUAWK'; sqIn.autocomplete = 'off'; sqIn.inputMode = 'numeric';
   sqIn.dataset.marshalInput = 'create-squawk';
@@ -320,6 +322,7 @@ function _panelInput({ part, value, placeholder, className, label, size, bad, se
   inp.type = 'text'; inp.size = size; inp.placeholder = placeholder; inp.value = value;
   if (label) inp.setAttribute('aria-label', label);
   inp.dataset.marshalInput = part;
+  forceCaps(inp); // SF-Q1: what lands on a Strip is in capitals
   let sent = false;
   const unmark = () => { inp.classList.remove('mb-input-bad'); inp.removeAttribute('title'); };
   inp.addEventListener('click', (ev) => ev.stopPropagation());

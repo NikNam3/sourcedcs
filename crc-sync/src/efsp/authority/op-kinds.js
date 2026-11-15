@@ -79,10 +79,10 @@ const FORMATION_OP_KINDS = ['SplitFormation', 'JoinFormation'];
 const PATTERN_OP_KINDS = ['JoinPattern', 'LeavePattern'];
 
 // docs/adr/0146 (H174, H175): the VFR strip's actions. Tag a track (StartFlightFollowing), the STARS handoff (VfrHandoff),
-// the optional code (AssignCode), IFR <-> VFR in place (ChangeFlightRules) and "Radar service terminated". A literal
+// the optional code (AssignCode) and its release (CancelFlightFollowing), IFR <-> VFR in place (ChangeFlightRules) and "Radar service terminated". A literal
 // capability on FORMATION_OP_KINDS' pattern (never in OP_KINDS, where NON_CREATE_OPS would hand it to the tactical and
 // carrier Positions silently), held by every ATC Position that works traffic on a scope or the field.
-const VFR_OP_KINDS = ['StartFlightFollowing', 'TerminateRadarService', 'VfrHandoff', 'AssignCode', 'ChangeFlightRules'];
+const VFR_OP_KINDS = ['StartFlightFollowing', 'TerminateRadarService', 'VfrHandoff', 'AssignCode', 'CancelFlightFollowing', 'ChangeFlightRules'];
 
 const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !COORDINATION_STEP_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
 

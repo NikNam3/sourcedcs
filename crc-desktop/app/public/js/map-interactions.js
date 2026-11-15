@@ -11,7 +11,9 @@ import { getTextSizePx, TEXT_OFFSET_EM } from './scope-constants.js';
 import { createLabelDragGate } from './label-drag-gate.js';
 import { _drag, _measure, _setDrag, _setMeasure, map } from './map-handle.js';
 import { bullseyePickTarget } from './view-state.js';
-import { labelOffsets, missionData, tracks } from './picture.js';
+import { coverageAtc, labelOffsets, missionData, tracks } from './picture.js';
+import { isHdgDragPress, startHdgDrag } from './scope-gestures/hdg-drag.js';
+import { wireAltWheel } from './scope-gestures/alt-wheel.js';
 
 // The scope's pointer handling (DESK-SPLIT, split out of map-setup.js's initMap): label drag and click, ATC target clicks, airport
 // and track clicks, the combined mouse-move (BRA, label drag, measure line) and the right-click measure line. Run once, from 'load'.
@@ -28,6 +30,7 @@ export function wireMapInteractions() {
   const _labelGate = createLabelDragGate();
 
   const _onLabelMouseDown = (e) => {
+    if (startHdgDrag(e)) return; // Ctrl + right drag: a heading, not a label drag (docs/adr/0164)
     if (e.originalEvent.button !== 0) return;
     // No e.preventDefault() here — we need the click event to fire later.
     _labelGate.down();
@@ -60,12 +63,20 @@ export function wireMapInteractions() {
     map.dragPan.disable();
   };
 
-  // Click on a label, unless the mouse was dragged. The controller who owns the
-  // contact's correlated Strip gets the assignment menu (HDG / SPEED / ALT,
-  // docs/adr/0140), with SUPPRESS for its conflict alerts (crc-sync's
-  // docs/adr/0145, 0147: only the owner's block offers it); everyone
-  // else, and a Shift+click, gets the track panel as before (H71 default 7),
-  // which is also the menu's TRACK item.
+  // A click on a contact (its label, its target or its tactical square). The controller who owns the contact's
+  // correlated Strip gets the assignment menu (HDG / SPEED / ALT, docs/adr/0140), with SUPPRESS for its conflict alerts
+  // (crc-sync's docs/adr/0145, 0147), the VFR actions and the tag (docs/adr/0146). The track info panel is the tactical
+  // controller's (H71 default 7): an ATC controller (signed on to an ATC Position) never gets it, not as a fallback, not
+  // on Shift+click, not as the menu's TRACK item; a tactical one gets it where there is no menu, on Shift+click, and as
+  // TRACK.
+  const _openContact = (id, ev) => {
+    const trackPanel = !coverageAtc;
+    if (ev && !(ev.shiftKey && trackPanel)
+      && openLabelMenu(id, ev.clientX, ev.clientY, trackPanel ? { onTrackInfo: () => showTrackPanel(id) } : {})) return;
+    if (trackPanel) showTrackPanel(id);
+  };
+
+  // Click on a label, unless the mouse was dragged.
   // e.preventDefault() stops the map-level click from closing the panel.
   const _onLabelClick = (e) => {
     if (bullseyePickTarget) return;
@@ -73,11 +84,9 @@ export function wireMapInteractions() {
     if (!_labelGate.takeClick()) return;
     const id = String(e.features[0].properties.id);
     _selectStripForTrackIfAny(id);
-    const ev = e.originalEvent;
-    if (ev && !ev.shiftKey && openLabelMenu(id, ev.clientX, ev.clientY, { onTrackInfo: () => showTrackPanel(id) })) return;
-    showTrackPanel(id);
+    _openContact(id, e.originalEvent);
   };
-  // An ATC block drags and opens the track panel exactly like a tactical one.
+  // An ATC block drags and clicks exactly like a tactical one.
   for (const layer of ['unit-labels', 'atc-labels']) {
     map.on('mousedown', layer, _onLabelMouseDown);
     map.on('click', layer, _onLabelClick);
@@ -86,7 +95,7 @@ export function wireMapInteractions() {
   // A click on an ATC TARGET is STARS's own gesture (docs/adr/0088): accept
   // a handoff or point-out offered to me, acknowledge what blinks, step a
   // finished exchange down, else open a PDB into an FDB and back. It then
-  // opens the track panel and selects the Strip, as a label click does.
+  // does what a label click does (_openContact).
   // The disc and its character are two layers; one click is one gesture.
   let _atcLastClick = null;
   const _onAtcTargetClick = (e) => {
@@ -98,12 +107,17 @@ export function wireMapInteractions() {
     _atcLastClick = e.originalEvent;
     const id = String(feat.properties.id);
     atcTargetClick(id);
-    // The target (disc, or `+` for primary only) also opens the track panel and jumps to the Strip, like the label and the
-    // tactical square (docs/wip/STRIP-JUMP.md). After the STARS gesture, so an accepted handoff lands on its Strip.
-    showTrackPanel(id);
+    // The target (disc, or `+` for primary only) then jumps to the Strip and opens what a label click opens
+    // (docs/wip/STRIP-JUMP.md). After the STARS gesture, so an accepted handoff lands on its Strip and its menu.
     _selectStripForTrackIfAny(id);
+    _openContact(id, e.originalEvent);
     updateMap();
   };
+  // Ctrl + right drag from a target or a tactical square assigns a heading, as from the label (docs/adr/0164).
+  for (const layer of ['atc-targets', 'atc-symbols', 'unit-squares']) map.on('mousedown', layer, startHdgDrag);
+  // Alt + wheel over a contact moves its assigned altitude (docs/adr/0164).
+  wireAltWheel();
+
   map.on('click', 'atc-targets', _onAtcTargetClick);
   map.on('click', 'atc-symbols', _onAtcTargetClick);
 
@@ -131,15 +145,15 @@ export function wireMapInteractions() {
   }
 
   // ── Left-click on track icon ─────────────────────────────────────────
-  // Aircraft and ships → track info panel
+  // Aircraft and ships: as a label click (_openContact)
   map.on('click', 'unit-squares', (e) => {
     if (bullseyePickTarget) return;
     const feat = e.features && e.features[0];
     if (!feat) return;
     e.preventDefault();
     const id  = String(feat.properties.id);
-    showTrackPanel(id);
     _selectStripForTrackIfAny(id);
+    _openContact(id, e.originalEvent);
   });
 
   // Refreshes the extended centerline's zoom-dependent tick spacing as soon
@@ -198,6 +212,7 @@ export function wireMapInteractions() {
   // ── Right-click measure line ─────────────────────────────────────────
   map.getCanvas().addEventListener('mousedown', (e) => {
     if (e.button !== 2) return;
+    if (isHdgDragPress(e)) return; // Ctrl + right drag on your own contact is a heading (docs/adr/0164), not a measure
     e.preventDefault();
     const rect   = map.getCanvas().getBoundingClientRect();
     const point  = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
