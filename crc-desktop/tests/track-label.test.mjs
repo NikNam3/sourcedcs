@@ -140,3 +140,9 @@ test('the carrier map label: side number and altitude in hundreds; no side numbe
   assert.equal(L.sideAltText(t, ''), 'VIPER11 012');
   assert.equal(L.sideAltText({ ...t, altitude: null }, '201'), '201');
 });
+
+test('an Alt+wheel preview of an at-or-below / at-or-above limit keeps its sign (ADR 0163, 0164)', () => {
+  assert.equal(L.assignedPreviewText({ altFt: 9000, altBlock: null, altPrefix: '<', altPreview: true }), '<090?');
+  assert.equal(L.assignedPreviewText({ altFt: 25000, altBlock: null, altPrefix: '>', altPreview: true }), '>250?');
+  assert.equal(L.assignedPreviewText({ altFt: 9000, altBlock: null, altPreview: true }), 'A090?');
+});

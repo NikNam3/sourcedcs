@@ -236,7 +236,9 @@ export function atcSpeed(speedKt) {
 export function atcAssignedText(assigned, currentFt) {
   if (!assigned) return '';
   const parts = [];
-  if (isAltitudeLimit(assigned.altBlock)) {
+  // docs/adr/0164: an Alt+wheel preview, not sent yet: marked `?`, no trend arrow (nothing was issued).
+  if (assigned.altPreview) parts.push(assignedPreviewText(assigned));
+  else if (isAltitudeLimit(assigned.altBlock)) {
     // crc-sync docs/adr/0163: the strip's own text ('<080'), the arrow only when the flight is past the limit.
     parts.push(`${assignedBlockText(assigned.altBlock, assigned.altText)}${limitTrend(assigned.altBlock, currentFt)}`);
   } else if (assigned.altBlock) {
@@ -254,6 +256,15 @@ export function atcAssignedText(assigned, currentFt) {
   }
   if (Number.isFinite(assigned.hdg)) parts.push('H' + String(Math.round(assigned.hdg) % 360).padStart(3, '0'));
   return parts.join(' ');
+}
+
+/** An Alt+wheel preview (docs/adr/0164) as a data block writes an assigned altitude, marked `?`: 'A090?', 'A080B120?'. */
+export function assignedPreviewText(assigned) {
+  const h = (ft) => String(Math.round(ft / 100)).padStart(3, '0');
+  const b = assigned.altBlock;
+  const prefix = assigned.altPrefix || ''; // an at-or-below / at-or-above limit keeps its sign: '<090?'
+  if (prefix) return `${prefix}${h(b ? b.lowFt : assigned.altFt)}?`;
+  return `${b ? `A${h(b.lowFt)}B${h(b.highFt)}` : `A${h(assigned.altFt)}`}?`;
 }
 
 /** The type as a STARS block writes it: the flight plan's own designator (`F16`), never a display label. */

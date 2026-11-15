@@ -3,6 +3,7 @@ import { buildAirports, buildBullseye, buildDrawings, buildNavpoints, buildTextM
 import { initIcons } from './icons.js';
 import { addOverlayLayers } from './map-layers-overlays.js';
 import { addTrackLayers } from './map-layers-tracks.js';
+import { addGestureLayers } from './map-layers-gestures.js';
 import { wireMapInteractions } from './map-interactions.js';
 import { initElevationContours } from './elevation.js';
 import { applyMapTheme } from './map-style.js';
@@ -85,6 +86,7 @@ export function initMap(container) {
 
     addOverlayLayers();
     addTrackLayers();
+    addGestureLayers();
     wireMapInteractions();
 
     _setMapReady(true);
