@@ -1691,7 +1691,7 @@ test('acting from a popover uses the Strip as it is NOW, not as it was when the 
     { ...POPOVER_CASES[0], act: (r) => click(findByText(r.el, 'Hand off to CTR')) },
     { ...POPOVER_CASES[1], act: (r) => click(findByText(r.el, 'TOFI to TAC_C2')) },
     { ...POPOVER_CASES[3], act: (r) => click(findByText(r.el, 'Approve entry')) },
-    { ...POPOVER_CASES[5], act: (r) => click(descendants(openPopoverIn(r))[0]) },
+    { ...POPOVER_CASES[5], act: (r) => click(descendants(openPopoverIn(r)).find(d => /efsp-highlight-swatch/.test(d.className || ''))) },
   ];
   for (const c of cases) {
     const r = await c.render();
