@@ -128,6 +128,13 @@ app.on('ready', async () => {
     });
     // Radio-only works from behind other programs: its transmit fuse and RX end are renderer timers (S-RO-1 RO8).
     if (launchMode === RADIO) win.webContents.setBackgroundThrottling(false);
+    // The portal finds CRC by its desktop entry; an AppImage installs none (global-ptt/desktop-entry.js).
+    try {
+        require('./global-ptt/desktop-entry.js').ensureDesktopEntry({
+            platform: process.platform, env: process.env, home: app.getPath('home'),
+            execPath: process.execPath, appPath: app.getAppPath(), packaged: app.isPackaged,
+        });
+    } catch (err) { console.warn('[global-ptt] desktop entry not written:', err.message); }
     require('./global-ptt/index.js').attach(win);
 
     // Dev-only: auto-open DevTools so a renderer-side error (e.g. a
