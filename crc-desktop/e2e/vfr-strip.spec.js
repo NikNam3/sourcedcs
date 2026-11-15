@@ -89,8 +89,12 @@ test('tag a contact at AP: a VFR strip TRACKED, no code, bound; the strip says V
   await dropStrips(page, [callsign]);
 });
 
-test('the data block\'s menu: ALT, a code, the handoff the receiver accepts, and radar service terminated', async ({ page }) => {
-  await openPanel(page, { signedOn: ['AP', 'LC'], facilityId: 'INCIRLIK', controller: 'vfr-2' });
+test('the data block\'s menu: ALT, a code, the handoff the receiver accepts, and radar service terminated', async ({ page, browser }) => {
+  // AP and LC are two controllers: one holding both would have the handoff accepted at once (docs/adr/0162).
+  await openPanel(page, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'vfr-2' });
+  const lcCtx = await browser.newContext({ baseURL: test.info().project.use.baseURL, viewport: { width: 1500, height: 1000 } });
+  const lc = await lcCtx.newPage();
+  await openPanel(lc, { signedOn: ['LC'], facilityId: 'INCIRLIK', controller: 'vfr-2-lc' });
   const callsign = uniqueCallsign('VF');
   const tid = `vfr-${Date.now() % 100000}`;
   await tag(page, tid, callsign);
@@ -118,14 +122,17 @@ test('the data block\'s menu: ALT, a code, the handoff the receiver accepts, and
   expect((await recordFor(page, callsign)).owner).toBe('AP');
   await expect(stripByCallsign(page, callsign).locator('.efsp-vfr-handoff-mark')).toHaveText('HO LC');
   await page.screenshot({ path: test.info().outputPath('02-handoff-initiated.png') });
-  await openMenu(page, tid, callsign);
-  await menu.locator('.label-menu-accept').click();
-  await expect.poll(() => recordFor(page, callsign)).toMatchObject({ owner: 'LC', bayId: 'lc-runway-queue', handoffTo: null });
+  const lcMenu = lc.locator('.label-menu');
+  await expect.poll(async () => (await recordFor(lc, callsign) || {}).handoffTo, 'LC sees the offer').toBe('LC');
+  await openMenu(lc, tid, callsign);
+  await lcMenu.locator('.label-menu-accept').click();
+  await expect.poll(() => recordFor(lc, callsign)).toMatchObject({ owner: 'LC', bayId: 'lc-runway-queue', handoffTo: null });
 
   // Radar service terminated, by the new holder.
-  await openMenu(page, tid, callsign);
-  await menu.locator('.label-menu-terminate').click();
-  await expect.poll(() => recordFor(page, callsign)).toBe(null);
+  await openMenu(lc, tid, callsign);
+  await lcMenu.locator('.label-menu-terminate').click();
+  await expect.poll(() => recordFor(lc, callsign)).toBe(null);
+  await lcCtx.close();
 });
 
 test('a second tag on a contact already tagged is refused, naming the flight; CD has no VFR form', async ({ page, browser }) => {
