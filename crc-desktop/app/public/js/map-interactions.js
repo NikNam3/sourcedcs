@@ -83,7 +83,7 @@ export function wireMapInteractions() {
     _selectStripForTrackIfAny(id);
     _openContact(id, e.originalEvent);
   };
-  // An ATC block drags and opens the track panel exactly like a tactical one.
+  // An ATC block drags and clicks exactly like a tactical one.
   for (const layer of ['unit-labels', 'atc-labels']) {
     map.on('mousedown', layer, _onLabelMouseDown);
     map.on('click', layer, _onLabelClick);
@@ -92,7 +92,7 @@ export function wireMapInteractions() {
   // A click on an ATC TARGET is STARS's own gesture (docs/adr/0088): accept
   // a handoff or point-out offered to me, acknowledge what blinks, step a
   // finished exchange down, else open a PDB into an FDB and back. It then
-  // opens the track panel and selects the Strip, as a label click does.
+  // does what a label click does (_openContact).
   // The disc and its character are two layers; one click is one gesture.
   let _atcLastClick = null;
   const _onAtcTargetClick = (e) => {
