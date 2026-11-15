@@ -43,6 +43,10 @@ module.exports = KINDS.map(kind => ({
   undo: kind === 'HANDOFF' ? HANDOFF_UNDO : 'none', // docs/adr/0100 §1: the other primitives have CANCEL
   authorize,
   // docs/adr/0101: what a mark wrote, in the entry of the op that caused it (one entry per outcome, ADR 0083).
-  auditFields: (ctx, result) => (result.controlAudit ? { tail: result.controlAudit } : {}),
+  // docs/adr/0162: a HANDOFF accepted at once (the sender holds the receiver) says so, the self-coordination record.
+  auditFields: (ctx, result) => {
+    const tail = { ...(result.controlAudit || {}), ...(result.selfCoordinated ? { autoAccepted: true, selfCoordinated: true } : {}) };
+    return Object.keys(tail).length ? { tail } : {};
+  },
   apply: (ctx, strip, op, meta) => ctx.coordination.applyOp(strip, op, meta.by, meta.actingPositionId),
 }));

@@ -44,6 +44,8 @@ const { Tofi } = require('./board/tofi');
 const { HandoffControl } = require('./board/handoff-control');
 const { StripOps } = require('./board/strip-ops');
 const { BoardPersistence } = require('./board/persistence');
+const { VfrTransfer } = require('./board/vfr-transfer');
+const { heldByController } = require('./self-held');
 const OPS = require('./board/ops');
 const { initialStateFor, replicaOnReceipt, senderStateOnAccept } = require('./authority');
 const { ReplayCache, replayRecord, REPLAY_PERSIST_WINDOW_MS } = require('./sync/replay-cache');
@@ -159,6 +161,12 @@ class BoardStore {
       undoHistory: () => this._undoHistory,
       airborneObserver,
     });
+    // A VFR handoff across Facilities (docs/adr/0162): this Board's half, either side.
+    this._vfrTransfer = new VfrTransfer({
+      rules, state: this._state, placement: this._placement, clock, audit: this._audit,
+      retire: (strip, by) => this._stripOps.retire(strip, by),
+    });
+    this._stripOps.vfrTransfer = this._vfrTransfer;
   }
 
   /** A Board built alone (tests, tools): its own history over this Board and its peers. Flight data writes reach a history only through the store's `onWrite`. */
@@ -327,6 +335,38 @@ class BoardStore {
 
   /** The other half of a HANDOFF's record changed: check-in, control, released, request (board/handoff-control.js). */
   receiveHandoffRecord(args) { return this._control.receiveHandoffRecord(args); }
+
+  /**
+   * A HANDOFF proposed against this Facility by a controller who also holds the receiving Position (docs/adr/0162): its
+   * replica is accepted at once, as that Position, and the entry says so. The permission is the receiver's own.
+   */
+  autoAcceptCoordination({ stripId, by, causedBy, fromFacilityId }) {
+    const strip = this._state.strips.get(stripId);
+    if (!strip || !strip.coordination || strip.coordination.state !== 'INITIATED') return { ok: false, reason: 'NOT_FOUND' };
+    const acting = strip.ownerPositionId;
+    const kind = strip.coordination.primitive;
+    if (!this._rules.canMutate(acting, kind) || !this._rules.canMutateAction(acting, kind, 'ACCEPT')) return { ok: false, reason: 'PERMISSION_DENIED' };
+    const before = deepClone(strip);
+    const result = this._coordination.applyOp(strip, { kind, action: 'ACCEPT' }, by, acting);
+    if (result.ok) this._audit.recordPeer(kind, strip, before, { causedBy, fromFacilityId, by, action: 'ACCEPT', extra: { autoAccepted: true, selfCoordinated: true } });
+    return result;
+  }
+
+  /** Why this Facility's `positionId` cannot be handed a VFR strip, or null (board/vfr-transfer.js). */
+  vfrHandoffReceiverRefusal(positionId) { return this._vfrTransfer.receiverRefusal(positionId); }
+
+  /** Does `controllerId` hold this Facility's `positionId`, Primary there or at the Position covering it (self-held.js)? */
+  isHeldByController(controllerId, positionId) { return heldByController(this._rules, controllerId, positionId); }
+
+  /** Another Facility's controller accepted at once (they hold the receiver): mint the strip here, a peer write (board/vfr-transfer.js). */
+  receiveVfrHandoff({ fromFacilityId, fromStrip, toPositionId, by, causedBy }) {
+    const out = this._vfrTransfer.mint({ fromStrip, toPositionId, by });
+    if (out.ok) this._audit.recordPeer('VfrHandoffReceived', out.strip, null, { causedBy, fromFacilityId, by });
+    return out;
+  }
+
+  /** The receiving Facility accepted this Board's VFR handoff and minted its strip: end ours (board/vfr-transfer.js). */
+  releaseVfrHandoff(args) { return this._vfrTransfer.release(args); }
 
   /**
    * The control tick's question (docs/adr/0122): the transferring Strips here whose not-released HANDOFF is checked in and

@@ -303,7 +303,7 @@ const STRIP_SHAPE = {
   finalCalls: { BEGIN_DESCENT: anyOf('at', 'by'), CLEARED_TO_LAND: anyOf('at', 'by') },
   previousLeg: anyOf('annotations', 'convertedAt', 'convertedBy', 'flags', 'stripType'),
   // docs/adr/0146: a VFR handoff initiated and not yet accepted (board/ops/vfr-handoff.js).
-  vfrHandoff: anyOf('toPositionId', 'initiatedAt', 'initiatedBy'),
+  vfrHandoff: anyOf('toPositionId', 'toFacilityId', 'initiatedAt', 'initiatedBy'),
 };
 const FLIGHT_DATA_SECTIONS = {
   identity: anyOf('aircraftType', 'beaconAssigned', 'beaconObserved', 'callsign', 'degradation', 'equipmentCodes',

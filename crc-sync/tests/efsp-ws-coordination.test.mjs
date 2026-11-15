@@ -164,6 +164,38 @@ test('CTR originates an ARRIVAL Strip, proposes HANDOFF to AP, and AP accepts it
   assert.equal(slot(accepted, 'peer').strips.updated[0].coordination.state, 'ACTIVE');
 });
 
+test('docs/adr/0162: a HANDOFF to a Position the sender also holds is accepted at once; CHECKED_IN stays the controller\'s', () => {
+  const ctx = makeCtx();
+  holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
+  holding(ctx, CTR_SESSION, 'INCIRLIK', ['AP']);
+  const senderStrip = handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist).ack.strip;
+  const proposed = handleMessage(ctx, CTR_SESSION, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+    facilityId: 'CENTER', actingPositionId: 'CTR', stripId: senderStrip.stripId, baseRev: senderStrip.rev,
+    op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' },
+  }, noopPersist);
+  assert.equal(proposed.ack.ok, true, JSON.stringify(proposed.ack));
+  assert.equal(proposed.ack.strip.coordination.state, 'ACTIVE', 'the sender side is live at once');
+  const receiver = ctx.boardStoreFor('INCIRLIK').getStrip(proposed.ack.strip.coordination.peerStripId);
+  assert.equal(receiver.coordination.state, 'ACTIVE');
+  assert.equal(receiver.bayId, 'ap-inbound', 'out of the Coordination Bay, as an ACCEPT moves it');
+  assert.equal(slot(proposed, 'peer').strips.updated[0].bayId, 'ap-inbound', 'the receiver\'s Board hears the accepted replica');
+  assert.notEqual(receiver.coordination.comms && receiver.coordination.comms.transferred, true, 'no check-in yet');
+});
+
+test('docs/adr/0162: a HANDOFF to a Position someone else holds still waits for them', () => {
+  const ctx = makeCtx();
+  holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
+  holding(ctx, AP_SESSION, 'INCIRLIK', ['AP']);
+  const senderStrip = handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist).ack.strip;
+  const proposed = handleMessage(ctx, CTR_SESSION, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+    facilityId: 'CENTER', actingPositionId: 'CTR', stripId: senderStrip.stripId, baseRev: senderStrip.rev,
+    op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' },
+  }, noopPersist);
+  assert.equal(proposed.ack.strip.coordination.state, 'INITIATED');
+});
+
 test('efsp-resync is facility-scoped — resyncing CENTER never returns INCIRLIK\'s strips or vice versa', () => {
   const ctx = makeCtx();
   const opsSession = { controllerId: 'ops1', who: 'Ops1' };

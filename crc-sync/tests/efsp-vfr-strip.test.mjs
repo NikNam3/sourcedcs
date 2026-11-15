@@ -28,7 +28,7 @@ const facilityConfig = (await import('../src/efsp/facility-config.js')).createFa
 const { CorrelationReconciler } = await import('../src/efsp/correlation-reconciler.js');
 const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
 const { octalCode } = await import('../src/surveillance/transponder.js');
-const { freshEfsp, mustAct, act, activate, steppedWallClock, DEPARTURE_FLIGHT_DATA, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
+const { freshEfsp, mustAct, act, hold, activate, steppedWallClock, DEPARTURE_FLIGHT_DATA, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
 
@@ -164,7 +164,7 @@ test('the STARS handoff: initiate (the holder keeps it), the receiver accepts (i
   let strip = send(efsp, c.AP, 'AP', TAG('730', 'N730')).ack.strip;
   // A one-click transfer is not how a VFR moves.
   assert.match(act(efsp, c.AP, 'AP', strip, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-runway-queue', rackId: 'rwy-05' }).detail, /receiver accepts/);
-  for (const [to, re] of [['AP', /already holds/], ['', /name the Position/], ['CTR', /not a Position of this Facility/], ['OPS', /does not work VFR/]]) {
+  for (const [to, re] of [['AP', /already holds/], ['', /name the Position/], ['CTR', /not a Position of INCIRLIK/], ['OPS', /does not work VFR/]]) {
     assert.match(act(efsp, c.AP, 'AP', strip, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: to }).detail, re, to);
   }
   strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'LC' });
@@ -183,6 +183,106 @@ test('the STARS handoff: initiate (the holder keeps it), the receiver accepts (i
   assert.equal(efsp.correlationStore.getCorrelation(strip.flightDataId).trackId, '730', 'the binding stays');
   const entries = efsp.mutationLog.readAll().filter(e => e.op === 'VfrHandoff' && e.stripId === strip.stripId);
   assert.deepEqual(entries.map(e => e.vfrHandoff.action), ['INITIATE', 'RECALL', 'INITIATE', 'ACCEPT']);
+});
+
+test('a handoff to a Position the sender also holds is accepted at once: Primary there, or Primary at the Position covering it', () => {
+  // AP alone holds AP and LC: the handoff AP -> LC has nobody else to answer it.
+  const { efsp, c } = freshEfsp(createEfsp, { AP: 'INCIRLIK', CTR: 'CENTER' }, { currentTheater: () => 'Test' });
+  hold(efsp, c.AP.session, 'INCIRLIK', ['AP', 'LC']);
+  let strip = send(efsp, c.AP, 'AP', TAG('760', 'N760')).ack.strip;
+  const ack = act(efsp, c.AP, 'AP', strip, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'LC' });
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  strip = live(efsp, strip);
+  assert.equal(strip.ownerPositionId, 'LC');
+  assert.equal(strip.bayId, 'lc-runway-queue');
+  assert.equal(strip.vfrHandoff, null);
+  const entry = efsp.mutationLog.readAll().filter(e => e.op === 'VfrHandoff' && e.stripId === strip.stripId).at(-1);
+  assert.deepEqual(entry.vfrHandoff, { action: 'INITIATE', from: 'AP', to: 'LC', autoAccepted: true, selfCoordinated: true });
+
+  // GC is unstaffed and covered by LC (its consolidation list): LC's controller holds GC by cover.
+  strip = mustAct(efsp, c.AP, 'LC', strip, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'GC' });
+  assert.equal(strip.ownerPositionId, 'GC', 'accepted at once by the covering controller');
+  assert.equal(strip.vfrHandoff, null);
+});
+
+test('a handoff to a Position someone else holds still waits for that controller', () => {
+  const { efsp, c } = freshEfsp(createEfsp, { AP: 'INCIRLIK', LC: 'INCIRLIK', CTR: 'CENTER' }, { currentTheater: () => 'Test' });
+  let strip = send(efsp, c.AP, 'AP', TAG('761', 'N761')).ack.strip;
+  // GC is unstaffed and covered by LC, which is another controller's: not the sender's to accept.
+  strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'GC' });
+  assert.equal(strip.ownerPositionId, 'AP');
+  assert.equal(strip.vfrHandoff.toPositionId, 'GC');
+});
+
+test('across Facilities (ADR 0162): AP hands a VFR to CENTER\'s CTR, CTR accepts on its own Board; the flight, its code and binding go with it', () => {
+  const { efsp, c } = freshEfsp(createEfsp, ATC, { currentTheater: () => 'Test' });
+  let strip = send(efsp, c.AP, 'AP', TAG('770', 'N770', 'C172', { code: true })).ack.strip;
+  const flightDataId = strip.flightDataId;
+  const code = fdOf(efsp, strip).identity.beaconAssigned;
+  assert.ok(code, 'a discrete code to carry');
+  for (const [op, re] of [
+    [{ toPositionId: 'GCI', toFacilityId: 'CENTER' }, /not a Position of CENTER/],
+    [{ toPositionId: 'CTR', toFacilityId: 'NOWHERE' }, /not a Facility/],
+  ]) assert.match(act(efsp, c.AP, 'AP', strip, { kind: 'VfrHandoff', action: 'INITIATE', ...op }).detail, re);
+  strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'CTR', toFacilityId: 'CENTER' });
+  assert.equal(strip.ownerPositionId, 'AP');
+  assert.deepEqual([strip.vfrHandoff.toFacilityId, strip.vfrHandoff.toPositionId], ['CENTER', 'CTR']);
+  // Not accepted at INCIRLIK, and not by anyone but CTR.
+  assert.equal(act(efsp, c.LC, 'LC', strip, { kind: 'VfrHandoff', action: 'ACCEPT' }).reason, 'NOT_OWNER');
+
+  const out = send(efsp, c.CTR, 'CTR', { kind: 'VfrHandoff', action: 'ACCEPT', fromFacilityId: 'INCIRLIK', fromStripId: strip.stripId });
+  assert.equal(out.ack.ok, true, JSON.stringify(out.ack));
+  const minted = out.ack.strip;
+  assert.equal(minted.stripType, 'VFR');
+  assert.equal(minted.ownerPositionId, 'CTR');
+  assert.equal(minted.bayId, 'ctr-overflight');
+  assert.equal(minted.flightDataId, flightDataId, 'the same flight');
+  assert.equal(live(efsp, minted, 'CENTER').state, 'TRACKED');
+  assert.equal(live(efsp, strip).state, 'DROPPED', 'AP\'s strip ends');
+  assert.equal(fdOf(efsp, minted).identity.beaconAssigned, code, 'the code stays with the flight');
+  assert.equal(efsp.correlationStore.getCorrelation(flightDataId).trackId, '770', 'the binding stays');
+  const deltas = out.broadcasts.filter(f => f.type === 'efsp-board-delta').map(f => f.facilityId).sort();
+  assert.deepEqual(deltas, ['CENTER', 'INCIRLIK'], 'both Boards hear of it');
+  const log = efsp.mutationLog.readAll();
+  assert.ok(log.find(e => e.op === 'VfrHandoff' && e.action === 'ACCEPT' && e.stripId === minted.stripId && e.facilityId === 'CENTER'));
+  assert.ok(log.find(e => e.op === 'VfrHandoffAccepted' && e.stripId === strip.stripId && e.after.state === 'DROPPED'));
+  // A second ACCEPT finds nothing open.
+  assert.equal(send(efsp, c.CTR, 'CTR', { kind: 'VfrHandoff', action: 'ACCEPT', fromFacilityId: 'INCIRLIK', fromStripId: strip.stripId }).ack.ok, false);
+
+  // And back: CTR to LC, LC accepts on INCIRLIK.
+  let back = live(efsp, minted, 'CENTER');
+  back = mustAct(efsp, c.CTR, 'CTR', back, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'LC', toFacilityId: 'INCIRLIK' });
+  const out2 = send(efsp, c.LC, 'LC', { kind: 'VfrHandoff', action: 'ACCEPT', fromFacilityId: 'CENTER', fromStripId: back.stripId });
+  assert.equal(out2.ack.ok, true, JSON.stringify(out2.ack));
+  assert.equal(out2.ack.strip.ownerPositionId, 'LC');
+  assert.equal(out2.ack.strip.bayId, 'lc-runway-queue');
+  assert.equal(live(efsp, back, 'CENTER').state, 'DROPPED');
+});
+
+test('across Facilities, a cross-Facility handoff can be recalled, and one the sender also holds is accepted at once', () => {
+  const { efsp, c } = freshEfsp(createEfsp, { AP: 'INCIRLIK', LC: 'INCIRLIK' }, { currentTheater: () => 'Test' });
+  let strip = send(efsp, c.AP, 'AP', TAG('771', 'N771')).ack.strip;
+  // Nobody on CTR (CENTER has no consolidation): refused.
+  assert.equal(act(efsp, c.AP, 'AP', strip, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'CTR', toFacilityId: 'CENTER' }).reason, 'NO_RECEIVING_POSITION');
+  // AP's controller signs on to CTR too: the handoff has nobody else to answer it.
+  hold(efsp, c.AP.session, 'CENTER', ['CTR']);
+  const ack = act(efsp, c.AP, 'AP', strip, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'CTR', toFacilityId: 'CENTER' });
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  assert.equal(live(efsp, strip).state, 'DROPPED');
+  const atCtr = board(efsp, 'CENTER').getAll().filter(s => s.flightDataId === strip.flightDataId && s.state !== 'DROPPED');
+  assert.equal(atCtr.length, 1);
+  assert.equal(atCtr[0].ownerPositionId, 'CTR');
+  const entry = efsp.mutationLog.readAll().filter(e => e.op === 'VfrHandoff' && e.stripId === strip.stripId).at(-1);
+  assert.equal(entry.vfrHandoff.autoAccepted, true);
+  assert.ok(efsp.mutationLog.readAll().find(e => e.op === 'VfrHandoffReceived' && e.stripId === atCtr[0].stripId));
+
+  // CTR hands to LC, someone else's: it waits, and CTR recalls it.
+  const apAtCenter = { session: c.AP.session, facilityId: 'CENTER' };
+  let s2 = mustAct(efsp, apAtCenter, 'CTR', atCtr[0], { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'LC', toFacilityId: 'INCIRLIK' });
+  assert.equal(s2.vfrHandoff.toPositionId, 'LC');
+  s2 = mustAct(efsp, apAtCenter, 'CTR', s2, { kind: 'VfrHandoff', action: 'RECALL' });
+  assert.equal(s2.vfrHandoff, null);
+  assert.equal(send(efsp, c.LC, 'LC', { kind: 'VfrHandoff', action: 'ACCEPT', fromFacilityId: 'CENTER', fromStripId: s2.stripId }).ack.ok, false, 'nothing open after the recall');
 });
 
 test('the walk at LTAG: GC tags a departure, hands it to LC, the runway queue by runway, departs, closed traffic, lands, back to GC, terminated', () => {

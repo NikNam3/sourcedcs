@@ -124,8 +124,11 @@ test('U2: a HANDOFF proposal to CTR announces a new Strip at CTR, even to one co
     const ctrTab = page.locator('.efsp-position-tab[data-position-id="CTR"]');
     await expect(ctrTab.locator('.efsp-tab-new-dot, .efsp-tab-new'), 'CTR\'s tab says a Strip arrived').toBeVisible({ timeout: 10000 });
     await ctrTab.click();
-    await page.locator('#efsp-bay-tabs .efsp-bay-tab.efsp-tab-has-arrival').click();
-    await expect(page.locator('.efsp-strip', { hasText: callsign }).first().locator('.efsp-strip-from')).toContainText('from AP');
+    // docs/adr/0162: one controller holding AP and CTR has the HANDOFF accepted at once, so the Strip lands in CTR's
+    // own Bay (the one CTR opens on), not in the coordination Bay: it is on screen, still marked as from AP.
+    const arrived = page.locator('.efsp-strip', { hasText: callsign }).first();
+    await expect(arrived.locator('.efsp-strip-from')).toContainText('from AP');
+    await expect(arrived, 'accepted at once').toContainText('ACTIVE');
   } finally {
     await dropStrips(page, [callsign]);
   }

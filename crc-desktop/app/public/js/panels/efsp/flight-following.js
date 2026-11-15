@@ -101,15 +101,18 @@ export function terminateRadarService(strip) {
 }
 
 /**
- * Where the holder may hand a VFR strip (the STARS handoff): every other Position of its Facility with a VFR Bay. None
- * while a handoff is open (recall it first). Pure over `bays` (the snapshot's).
+ * Where the holder may hand a VFR strip (the STARS handoff): every other Position with a VFR Bay, of its own Facility or
+ * another (crc-sync docs/adr/0162: AP to CENTER's CTR and back). Position ids are unique across Facilities (ADR 0132).
+ * None while a handoff is open (recall it first). Pure over `bays` (the snapshot's).
  * @returns {string[]}
  */
 export function vfrHandoffTargets(strip, bays = getEfspBays()) {
   if (!isVfrStrip(strip) || strip.vfrHandoff) return [];
-  return (bays || [])
-    .filter(b => b.vfr === true && b.positionId !== strip.ownerPositionId && (!strip.facilityId || !b.facilityId || b.facilityId === strip.facilityId))
-    .map(b => b.positionId);
+  const out = [];
+  for (const b of bays || []) {
+    if (b.vfr === true && b.positionId !== strip.ownerPositionId && !out.includes(b.positionId)) out.push(b.positionId);
+  }
+  return out;
 }
 
 /** The Position this controller accepts an open VFR handoff as, or null (STARS: the receiver accepts). */
@@ -118,20 +121,35 @@ export function vfrHandoffAcceptAs(strip) {
   return getActingPositions().includes(strip.vfrHandoff.toPositionId) ? strip.vfrHandoff.toPositionId : null;
 }
 
+/** The Facility an open handoff goes to when it is another one than the strip's, else null (docs/adr/0162). */
+function _acrossTo(strip) {
+  const h = strip.vfrHandoff;
+  return h && h.toFacilityId && h.toFacilityId !== strip.facilityId ? h.toFacilityId : null;
+}
+
 /** May this controller recall the open handoff (the holder)? */
 export function canRecallVfrHandoff(strip) {
   return _held(strip) && !!strip.vfrHandoff;
 }
 
 export function initiateVfrHandoff(strip, toPositionId) {
-  return sendEfspMutation(strip.ownerPositionId, strip, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId });
+  const toFacilityId = facilityOfPosition(toPositionId);
+  const op = { kind: 'VfrHandoff', action: 'INITIATE', toPositionId };
+  if (toFacilityId && strip.facilityId && toFacilityId !== strip.facilityId) op.toFacilityId = toFacilityId;
+  return sendEfspMutation(strip.ownerPositionId, strip, op);
 }
 export function recallVfrHandoff(strip) {
   return sendEfspMutation(strip.ownerPositionId, strip, { kind: 'VfrHandoff', action: 'RECALL' });
 }
 export function acceptVfrHandoff(strip) {
   const as = vfrHandoffAcceptAs(strip);
-  return as ? sendEfspMutation(as, strip, { kind: 'VfrHandoff', action: 'ACCEPT' }) : false;
+  if (!as) return false;
+  // From another Facility: sent to the receiver's own Board, naming the sender's strip (it mints the strip there).
+  const across = _acrossTo(strip);
+  if (across) {
+    return sendEfspCreateStrip(as, { kind: 'VfrHandoff', action: 'ACCEPT', fromFacilityId: strip.facilityId, fromStripId: strip.stripId }, across);
+  }
+  return sendEfspMutation(as, strip, { kind: 'VfrHandoff', action: 'ACCEPT' });
 }
 
 /** A discrete code for a VFR strip whose flight has none (H175 VR-Q4), at the holder. */

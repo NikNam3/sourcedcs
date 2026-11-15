@@ -61,6 +61,16 @@ async function tag(page, positionId, trackId, callsign) {
     setTimeout(() => resolve(null), 10000);
   }), [positionId, trackId, callsign]);
   expect(ack, `${positionId} tags ${trackId}`).toEqual({ ok: true, reason: null, detail: null });
+  // A VFR flight with no beacon code is not on flight following and alerts as untracked (2.3.0, conflict-alert.js), so
+  // give it a code: the CA here is between two tracked flights.
+  await page.evaluate(([p, cs]) => {
+    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
+    crc.ws.sendEfspMutation(p, s, { kind: 'AssignCode' });
+  }, [positionId, callsign]);
+  await expect.poll(() => page.evaluate((cs) => {
+    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
+    return !!(s && crc.state.getEfspFlightData(s.flightDataId).identity.beaconAssigned);
+  }, callsign), `${callsign} has a code`).toBe(true);
 }
 
 /** This session's view of the alert: { shownAt, suppressedAt, suppressed } or null. */

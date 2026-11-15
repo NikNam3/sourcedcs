@@ -197,9 +197,11 @@ test('SCENARIO a single controller working both Approach and Center hands a flig
   const proposed = mustAct(efsp, both, 'AP', strip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
   });
-  const accepted = mustAct(efsp, atCenter, 'CTR', centerStrip(efsp, proposed.coordination.peerStripId), {
-    kind: 'HANDOFF', action: 'ACCEPT',
-  });
+  // docs/adr/0162: holding CTR too, the PROPOSE is accepted at once; a second ACCEPT finds nothing open.
+  const accepted = centerStrip(efsp, proposed.coordination.peerStripId);
+  assert.equal(act(efsp, atCenter, 'CTR', accepted, { kind: 'HANDOFF', action: 'ACCEPT' }).ok, false);
+  const entry = efsp.mutationLog.readAll().filter(e => e.op === 'HANDOFF' && e.action === 'ACCEPT' && e.stripId === accepted.stripId).at(-1);
+  assert.equal(entry.autoAccepted, true, 'the receiver\'s entry says it was accepted at once');
 
   // §4.8.3: the state change is mandatory and unconditional; only the
   // two-party dialogue collapses. Both replicas exist, jurisdiction moved.

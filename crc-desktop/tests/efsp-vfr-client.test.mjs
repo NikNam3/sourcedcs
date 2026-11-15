@@ -8,10 +8,10 @@ import assert from 'node:assert/strict';
 import * as serverConfig from './helpers/server-config.mjs';
 import './helpers/client-env.mjs';
 import { applyEfspSnapshot } from '../app/public/js/panels/efsp/efsp-state.js';
-import { sendEfspSetPositions } from '../app/public/js/panels/efsp/efsp-ws.js';
+import { sendEfspSetPositions, setEfspSender, sendEfspMutation as realSendMutation, sendEfspCreateStrip as realSendCreate } from '../app/public/js/panels/efsp/efsp-ws.js';
 import {
   canAssignCode, canCancelIfr, canRecallVfrHandoff, canTagTrack, canTerminateRadarService, contactForToken, tagProblem, tagTrack,
-  pickVfrTagPosition, vfrBayOf, vfrHandoffAcceptAs, vfrHandoffTargets, vfrTagPosition, vfrTagPositions,
+  acceptVfrHandoff, initiateVfrHandoff, pickVfrTagPosition, vfrBayOf, vfrHandoffAcceptAs, vfrHandoffTargets, vfrTagPosition, vfrTagPositions,
 } from '../app/public/js/panels/efsp/flight-following.js';
 import { atcRelation } from '../app/public/js/atc-scope.js';
 import { latestFromServer } from '../app/public/js/picture.js';
@@ -87,7 +87,7 @@ test('AT: the tag goes to the Position picked, any worked with a VFR Bay; the pi
 test('the handoff: targets are the Facility\'s other VFR Positions; the named one accepts; the holder recalls', () => {
   board();
   const s1 = strip('s1', 'f1');
-  assert.deepEqual(vfrHandoffTargets(s1, ALL_BAYS).sort(), ['CD', 'GC', 'LC'], 'its own Facility only, never itself');
+  assert.deepEqual(vfrHandoffTargets(s1, ALL_BAYS).sort(), ['CD', 'CTR', 'GC', 'LC'], 'every VFR Position, CENTER\'s CTR too (ADR 0162), never itself');
   const pending = strip('s1', 'f1', { vfrHandoff: { toPositionId: 'LC' } });
   assert.deepEqual(vfrHandoffTargets(pending, ALL_BAYS), [], 'recall first');
   sendEfspSetPositions('INCIRLIK', ['LC']);
@@ -128,4 +128,28 @@ test('.ff names a contact by the track number its data block shows, or by its id
   assert.equal(contactForToken('9999'), null);
   assert.equal(contactForToken(''), null);
   latestFromServer.clear();
+});
+
+test('across Facilities (ADR 0162): INITIATE names the other Facility; the receiver ACCEPTs on its own Board, naming the sender\'s strip', () => {
+  board();
+  const sent = [];
+  const realMutation = realSendMutation; const realCreate = realSendCreate; // live bindings: keep the originals
+  setEfspSender('sendEfspMutation', (...args) => { sent.push(['mutation', ...args]); return 'mid'; });
+  setEfspSender('sendEfspCreateStrip', (...args) => { sent.push(['stripless', ...args]); return 'mid'; });
+  try {
+    const s1 = strip('s1', 'f1');
+    initiateVfrHandoff(s1, 'CTR');
+    assert.deepEqual(sent.pop(), ['mutation', 'AP', s1, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'CTR', toFacilityId: 'CENTER' }]);
+    initiateVfrHandoff(s1, 'LC');
+    assert.deepEqual(sent.pop()[3], { kind: 'VfrHandoff', action: 'INITIATE', toPositionId: 'LC' }, 'inside the Facility: no toFacilityId');
+
+    sendEfspSetPositions('CENTER', ['CTR']);
+    const pending = strip('s1', 'f1', { vfrHandoff: { toPositionId: 'CTR', toFacilityId: 'CENTER' } });
+    assert.equal(acceptVfrHandoff(pending), 'mid');
+    assert.deepEqual(sent.pop(), ['stripless', 'CTR', { kind: 'VfrHandoff', action: 'ACCEPT', fromFacilityId: 'INCIRLIK', fromStripId: 's1' }, 'CENTER']);
+  } finally {
+    setEfspSender('sendEfspMutation', realMutation);
+    setEfspSender('sendEfspCreateStrip', realCreate);
+    sendEfspSetPositions('CENTER', []);
+  }
 });

@@ -81,7 +81,8 @@ async function mount({ metrics = true } = {}) {
 
   ws.setEfspSender('_sendEfsp', () => {});
   ws.sendEfspSetPositions('INCIRLIK', ['GC']); // getActingPositions() = ['GC']
-  ws.setEfspSender('sendEfspMutation', (actingPositionId, s, op) => { mutations.push({ actingPositionId, stripId: s.stripId, rev: s.rev, op }); return 'mid'; });
+  // Acked at once: the paper gestures' flag writes wait for the previous one's ack (flag-writer.js).
+  ws.setEfspSender('sendEfspMutation', (actingPositionId, s, op, opts) => { mutations.push({ actingPositionId, stripId: s.stripId, rev: s.rev, op }); if (opts && opts.onAck) opts.onAck({ ok: true }); return 'mid'; });
   ws.setEfspSender('sendEfspCreateStrip', () => 'mid');
   geojson._setUpdateMapForTest(() => {});
   // Rendering a Rack needs more DOM than the stub has; the Bay's content is not what is measured.
