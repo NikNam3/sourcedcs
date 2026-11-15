@@ -208,6 +208,10 @@
    "setIffOverride",
    "toggleUserCoalition"
   ],
+  "label-drag-gate.js": [
+   "LABEL_DRAG_THRESHOLD_PX",
+   "createLabelDragGate"
+  ],
   "los.js": [
    "EFFECTIVE_EARTH_RADIUS_M",
    "LOS_SAMPLE_COUNT",
