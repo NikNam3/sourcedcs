@@ -2,6 +2,7 @@
 import { markEfspChanged } from './panels/efsp/efsp-change-bus.js';
 import { kinematics, projectPos } from './geo.js';
 import { atcBlockLines, atcEmergencyTag } from './track-label.js';
+import { trackHighlightColor } from './panels/efsp/track-highlight.js';
 
 import {
   conformanceAlertsForFlightData, getEfspFlightData, getEfspPositionLetter, getEfspStrip, conflictAlertsForTrack, refuelingAlertText,
@@ -396,7 +397,8 @@ export function atcCoastAfterMs() {
 export function atcDisplay(id, t, now = Date.now()) {
   const palette = atcPalette();
   const strips = _stripsFor(id);
-  const rel = atcNoteOwnership(id, atcRelation(t, strips, _actingSet(), _letterOf), now);
+  const acting = _actingSet();
+  const rel = atcNoteOwnership(id, atcRelation(t, strips, acting, _letterOf), now);
   const sinceReturn = now - (lastSweepMs.get(id) || now);
   const coast = rel.associated && sinceReturn > atcCoastAfterMs();
 
@@ -417,7 +419,7 @@ export function atcDisplay(id, t, now = Date.now()) {
   const view = atcView(t, rel, { palette, now, conflicts, conflictTags, conflictsSuppressed, airspace, conform, coast });
 
   const speedKt = kinematics(hist).speedKt;
-  const lines = atcBlockLines(t, view, { speedKt, assigned: atcAssigned(flightData), assignedCode: flightData && flightData.identity ? flightData.identity.beaconAssigned : null, typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1 });
+  const lines = atcBlockLines(t, view, { speedKt, assigned: atcAssigned(flightData), assignedCode: flightData && flightData.identity ? flightData.identity.beaconAssigned : null, typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1, highlight: trackHighlightColor(strips, acting) });
   return { id, lat, lon, rel, view, palette, lines };
 }
 

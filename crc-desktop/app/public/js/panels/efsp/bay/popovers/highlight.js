@@ -3,6 +3,7 @@ import { getEfspStrip } from '../../efsp-state.js';
 import { setHighlight } from '../../efsp-gestures.js';
 import { noteEfspGesture } from '../../efsp-metrics-client.js';
 import { _dispatchGesture } from '../dispatch.js';
+import { effectiveFlag } from '../../flag-writer.js';
 import { openPopover } from '../popover-portal.js';
 
 
@@ -28,7 +29,7 @@ function _nextHighlightColor(current) {
 
 export function _cycleHighlight(strip) {
   const live = getEfspStrip(strip.stripId) || strip;
-  return _dispatchGesture(strip, setHighlight, _nextHighlightColor(live.flags.highlight));
+  return _dispatchGesture(strip, setHighlight, _nextHighlightColor(effectiveFlag(live, 'highlight')));
 }
 
 let _openPopoverHandle = null;
@@ -50,6 +51,19 @@ export function _openHighlightPopover(strip, anchorEl) {
       _closeHighlightPopover();
     });
     popover.appendChild(swatch);
+  }
+  // Off: clicking the colour the Strip already has clears it too, but nobody finds that by looking.
+  if (effectiveFlag(getEfspStrip(strip.stripId) || strip, 'highlight')) {
+    const off = document.createElement('button');
+    off.className = 'efsp-highlight-swatch efsp-highlight-off';
+    off.textContent = '×';
+    off.title = 'No highlight';
+    off.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const acting = _dispatchGesture(strip, setHighlight, null); noteEfspGesture('HIGHLIGHT', 'contextmenu+swatch', acting);
+      _closeHighlightPopover();
+    });
+    popover.appendChild(off);
   }
   _openPopoverHandle = openPopover({ el: popover, anchor: anchorEl, strip, onClose: () => { _openPopoverHandle = null; } });
 }

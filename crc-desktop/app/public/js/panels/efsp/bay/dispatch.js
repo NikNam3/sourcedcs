@@ -3,6 +3,7 @@ import { isWithinDoubleTapWindow } from '../efsp-nla.js';
 import { getEfspBays, getEfspCorrelationForStrip, getEfspMarsa, getEfspNonOwnerBlockWrites, getEfspStrip } from '../efsp-state.js';
 import { getActingPositions, sendEfspCorrelationMutation, sendEfspMarsaMutation, sendEfspMutation } from '../efsp-ws.js';
 import { _isRejectedCoordinationReplica } from './coordination-rules.js';
+import { withWantedFlags, writeFlag } from '../flag-writer.js';
 
 // What a Strip's controls send (DESK-SPLIT, split out of bay-view.js): the acting-Position rule, the board-wide double-tap
 // guard and the one-Mutation dispatch helpers (MARSA, correlation, NLA, move, transfer, hand-back, the paper gestures).
@@ -160,7 +161,11 @@ export function _dispatchGesture(strip, gestureFn, ...extraArgs) {
   if (_isRejectedCoordinationReplica(strip)) return;
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
-  gestureFn(strip, ...extraArgs, (s, op) => sendEfspMutation(actingPositionId, s, op));
+  // A flag write goes through flag-writer.js, one per Strip in flight, so a quick second click is not refused STALE_REV;
+  // the gesture decides set-or-clear from what the controller last asked for, not from a record its ack has not reached.
+  gestureFn(withWantedFlags(strip), ...extraArgs, (s, op) => (op.kind === 'SetFlag'
+    ? writeFlag(actingPositionId, s.stripId, op.flag, op.value)
+    : sendEfspMutation(actingPositionId, s, op)));
   return actingPositionId; // truthy only when dispatched — what the gesture metric counts (docs/adr/0072)
 }
 

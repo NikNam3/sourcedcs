@@ -1119,6 +1119,12 @@
    "positionsOf",
    "shippedFacilityIds"
   ],
+  "panels/efsp/flag-writer.js": [
+   "_resetFlagWriterForTest",
+   "effectiveFlag",
+   "withWantedFlags",
+   "writeFlag"
+  ],
   "panels/efsp/flight-following.js": [
    "acceptVfrHandoff",
    "assignCode",
@@ -1669,6 +1675,9 @@
    "TIME_CHAINS",
    "resolveTimeChain",
    "timeChainForBlock"
+  ],
+  "panels/efsp/track-highlight.js": [
+   "trackHighlightColor"
   ],
   "panels/efsp/transit-actions.js": [
    "requestTransit",

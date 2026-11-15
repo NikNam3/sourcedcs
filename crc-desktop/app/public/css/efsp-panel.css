@@ -729,6 +729,12 @@
   cursor: pointer;
   padding: 0;
 }
+.efsp-highlight-off {
+  background: transparent;
+  color: #c8d0d8;
+  font-size: 16px;
+  line-height: 1;
+}
 
 .efsp-insertion-line {
   position: absolute;
