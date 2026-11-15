@@ -23,6 +23,7 @@
 // nets (a retired transferring Strip, a repair) may move control before check-in: they exist because nobody else holds it.
 
 const { MAX_FREE_TEXT, parseAltitude, activeClearanceEntry } = require('../flight-data-store');
+const { bandEnds, entryBand, isAltitudeLimit } = require('../altitude-band');
 const { deepClone } = require('./strip-util');
 const { handoffGuardRefusal } = require('../handoff-guards');
 const log = require('../../log').logger('efsp:handoff-control');
@@ -350,11 +351,18 @@ class HandoffControl {
     const next = text.trim() === '' ? null : parseAltitude(text.trim().toUpperCase());
     if (text.trim() !== '' && !next) return null; // not an altitude: SetBlock refuses it itself
     if (!cur || !next) return { needed: ['CLIMB', 'DESCENT'], next };
-    const low = cur.block ? cur.block.lowFt : cur.parsed;
-    const high = cur.block ? cur.block.highFt : cur.parsed;
-    if (!Number.isFinite(low) || !Number.isFinite(high)) return { needed: ['CLIMB', 'DESCENT'], next };
-    if (next.lowFt > high) return { needed: ['CLIMB'], next };
-    if (next.highFt < low) return { needed: ['DESCENT'], next };
+    const band = entryBand(cur);
+    if (!band) return { needed: ['CLIMB', 'DESCENT'], next };
+    // A limit (docs/adr/0163) has one open end, read as -Infinity / Infinity. When either side is a limit, the axes
+    // are the directions the new band opens past the current one ("<100" after 080 lets the flight climb); a closed
+    // band keeps the overlap rule (ours).
+    const { low, high } = bandEnds(band);
+    const to = bandEnds(next);
+    if (to.low > high) return { needed: ['CLIMB'], next };
+    if (to.high < low) return { needed: ['DESCENT'], next };
+    if (isAltitudeLimit(band) || isAltitudeLimit(next)) {
+      return { needed: [...(to.high > high ? ['CLIMB'] : []), ...(to.low < low ? ['DESCENT'] : [])], next };
+    }
     return { needed: [], next };
   }
 

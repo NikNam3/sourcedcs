@@ -75,6 +75,7 @@
 // receivers with no altitude check at all (H134 LT-RQ10 a's fallback).
 
 const { activeClearanceEntry } = require('./flight-data-store');
+const { bandEnds } = require('./altitude-band');
 const { WALL_CLOCK } = require('../mission-clock');
 
 const { MS_PER_KT } = require('../units');
@@ -106,7 +107,7 @@ function headingGraceSec(turnDeg, groundSpeedMs, cfg) {
  * One flight, one moment. Pure: all memory lives in `mem`, which the caller
  * keeps per flight and passes back next time.
  *
- * @param {object} input  { hdg: {parsed, at}|null, alt: {parsed, block?: {lowFt, highFt}, at}|null,
+ * @param {object} input  { hdg: {parsed, at}|null, alt: {parsed, block?: {lowFt, highFt} (one end null for a limit), at}|null,
  *                          course, groundSpeedMs, verticalSpeedMs, altFt }
  * @param {object} mem    per-flight memory (mutated)
  * @param {number} now    ms, mission time (stamps, `since`)
@@ -168,13 +169,15 @@ function evaluateConformance(input, mem, now, cfg, wallNow = now) {
     // A block (docs/adr/0091) is a band: no deviation anywhere inside it, and
     // outside it the distance to the NEAREST edge, so the edge tolerance and the
     // bust threshold are the same as for a single altitude. `edge` is the
-    // altitude the alert is measured from.
-    const low = alt.block ? alt.block.lowFt : alt.parsed;
-    const high = alt.block ? alt.block.highFt : alt.parsed;
+    // altitude the alert is measured from. A limit (docs/adr/0163, "<080" /
+    // ">FL240") is a band with one open end: the whole allowed side conforms
+    // (diff 0), so it counts as reached there and the limit is never a level the
+    // flight is expected to level off at; past it, the same bust and wrong-way rules.
+    const { low, high } = alt.block ? bandEnds(alt.block) : { low: alt.parsed, high: alt.parsed };
     const edge = input.altFt < low ? low : input.altFt > high ? high : input.altFt;
     const diff = edge - input.altFt; // + means the aircraft is below its clearance
     const assigned = alt.block ? (diff === 0 ? (high - input.altFt <= input.altFt - low ? high : low) : edge) : alt.parsed;
-    const blockOut = alt.block ? { block: { lowFt: alt.block.lowFt, highFt: alt.block.highFt } } : {};
+    const blockOut = alt.block ? { block: { lowFt: alt.block.lowFt ?? null, highFt: alt.block.highFt ?? null } } : {};
     if (Math.abs(diff) <= cfg.atAltitudeBandFt) mem.reached = true;
 
     const fpm = Number.isFinite(input.verticalSpeedMs) ? input.verticalSpeedMs * FPM_PER_MS : 0;

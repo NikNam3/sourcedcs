@@ -67,6 +67,12 @@
    "apiToIndicated",
    "pressureAtAlt"
   ],
+  "altitude-limit.js": [
+   "isAltitudeLimit",
+   "limitFt",
+   "limitTrend",
+   "limitWords"
+  ],
   "app.js": [
    "_ws",
    "applyCoverage",

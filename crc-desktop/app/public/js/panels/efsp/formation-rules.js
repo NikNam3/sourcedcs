@@ -97,7 +97,7 @@ export function parseAssignmentToken(raw) {
   if (m) return { kind: 'SPEED', value: m[1] };
   m = /^S(\d{2,3})$/.exec(t);
   if (m) return { kind: 'SPEED', value: m[1] };
-  m = /^(FL\d{1,3}|A\d{1,3})$/.exec(t);
+  m = /^([<>]?(?:FL\d{1,3}|A\d{1,3}))$/.exec(t); // '<'/'>': a limit, at or below / above (crc-sync docs/adr/0163)
   if (m) return { kind: 'ALTITUDE', value: m[1] };
   return null;
 }
@@ -114,7 +114,7 @@ export function parseAssignmentValue(kind, raw) {
     const m = /^S?(M0?\.\d{1,2}|\d{2,3})$/.exec(t);
     return m ? { kind, value: m[1] } : null;
   }
-  if (kind === 'ALTITUDE') return /^(FL\d{1,3}|A\d{1,3}|\d{1,5})$/.test(t) ? { kind, value: t } : null;
+  if (kind === 'ALTITUDE') return /^[<>]?(FL\d{1,3}|A\d{1,3}|\d{1,5})$/.test(t) ? { kind, value: t } : null; // crc-sync docs/adr/0163
   return null;
 }
 
