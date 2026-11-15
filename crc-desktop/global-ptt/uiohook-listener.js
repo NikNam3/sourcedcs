@@ -2,7 +2,7 @@
 
 // The global PTT listener for Windows and X11 (docs/adr/0161 §3): `uiohook-napi`, a system-wide hook that observes and
 // never swallows, so DCS still gets the key. The native module loads on first use, inside the caller's try (index.js):
-// requiring this file loads nothing native. Every event is dropped here unless it is the bound input; nothing is logged.
+// requiring this file loads nothing native. Every event is dropped here unless it is a bound input; nothing is logged.
 
 const { bindableKeyLabel, bindableMouseLabel } = require('./input-allowlist');
 
@@ -40,11 +40,13 @@ function createUiohookListener(o = {}) {
     }
   }
 
-  function start(binding, onEdge) {
-    const isKey = binding.type === 'key';
-    const key = (down) => (e) => { if (isKey && e.keycode === binding.keycode) onEdge(down); };
-    const mouse = (down) => (e) => { if (!isKey && e.button === binding.button) onEdge(down); };
-    hookOn({ keydown: key(true), keyup: key(false), mousedown: mouse(true), mouseup: mouse(false) });
+  // `bindings`: `{ ptt, intercom }`, a binding or null each (docs/adr/0166 §1); an edge names the channel it is for.
+  function start(bindings, onEdge) {
+    const bound = Object.entries(bindings).filter(([, b]) => b);
+    const on = (type, field, down) => (e) => {
+      for (const [channel, b] of bound) if (b.type === type && e[field] === b[field]) onEdge(channel, down);
+    };
+    hookOn({ keydown: on('key', 'keycode', true), keyup: on('key', 'keycode', false), mousedown: on('mouse', 'button', true), mouseup: on('mouse', 'button', false) });
   }
 
   function stop() { if (removeHandlers()) lib.uIOhook.stop(); }

@@ -27,7 +27,7 @@ function rig({ probeFails = false, noListener = false, throttling = true } = {})
   const wc = new EventEmitter();
   const sent = [];
   wc.isDestroyed = () => false;
-  wc.send = (ch, v) => sent.push([ch, v]);
+  wc.send = (ch, ...v) => sent.push([ch, ...v]);
   wc.throttling = throttling;
   wc.getBackgroundThrottling = () => wc.throttling;
   wc.setBackgroundThrottling = (v) => { wc.throttling = v; };
@@ -37,7 +37,7 @@ function rig({ probeFails = false, noListener = false, throttling = true } = {})
     kind: 'fake', started: 0, stopped: 0,
     probe: async () => { if (probeFails) throw new Error('nope'); },
     accepts: (b) => !!b,
-    start: async (_b, onEdge) => { listener.started++; listener.edge = onEdge; },
+    start: async (_b, onEdge) => { listener.started++; listener.edge = (d, channel = 'ptt') => onEdge(channel, d); },
     stop: async () => { listener.stopped++; },
     capture: async () => ({ type: 'key', keycode: 91, label: 'F13' }),
     cancelCapture() {},
@@ -70,13 +70,14 @@ test('no listener, or one that cannot load: reported as not available, and never
   }
 });
 
-test('an edge reaches the window as a bare boolean', async (t) => {
+test('an edge reaches the window as a bare boolean and its channel', async (t) => {
   t.after(shutdown);
   const r = rig();
-  await r.call(CH.configure, ON);
+  await r.call(CH.configure, { ...ON, intercom: { type: 'key', keycode: 92, label: 'F14' } });
   r.listener.edge(true);
   r.listener.edge(false);
-  assert.deepEqual(r.sent, [[CH.edge, true], [CH.edge, false]]);
+  r.listener.edge(true, 'intercom');
+  assert.deepEqual(r.sent, [[CH.edge, true, 'ptt'], [CH.edge, false, 'ptt'], [CH.edge, true, 'intercom']]);
 });
 
 test('throttling is off while the listener runs, then back as it was', async (t) => {
@@ -105,10 +106,10 @@ test('the renderer reporting the fuse reaches the gate', async (t) => {
   const r = rig();
   await r.call(CH.configure, ON);
   r.listener.edge(true);
-  r.ipc.emit(CH.fuse, { sender: r.wc });
+  r.ipc.emit(CH.fuse, { sender: r.wc }, 'ptt');
   r.listener.edge(true);
   r.listener.edge(false);
-  assert.deepEqual(r.sent, [[CH.edge, true], [CH.edge, false]]);
+  assert.deepEqual(r.sent, [[CH.edge, true, 'ptt'], [CH.edge, false, 'ptt']]);
 });
 
 test('a sender other than the main window gets nothing', async (t) => {

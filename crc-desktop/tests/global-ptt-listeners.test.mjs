@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { createUiohookListener } = require('../global-ptt/uiohook-listener.js');
-const { createPortalListener, SHORTCUT_ID } = require('../global-ptt/portal-listener.js');
+const { createPortalListener, SHORTCUT_ID, SHORTCUTS } = require('../global-ptt/portal-listener.js');
 
 const KEYS = { Escape: 1, Space: 57, F13: 91, Ctrl: 29, CtrlRight: 3613, A: 30, Numpad1: 79 };
 
@@ -42,7 +42,7 @@ test('uiohook: a module that cannot load is an error to catch, not a crash at re
 test('uiohook: only the bound key is forwarded', () => {
   const r = uiohookRig();
   const edges = [];
-  r.listener.start({ type: 'key', keycode: 91, label: 'F13' }, (d) => edges.push(d));
+  r.listener.start({ ptt: { type: 'key', keycode: 91, label: 'F13' }, intercom: null }, (c, d) => edges.push(d));
   r.uIOhook.emit('keydown', { keycode: 30 });
   r.uIOhook.emit('keyup', { keycode: 30 });
   r.uIOhook.emit('mousedown', { button: 91 });
@@ -55,7 +55,7 @@ test('uiohook: only the bound key is forwarded', () => {
 test('uiohook: only the bound mouse button is forwarded', () => {
   const r = uiohookRig();
   const edges = [];
-  r.listener.start({ type: 'mouse', button: 4, label: 'Mouse 4' }, (d) => edges.push(d));
+  r.listener.start({ ptt: { type: 'mouse', button: 4, label: 'Mouse 4' }, intercom: null }, (c, d) => edges.push(d));
   r.uIOhook.emit('mousedown', { button: 5 });
   r.uIOhook.emit('keydown', { keycode: 4 });
   assert.deepEqual(edges, []);
@@ -66,7 +66,7 @@ test('uiohook: only the bound mouse button is forwarded', () => {
 
 test('uiohook: stop removes every handler and stops the hook', () => {
   const r = uiohookRig();
-  r.listener.start({ type: 'key', keycode: 91, label: 'F13' }, () => {});
+  r.listener.start({ ptt: { type: 'key', keycode: 91, label: 'F13' } }, () => {});
   assert.equal(r.uIOhook.started, 1);
   r.listener.stop();
   assert.equal(r.uIOhook.stopped, 1);
@@ -76,7 +76,7 @@ test('uiohook: stop removes every handler and stops the hook', () => {
 test('uiohook: a hook that fails to start leaves no handler behind', () => {
   const r = uiohookRig();
   r.uIOhook.start = () => { throw new Error('Failed to open X11 display.'); };
-  assert.throws(() => r.listener.start({ type: 'key', keycode: 91, label: 'F13' }, () => {}), /X11/);
+  assert.throws(() => r.listener.start({ ptt: { type: 'key', keycode: 91, label: 'F13' } }, () => {}), /X11/);
   assert.equal(r.handlerCount(), 0);
   assert.equal(r.uIOhook.stopped, 0);
 });
@@ -173,33 +173,34 @@ function portalRig({ bindCode = 0, label = 'Meta+F13', version = 2, registerFail
   return { listener, log, signals };
 }
 const BOUND = { shortcutId: SHORTCUT_ID, label: 'Meta+F13' };
+const ON = { ptt: BOUND, intercom: null };
 const did = (r, m) => r.log.some(l => l[0] === m);
 const tick = () => new Promise(res => setImmediate(res));
 
 test('portal: register comes before every other portal call', async () => {
   const r = portalRig();
-  await r.listener.start(BOUND, () => {});
+  await r.listener.start(ON, () => {});
   assert.deepEqual(r.log.slice(0, 3), [['connect'], ['register', 'page.sourcedcs.crc'], ['CreateSession']]);
 });
 
 test('portal: an older portal refusing to register is not a failure', async () => {
   const r = portalRig({ registerFails: true });
-  assert.deepEqual(await r.listener.start(BOUND, () => {}), { label: 'Meta+F13' });
+  assert.deepEqual(await r.listener.start(ON, () => {}), { labels: { ptt: 'Meta+F13' } });
 });
 
 test('portal: a shortcut the desktop knows is not bound again; an unknown one is', async () => {
   let r = portalRig({ known: true });
-  await r.listener.start(BOUND, () => {});
+  await r.listener.start(ON, () => {});
   assert.equal(did(r, 'BindShortcuts'), false);
   r = portalRig();
-  await r.listener.start(BOUND, () => {});
+  await r.listener.start(ON, () => {});
   assert.equal(did(r, 'BindShortcuts'), true);
 });
 
 test('portal: Activated and Deactivated become edges, for this session and shortcut only', async () => {
   const r = portalRig();
   const edges = [];
-  await r.listener.start(BOUND, (d) => edges.push(d));
+  await r.listener.start(ON, (c, d) => edges.push(d));
   r.signals.Activated(['/other', SHORTCUT_ID, 1, {}]);
   r.signals.Activated(['/s/1', 'not_ours', 1, {}]);
   assert.deepEqual(edges, []);
@@ -210,7 +211,7 @@ test('portal: Activated and Deactivated become edges, for this session and short
 
 test('portal: stop unsubscribes, closes the session and the connection', async () => {
   const r = portalRig();
-  await r.listener.start(BOUND, () => {});
+  await r.listener.start(ON, () => {});
   await r.listener.stop();
   assert.deepEqual(r.signals, {});
   assert.deepEqual(r.log.slice(-1), [['close']]);
@@ -220,7 +221,7 @@ test('portal: stop unsubscribes, closes the session and the connection', async (
 test('portal: the portal restarting releases and registers afresh', async () => {
   const r = portalRig({ known: true });
   const edges = [];
-  await r.listener.start(BOUND, (d) => edges.push(d));
+  await r.listener.start(ON, (c, d) => edges.push(d));
   r.signals.restart();
   await tick(); await tick();
   assert.deepEqual(edges, [false]);
@@ -264,7 +265,7 @@ test('portal: the controller refusing the dialog is no binding', async () => {
 
 test('portal: a refused bind at start closes everything and fails the start', async () => {
   const r = portalRig({ bindCode: 2 });
-  await assert.rejects(r.listener.start(BOUND, () => {}), /refused/);
+  await assert.rejects(r.listener.start(ON, () => {}), /refused/);
   assert.deepEqual(r.signals, {});
   assert.deepEqual(r.log.slice(-1), [['close']]);
 });
@@ -272,6 +273,8 @@ test('portal: a refused bind at start closes everything and fails the start', as
 test('portal: bindings are the portal\'s own', () => {
   const r = portalRig();
   assert.equal(r.listener.accepts(BOUND), true);
+  assert.equal(r.listener.accepts(BOUND, 'intercom'), false);
+  assert.equal(r.listener.accepts({ shortcutId: SHORTCUTS.intercom.id, label: 'x' }, 'intercom'), true);
   assert.equal(r.listener.accepts({ type: 'key', keycode: 91, label: 'F13' }), false);
 });
 
@@ -280,4 +283,65 @@ test('portal: probing asks for the version and touches no shortcut', async () =>
   await r.listener.probe();
   assert.deepEqual(r.log, [['connect'], ['close']]);
   await assert.rejects(portalRig({ version: 0 }).listener.probe(), /no GlobalShortcuts/);
+});
+
+test('uiohook: two channels, each input to its own', () => {
+  const r = uiohookRig();
+  const edges = [];
+  r.listener.start({ ptt: { type: 'key', keycode: 91, label: 'F13' }, intercom: { type: 'mouse', button: 4, label: 'Mouse 4' } }, (c, d) => edges.push([c, d]));
+  r.uIOhook.emit('keydown', { keycode: 91 });
+  r.uIOhook.emit('mousedown', { button: 4 });
+  r.uIOhook.emit('mouseup', { button: 4 });
+  r.uIOhook.emit('keydown', { keycode: 4 }); // a key with the mouse button's number is not the button
+  r.uIOhook.emit('keyup', { keycode: 91 });
+  assert.deepEqual(edges, [['ptt', true], ['intercom', true], ['intercom', false], ['ptt', false]]);
+});
+
+function twoShortcutRig({ knownIds = [], bindCode = 0 } = {}) {
+  const log = [], signals = {};
+  const entry = (id, label) => [id, { trigger_description: { value: label } }];
+  const all = [entry(SHORTCUTS.ptt.id, 'Meta+F13'), entry(SHORTCUTS.intercom.id, 'Meta+F14')];
+  const client = {
+    version: async () => 2,
+    register: async () => {},
+    describe: (o) => o,
+    request: async (member, _sig, args) => {
+      if (member === 'CreateSession') return { code: 0, results: { session_handle: '/s/1' } };
+      if (member === 'ListShortcuts') return { code: 0, results: { shortcuts: all.filter(e => knownIds.includes(e[0])) } };
+      const shortcuts = args({})[1];
+      log.push([member, shortcuts.map(x => x[0])]);
+      return { code: bindCode, results: { shortcuts: all.filter(e => shortcuts.some(x => x[0] === e[0])) } };
+    },
+    onSignal: async (name, fn) => { signals[name] = fn; return () => { delete signals[name]; }; },
+    onPortalRestart: async () => {},
+    closeSession: async () => {},
+    close: () => {},
+  };
+  return { listener: createPortalListener({ connect: async () => client }), log, signals };
+}
+
+test('portal: the intercom is a shortcut of its own; a bind names every one of ours the desktop knows', async () => {
+  const r = twoShortcutRig({ knownIds: [SHORTCUTS.ptt.id] });
+  const edges = [];
+  const started = await r.listener.start({ ptt: BOUND, intercom: { shortcutId: SHORTCUTS.intercom.id, label: 'Meta+F14' } }, (c, d) => edges.push([c, d]));
+  assert.deepEqual(r.log, [['BindShortcuts', [SHORTCUTS.ptt.id, SHORTCUTS.intercom.id]]]);
+  assert.deepEqual(started, { labels: { ptt: 'Meta+F13', intercom: 'Meta+F14' } });
+  r.signals.Activated(['/s/1', SHORTCUTS.intercom.id, 1, {}]);
+  r.signals.Activated(['/s/1', SHORTCUTS.ptt.id, 1, {}]);
+  assert.deepEqual(edges, [['intercom', true], ['ptt', true]]);
+});
+
+test('portal: only the bound channels give edges', async () => {
+  const r = twoShortcutRig({ knownIds: [SHORTCUTS.ptt.id, SHORTCUTS.intercom.id] });
+  const edges = [];
+  await r.listener.start(ON, (c, d) => edges.push([c, d]));
+  assert.deepEqual(r.log, []); // both known: nothing bound again
+  r.signals.Activated(['/s/1', SHORTCUTS.intercom.id, 1, {}]);
+  assert.deepEqual(edges, []);
+});
+
+test('portal: a first intercom capture binds it beside the known PTT shortcut', async () => {
+  const r = twoShortcutRig({ knownIds: [SHORTCUTS.ptt.id] });
+  assert.deepEqual(await r.listener.capture('intercom'), { shortcutId: SHORTCUTS.intercom.id, label: 'Meta+F14' });
+  assert.deepEqual(r.log, [['BindShortcuts', [SHORTCUTS.ptt.id, SHORTCUTS.intercom.id]]]);
 });
