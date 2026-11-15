@@ -1,4 +1,4 @@
-### Changed in 2.4.0
+### Changed in 2.3.1
 - **VFR handoff to another Facility:** a VFR Strip can now be handed to CTR, and from CTR to any station with a VFR Bay. The receiver accepts and gets the Strip with its code, assigned values and track; the sender's Strip ends
 - **A handoff to a Position you also hold is accepted at once,** including one you cover for an unstaffed Position. VFR moves straight away; an IFR HANDOFF is accepted, and CHECKED IN stays yours to press when the pilot calls
 - **Click a contact on the map and the Strip panel jumps to its Strip:** the Position tab and Bay that hold it, selected and scrolled into view, for a Strip one of your Positions holds. It never switches while you are editing a Block or have a popover open. ATC targets too
