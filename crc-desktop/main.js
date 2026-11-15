@@ -219,8 +219,8 @@ app.on('ready', async () => {
     autoUpdater.on('update-downloaded', (info) => {
         sendUpdateStatus({ state: 'ready', version: info.version });
         try {
-            writePendingPatchNotes(patchNotesPath, { version: info.version, notes: info.releaseNotes });
-            writePendingPatchNotes(lastPatchNotesPath, { version: info.version, notes: info.releaseNotes });
+            writePendingPatchNotes(patchNotesPath, { version: info.version, notes: info.releaseNotes, fromVersion: app.getVersion() });
+            writePendingPatchNotes(lastPatchNotesPath, { version: info.version, notes: info.releaseNotes, fromVersion: app.getVersion() });
         } catch (err) {
             console.error('[patch-notes] failed to persist pending patch notes:', err.message);
         }

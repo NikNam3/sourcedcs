@@ -14,7 +14,7 @@ const os = require('os');
 const path = require('path');
 
 const {
-  normalizeReleaseNotes, writePendingPatchNotes, readAndClearPendingPatchNotes,
+  normalizeReleaseNotes, notesSince, writePendingPatchNotes, readAndClearPendingPatchNotes,
 } = require('../patch-notes');
 
 function tmpFile() {
@@ -92,4 +92,27 @@ test('readAndClearPendingPatchNotes: corrupt JSON is treated as absent, not a cr
   fs.writeFileSync(file, '{ not valid json');
   assert.equal(readAndClearPendingPatchNotes(file, '1.2.0'), null);
   assert.equal(fs.existsSync(file), false);
+});
+
+const ALL_NOTES = ['### Changed in 2.3.1', '- new A', '', '### Changed in 2.3.0', '- new B', '', '### Fixed in 2.1.5', '- fix C'].join('\n');
+
+test('notesSince: only the versions this update brings, newest first', () => {
+  assert.equal(notesSince(ALL_NOTES, '2.3.0', '2.3.1'), '### Changed in 2.3.1\n- new A');
+  assert.equal(notesSince(ALL_NOTES, '2.1.5', '2.3.1'), '### Changed in 2.3.1\n- new A\n\n### Changed in 2.3.0\n- new B');
+  assert.equal(notesSince(ALL_NOTES, null, '2.3.0'), '### Changed in 2.3.0\n- new B', 'no previous version: the new one only');
+  assert.equal(notesSince('- just a line', '2.3.0', '2.3.1'), '- just a line', 'no headings: whole');
+  assert.equal(notesSince(ALL_NOTES, '2.3.1', '2.3.1'), '### Changed in 2.3.1\n- new A', 'nothing newer: the newest section');
+});
+
+test('writePendingPatchNotes keeps only the sections after fromVersion', () => {
+  const file = require('path').join(require('os').tmpdir(), `pn-${process.pid}-${Date.now()}.json`);
+  writePendingPatchNotes(file, { version: '2.3.1', notes: ALL_NOTES, fromVersion: '2.3.0' });
+  assert.deepEqual(JSON.parse(require('fs').readFileSync(file, 'utf8')), { version: '2.3.1', notes: '### Changed in 2.3.1\n- new A', fromVersion: '2.3.0' });
+  require('fs').unlinkSync(file);
+});
+
+test('a pending file from an older CRC (all notes, no fromVersion) shows only the new version', () => {
+  const file = require('path').join(require('os').tmpdir(), `pn-old-${process.pid}-${Date.now()}.json`);
+  require('fs').writeFileSync(file, JSON.stringify({ version: '2.3.1', notes: ALL_NOTES }));
+  assert.deepEqual(readAndClearPendingPatchNotes(file, '2.3.1'), { version: '2.3.1', notes: '### Changed in 2.3.1\n- new A' });
 });
