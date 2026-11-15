@@ -194,6 +194,19 @@ class Coordination {
     // scoped to the peer Facility, alongside the normal one for this side.
     // The replica was minted at an unstaffed Position that a staffed one is offered (F4 below): the sender is told.
     const warnings = proposal.offeredTo ? [warn('UNSTAFFED_RECEIVER', `${op.toPositionId} is unstaffed: offered to ${proposal.offeredTo}`)] : undefined;
+    // docs/adr/0162: a HANDOFF to a Position the sending controller also holds (Primary there, or at the Position covering
+    // it) has nobody else to answer it: the receiver's replica is accepted at once, in this Mutation. CHECKED_IN stays the
+    // controller's (ADR 0122): control moves when the pilot reports on the new frequency, as for any handoff.
+    if (primitive === 'HANDOFF' && peer.isHeldByController(by, op.toPositionId)) {
+      const accepted = peer.autoAcceptCoordination({ stripId: proposal.strip.stripId, by, causedBy: this._activeCmid, fromFacilityId: this._rules.facilityId });
+      if (accepted.ok) {
+        return {
+          ok: true, strip, selfCoordinated: true, peerFacilityId: op.toFacilityId, peerStrip: accepted.strip,
+          warnings: [...(warnings || []), ...(accepted.warnings || [])].length ? [...(warnings || []), ...(accepted.warnings || [])] : undefined,
+          carrierChanged: accepted.carrierChanged,
+        };
+      }
+    }
     return { ok: true, strip, peerFacilityId: op.toFacilityId, peerStrip: proposal.strip, warnings };
   }
 

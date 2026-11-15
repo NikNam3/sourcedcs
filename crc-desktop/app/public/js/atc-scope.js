@@ -8,6 +8,7 @@ import {
   stripIdsForTrackId, airspaceEntryAlertsForTrack
 } from './panels/efsp/efsp-state.js';
 import { getActingPositions, sendEfspMutation } from './panels/efsp/efsp-ws.js';
+import { acceptVfrHandoff } from './panels/efsp/flight-following.js';
 import { coverageDatalink, coverageRadars, history, lastSweepMs, tracks } from './picture.js';
 import { map, mapReady } from './map-handle.js';
 import { settings } from './settings.js';
@@ -436,7 +437,7 @@ export function atcTargetClick(id, now = Date.now()) {
     airspace: _airspaceAckKeys(id),
     accept: (strip) => {
       // crc-sync docs/adr/0146: the receiver of a VFR handoff accepts as the Position it names.
-      if (strip.vfrHandoff) { sendEfspMutation(strip.vfrHandoff.toPositionId, strip, { kind: 'VfrHandoff', action: 'ACCEPT' }); return; }
+      if (strip.vfrHandoff) { acceptVfrHandoff(strip); return; }
       sendEfspMutation(strip.ownerPositionId, strip, { kind: strip.coordination.primitive, action: 'ACCEPT' });
     },
   });

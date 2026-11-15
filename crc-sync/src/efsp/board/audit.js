@@ -25,7 +25,7 @@ class BoardAudit {
    * of the sender's Mutation; `causedBy` names that Mutation. `after` of a peer
    * entry is never a drop the traffic count would count (traffic-count.js).
    */
-  recordPeer(op, strip, before, { causedBy, fromFacilityId, by, action }) {
+  recordPeer(op, strip, before, { causedBy, fromFacilityId, by, action, extra }) {
     if (!this._mutationLog) return;
     this._mutationLog.record({
       clientMutationId: null, causedBy: causedBy || null, op,
@@ -34,6 +34,7 @@ class BoardAudit {
       facilityId: this._rules.facilityId || null, fromFacilityId: fromFacilityId || null,
       actingPositionId: null, actorId: by || null, at: this._clock.now(),
       before, after: deepClone(strip), source: 'peer',
+      ...(extra || {}),
     });
   }
 
