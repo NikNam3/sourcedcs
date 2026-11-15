@@ -258,7 +258,8 @@ export function atcType(t) {
  * @param {object} t  the wire track
  * @param {object} v  atc-scope.js's view: { kind: 'FDB'|'PDB'|'LDB'|'NONE',
  *   line0: [{text,color,blink}], l1Suffix: [{text,color,blink}], recipient: string, coast: boolean }
- * @param {{speedKt:number, assigned?:object, assignedCode?:string|null, typePhase?:boolean}} info
+ * @param {{speedKt:number, assigned?:object, assignedCode?:string|null, typePhase?:boolean, highlight?:string|null}} info
+ *   highlight: the correlated Strip's HIGHLIGHT colour, for the callsign;
  *   typePhase: the half of the time-share that shows the type instead of the speed;
  *   assignedCode: the flight's assigned beacon code, for the received code on line 3 (receivedCodeText)
  * @returns {Array<Array<{text:string,color:string|null,blink:boolean}>>}
@@ -296,7 +297,7 @@ export function atcBlockLines(t, v, info = {}) {
   }
 
   // FDB
-  const l1 = [seg(trackName(t))];
+  const l1 = [seg(trackName(t), info.highlight || null)]; // the Strip's HIGHLIGHT (panels/efsp/track-highlight.js)
   for (const item of v.l1Suffix || []) l1.push(seg(' '), seg(item.text, item.color || null, !!item.blink));
   lines.push(l1);
   const l2 = [seg(`${alt || '   '} `)];

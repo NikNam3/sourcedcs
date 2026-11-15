@@ -105,7 +105,7 @@ export function addTrackLayers() {
         // docs/adr/0058: a conflict or conformance tag leads, in its own colour.
         ['get', 'alertTag'], {'text-color': ['get', 'alertColor']},
         ['case', ['!=', ['get', 'alertTag'], ''], ' ', ''], {},
-        ['get', 'callsign'], {},
+        ['get', 'callsign'], {'text-color': ['get', 'csColor']}, // the Strip's HIGHLIGHT, else the label's colour
         // Add '\n' after callsign only when there's something on subsequent lines
         ['case', ['any', ['!=', ['get', 'infoLine'], ''], ['!=', ['get', 'sqTag'], '']], '\n', ''], {},
         ['get', 'infoLine'], {},

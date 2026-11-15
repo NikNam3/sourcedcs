@@ -395,7 +395,11 @@ ordinary Strip faces and shows them.)
 
 **One-input gestures.** **Alt+click** on a Strip toggles OFFSET and **Ctrl/Cmd+click** steps its
 HIGHLIGHT (yellow, cyan, lime, off); both are one input. The `⋯` item and the right-click swatches still
-work (two inputs). On macOS Ctrl+click is a context click, so use the swatches there.
+work (two inputs); a highlighted Strip's swatches end with **×**, which clears it. On macOS Ctrl+click is a
+context click, so use the swatches there. Quick clicks are sent one after another, so stepping through the
+colours is never refused as somebody else's change. The colour also shows on the map: the callsign in the
+track's label (both label styles) takes it, for a Strip one of your Positions owns; the target, leader and
+the rest of the block keep their colours.
 
 ### Strip counts and arrivals (docs/adr/0057)
 
@@ -604,7 +608,7 @@ Strip {
 - `offset` (bool) — visually indents the Strip (⇥ button), no server meaning beyond display.
 - `flipped` (bool) — shows only the callsign (Block 1), hides everything else (double-click to toggle).
 - `removeIndicator` (bool) — set automatically by `DropStrip`; distinct from actual deletion (a `DROPPED` Strip stays on the server, just off the visible Board, until it is archived (§8J)).
-- `highlight` (`null|'yellow'|'cyan'|'lime'`) — right-click swatch popover. Never red — red is reserved for `attention`.
+- `highlight` (`null|'yellow'|'cyan'|'lime'`) — right-click swatch popover (× clears) or Ctrl/Cmd+click. Never red — red is reserved for `attention`. The owner's map shows it on the track label's callsign (`panels/efsp/track-highlight.js`). The paper gestures' SetFlag writes go one per Strip in flight (`panels/efsp/flag-writer.js`), so a quick second click is not refused STALE_REV.
 - `attention` (`null|'red'`) — Shift+click. The one saturated-red channel on the Board, per guide §7.7 rule 4.
 
 **`annotations`** — append-only cells for any Block routed `{kind:'annotation'}` in the Block Map (§6). Each cell is a list of `Entry{value, status, at, by}`; `status ∈ ACTIVE|SUPERSEDED|STRUCK|PREPLANNED`. Amending appends a new `ACTIVE` entry and marks the old one `SUPERSEDED` — never overwrites (guide §3.7, FAA JO 7110.65 ¶2-3-1: "do not erase or overwrite any item"). `confirmVacated: true` on a `SetBlock` marks the current `ACTIVE` entry `STRUCK` instead (for altitude-type Blocks — a controller confirming the aircraft has actually left an altitude, never automatic on assignment).

@@ -11,6 +11,8 @@ import {
 } from './panels/efsp/efsp-state.js';
 import { getCorrelatedHighlightTrackId } from './panels/efsp/correlation-highlight.js';
 import { buildCarrierFinalLine } from './panels/efsp/carrier-panel.js';
+import { trackHighlightColor } from './panels/efsp/track-highlight.js';
+import { getActingPositions } from './panels/efsp/efsp-ws.js';
 import {
   CRC_RANGE_M, FADE_DURATION_MS, getLabelHalfW, getLeaderIconGap, getScale, getTextSizePx, HISTORY_MAX, LABEL_EDGE_MARGIN, MIN_SPD_KT_PPL, STALE_MS, TEXT_OFFSET_EM
 } from './scope-constants.js';
@@ -449,6 +451,7 @@ export function buildLabels() {
       geometry: { type: 'Point', coordinates: coords },
       properties: {
         id, scheme: 'TACTICAL', callsign: trackName(t), infoLine,
+        csColor: (air && trackHighlightColor(stripIdsForTrackId(id).map(getEfspStrip), getActingPositions())) || color,
         sqTag: code.text, sqColor: code.color || color,
         color, opacity, textOffset, alertTag, alertColor, asgnLine,
       },

@@ -58,6 +58,16 @@ test('¶5-4-6 e NOTE in the ATC full data block: line 3 carries the received cod
   assert.equal(line3({}), '', 'no assigned code known: nothing to compare');
 });
 
+test('the ATC full data block\'s callsign takes the Strip\'s HIGHLIGHT colour, nothing else on the block does', () => {
+  const t = contact({ ssr: { code: '4521' }, altitude: MODE_C, label: { callsign: 'VIPER11', source: 'FLIGHT_DATA', trackNumber: 'TN1' } });
+  const v = { kind: 'FDB', line0: [], l1Suffix: [] };
+  const lines = L.atcBlockLines(t, v, { speedKt: 280, highlight: 'cyan' });
+  assert.equal(lines[0][0].text, 'VIPER11');
+  assert.equal(lines[0][0].color, 'cyan');
+  assert.ok(lines.slice(1).flat().every(s => s.color === null));
+  assert.equal(L.atcBlockLines(t, v, { speedKt: 280 })[0][0].color, null, 'no highlight: the block\'s own colour');
+});
+
 test('an altitude is shown only when a sensor gave one, and marked when it is not Mode C', () => {
   assert.equal(L.altitudeShort(contact()), '');
   assert.equal(L.altitudeShort(contact({ altitude: MODE_C })), '120');
