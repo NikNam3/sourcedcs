@@ -100,7 +100,8 @@ The FAA, quoted from JO 7110.65BB (faa.gov atc_html, read 2026-10-27):
   0143, null or set) no longer starts. Production never ran ADR 0143 (protocol 1 deployed) and its v2 deploy deletes the
   Board; a local Board is fixed by deleting the key (the lane's wip note gives the jq line). A Board holding old
   VFR-departure Strips needs nothing: they are ordinary DEPARTURE Strips.
-- Not built: a VFR handoff **across Facilities** (AP to CENTER's CTR). The cross-Facility HANDOFF carries replicas and the
+- *Superseded by ADR 0162 (built 2026-11-15): a VFR handoff across Facilities, and auto-accept when the sender holds the
+  receiver.* Not built: a VFR handoff **across Facilities** (AP to CENTER's CTR). The cross-Facility HANDOFF carries replicas and the
   control-release model (ADR 0101, 0122), which H175 rejects for a VFR; a VFR leaving the Facility's airspace is
   terminated, or handed off once a cross-Facility VFR handoff is designed (a supervisor question, not a default).
 - Two controllers tagging one track: the second is refused, naming the first's callsign. A track lost and back: the

@@ -129,7 +129,8 @@ class StripOps {
 
     // An op that makes its own subject (H136's StartFlightFollowing): no Strip to gate on, and undoable like any other
     // keyed Mutation. The frame names the Strip it made once it exists, so the Undo's audit entry can name it.
-    if (entry && entry.stripless) return this._dispatchStripless(entry, mutation, actingPositionId, by, keyed, frameMeta);
+    // `stripless` is true, or a predicate over the op (VfrHandoff's ACCEPT from another Facility, docs/adr/0162).
+    if (entry && (typeof entry.stripless === 'function' ? entry.stripless(op) : entry.stripless)) return this._dispatchStripless(entry, mutation, actingPositionId, by, keyed, frameMeta);
 
     const strip = this.state.strips.get(mutation.stripId);
     if (!strip) return { ok: false, reason: 'NOT_FOUND' };
