@@ -289,8 +289,9 @@ test('the proposer\'s note reaches the receiver', async ({ browser }) => {
   await goBay(b, 'AP', 'ap-coordination');
   const replica = strip(b, 'NOTE01');
   await expect(replica.getByRole('button', { name: 'Accept Hand Off' })).toBeVisible();
-  const shown = await replica.evaluate((el, n) => el.innerText.includes(n)
-    || [...el.querySelectorAll('[title]')].some(t => t.title.includes(n)), note);
+  // Typed notes are capitals (U-STRIP-FACE, SF-Q1 a): compare without case.
+  const shown = await replica.evaluate((el, n) => el.innerText.toUpperCase().includes(n)
+    || [...el.querySelectorAll('[title]')].some(t => t.title.toUpperCase().includes(n)), note.toUpperCase());
   expect(shown, 'the note is stored on the replica (coordination.note) and rendered nowhere').toBe(true);
 });
 
@@ -303,8 +304,8 @@ test('a TOFI note reaches the MRU controller', async ({ browser }) => {
   await goBay(b, 'TAC_C2', 'tac-c2-coordination');
   const mission = strip(b, 'NOTE02');
   await expect(mission.getByRole('button', { name: 'Accept TOFI Entry' })).toBeVisible();
-  const shown = await mission.evaluate((el, n) => el.innerText.includes(n)
-    || [...el.querySelectorAll('[title]')].some(t => t.title.includes(n)), note);
+  const shown = await mission.evaluate((el, n) => el.innerText.toUpperCase().includes(n)
+    || [...el.querySelectorAll('[title]')].some(t => t.title.toUpperCase().includes(n)), note.toUpperCase());
   expect(shown, 'the TOFI note is rendered nowhere on the MRU side').toBe(true);
 });
 
