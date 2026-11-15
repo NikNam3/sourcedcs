@@ -91,6 +91,12 @@ The FAA, quoted from JO 7110.65BB (faa.gov atc_html, read 2026-10-27):
 8. **Removed:** `CreateVfrDeparture` and its grant, Block 9K and `filed.directionOfFlight` (nothing else read it), the CD
    toolbar VFR form and `.vfr`, `hasNoClearance`, `keepIfrHidden`, `FLIGHT_FOLLOWING_POSITIONS`, `VFR_DEPARTURE_POSITIONS`.
    `.ff <track> <CALLSIGN> [TYPE]` and `.term` stay as the keyboard path.
+9. **Amended 2026-11-15 (the human: "i need a cancel FF button. that doesnt drop the whole strip like radar services
+   cancelled"): `CancelFlightFollowing`.** On a VFR strip with a code, at its holder: the code is released
+   (`releaseAssignedCode`, "squawk VFR", JO 7110.65BB para 5-2-7 b), the strip, its cells and its binding stay, so the
+   flight is the tagged VFR with no code of item 1 again (no CA, 2.3.0's rule). The data block's CANCEL FF, the strip's
+   `⋯`, and an emptied Block 5 on a VFR strip send it (Block 5 on an IFR strip is never emptied). Not undone; CODE gives a
+   new one. In the VFR grant (`VFR_OP_KINDS`).
 
 ## Consequences
 

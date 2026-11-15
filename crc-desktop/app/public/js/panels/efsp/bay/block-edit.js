@@ -7,6 +7,7 @@ import {
 } from '../strip-template.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { sendEfspMutation } from '../efsp-ws.js';
+import { isVfrStrip } from '../vfr.js';
 import { _resolveActingPositionId } from './dispatch.js';
 
 
@@ -477,6 +478,12 @@ function _startBlockEdit(strip, blockId, span, draft) {
     // moved past, and it comes back rejected as STALE_REV even though
     // nothing else touched the Strip in between.
     const currentStrip = getEfspStrip(strip.stripId) || strip;
+    // An emptied Block 5 on a VFR strip is "squawk VFR": flight following ends, the strip stays (CancelFlightFollowing,
+    // crc-sync docs/adr/0146). A code is never emptied on an IFR strip.
+    if (sendBlockId === '5' && value === '' && isVfrStrip(currentStrip)) {
+      sendEfspMutation(actingPositionId, currentStrip, { kind: 'CancelFlightFollowing' });
+      return;
+    }
     sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId: sendBlockId, value });
   };
 

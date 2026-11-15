@@ -11,7 +11,7 @@ import { getTextSizePx, TEXT_OFFSET_EM } from './scope-constants.js';
 import { createLabelDragGate } from './label-drag-gate.js';
 import { _drag, _measure, _setDrag, _setMeasure, map } from './map-handle.js';
 import { bullseyePickTarget } from './view-state.js';
-import { labelOffsets, missionData, tracks } from './picture.js';
+import { coverageAtc, labelOffsets, missionData, tracks } from './picture.js';
 
 // The scope's pointer handling (DESK-SPLIT, split out of map-setup.js's initMap): label drag and click, ATC target clicks, airport
 // and track clicks, the combined mouse-move (BRA, label drag, measure line) and the right-click measure line. Run once, from 'load'.
@@ -60,12 +60,20 @@ export function wireMapInteractions() {
     map.dragPan.disable();
   };
 
-  // Click on a label, unless the mouse was dragged. The controller who owns the
-  // contact's correlated Strip gets the assignment menu (HDG / SPEED / ALT,
-  // docs/adr/0140), with SUPPRESS for its conflict alerts (crc-sync's
-  // docs/adr/0145, 0147: only the owner's block offers it); everyone
-  // else, and a Shift+click, gets the track panel as before (H71 default 7),
-  // which is also the menu's TRACK item.
+  // A click on a contact (its label, its target or its tactical square). The controller who owns the contact's
+  // correlated Strip gets the assignment menu (HDG / SPEED / ALT, docs/adr/0140), with SUPPRESS for its conflict alerts
+  // (crc-sync's docs/adr/0145, 0147), the VFR actions and the tag (docs/adr/0146). The track info panel is the tactical
+  // controller's (H71 default 7): an ATC controller (signed on to an ATC Position) never gets it, not as a fallback, not
+  // on Shift+click, not as the menu's TRACK item; a tactical one gets it where there is no menu, on Shift+click, and as
+  // TRACK.
+  const _openContact = (id, ev) => {
+    const trackPanel = !coverageAtc;
+    if (ev && !(ev.shiftKey && trackPanel)
+      && openLabelMenu(id, ev.clientX, ev.clientY, trackPanel ? { onTrackInfo: () => showTrackPanel(id) } : {})) return;
+    if (trackPanel) showTrackPanel(id);
+  };
+
+  // Click on a label, unless the mouse was dragged.
   // e.preventDefault() stops the map-level click from closing the panel.
   const _onLabelClick = (e) => {
     if (bullseyePickTarget) return;
@@ -73,9 +81,7 @@ export function wireMapInteractions() {
     if (!_labelGate.takeClick()) return;
     const id = String(e.features[0].properties.id);
     _selectStripForTrackIfAny(id);
-    const ev = e.originalEvent;
-    if (ev && !ev.shiftKey && openLabelMenu(id, ev.clientX, ev.clientY, { onTrackInfo: () => showTrackPanel(id) })) return;
-    showTrackPanel(id);
+    _openContact(id, e.originalEvent);
   };
   // An ATC block drags and opens the track panel exactly like a tactical one.
   for (const layer of ['unit-labels', 'atc-labels']) {
@@ -98,10 +104,10 @@ export function wireMapInteractions() {
     _atcLastClick = e.originalEvent;
     const id = String(feat.properties.id);
     atcTargetClick(id);
-    // The target (disc, or `+` for primary only) also opens the track panel and jumps to the Strip, like the label and the
-    // tactical square (docs/wip/STRIP-JUMP.md). After the STARS gesture, so an accepted handoff lands on its Strip.
-    showTrackPanel(id);
+    // The target (disc, or `+` for primary only) then jumps to the Strip and opens what a label click opens
+    // (docs/wip/STRIP-JUMP.md). After the STARS gesture, so an accepted handoff lands on its Strip and its menu.
     _selectStripForTrackIfAny(id);
+    _openContact(id, e.originalEvent);
     updateMap();
   };
   map.on('click', 'atc-targets', _onAtcTargetClick);
@@ -131,15 +137,15 @@ export function wireMapInteractions() {
   }
 
   // ── Left-click on track icon ─────────────────────────────────────────
-  // Aircraft and ships → track info panel
+  // Aircraft and ships: as a label click (_openContact)
   map.on('click', 'unit-squares', (e) => {
     if (bullseyePickTarget) return;
     const feat = e.features && e.features[0];
     if (!feat) return;
     e.preventDefault();
     const id  = String(feat.properties.id);
-    showTrackPanel(id);
     _selectStripForTrackIfAny(id);
+    _openContact(id, e.originalEvent);
   });
 
   // Refreshes the extended centerline's zoom-dependent tick spacing as soon

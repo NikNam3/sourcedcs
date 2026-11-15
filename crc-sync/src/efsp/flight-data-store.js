@@ -1085,6 +1085,26 @@ class FlightDataStore {
   }
 
   /**
+   * CancelFlightFollowing (docs/adr/0146): the flight's code is released and Block 5 is empty again, as after a VFR tag
+   * with no code. Refused when it has none.
+   * @returns {{ok:true, flightData, code:string}|{ok:false, reason:string, detail?:string}}
+   */
+  releaseAssignedCode(flightDataId, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
+    const code = flightData.identity.beaconAssigned;
+    if (!code) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'it has no code' };
+    if (this._codeAllocator.holderOf(code) === flightDataId) this._codeAllocator.release(code);
+    flightData.identity.beaconAssigned = null;
+    flightData.provenance['identity.beaconAssigned'] = 'CONTROLLER_ENTERED';
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['identity.beaconAssigned']);
+    return { ok: true, flightData, code };
+  }
+
+  /**
    * WP5 (docs/adr/0045) — the code the aircraft is actually squawking, as
    * reported by the correlated surveillance contact.
    *

@@ -111,19 +111,14 @@ test('the owner assigns heading and altitude from the label; the values land on 
   await expect(menu).toHaveCount(0);
   expect(await page.evaluate(() => crc.state.getPendingMutations().length)).toBe(0);
 
-  // The TRACK item and Shift+click are today's click.
+  // An ATC controller never gets the track info panel (the tactical controller's): no TRACK item.
   await page.mouse.click(pt.x, pt.y);
-  await menu.locator('.label-menu-track').click();
-  await expect(menu).toHaveCount(0);
-  await expect(page.locator('#tp-callsign')).toContainText(callsign);
-  await page.evaluate(() => crc.trackPanel.closeTrackPanel());
-  await page.keyboard.down('Shift');
-  await page.mouse.click(pt.x, pt.y);
-  await page.keyboard.up('Shift');
-  await expect(menu).toHaveCount(0);
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('.label-menu-track')).toHaveCount(0);
+  await expect(page.locator('#tp-callsign', { hasText: callsign })).toHaveCount(0);
 });
 
-test('not the owner: the label click opens the track panel, no menu', async ({ page }) => {
+test('not the owner: the label click opens no menu, and an ATC controller no track panel either', async ({ page }) => {
   await openCtr(page, `ulm-other-${Date.now()}`);
   const callsign = uniqueCallsign('LBN');
   await seedStrip(page, { callsign, actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
@@ -135,6 +130,6 @@ test('not the owner: the label click opens the track panel, no menu', async ({ p
   await putContact(page, callsign, 'ulm-2');
   const pt = await labelPoint(page, 'ulm-2');
   await page.mouse.click(pt.x, pt.y);
-  await expect(page.locator('#tp-callsign')).toContainText(callsign);
   await expect(page.locator('.label-menu')).toHaveCount(0);
+  await expect(page.locator('#tp-callsign', { hasText: callsign })).toHaveCount(0);
 });

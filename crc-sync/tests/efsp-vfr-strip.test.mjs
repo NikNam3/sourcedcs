@@ -134,6 +134,26 @@ test('AssignCode gives the flight a discrete code once; with no code free, refus
   assert.match(act(efsp, c.AP, 'AP', live(efsp, strip), { kind: 'AssignCode' }).detail, /already has code/);
 });
 
+test('CancelFlightFollowing releases the code and keeps the strip, bound and held; CODE gives a new one', () => {
+  const { efsp, c } = freshEfsp(createEfsp, ATC, { currentTheater: () => 'Test' });
+  let strip = send(efsp, c.AP, 'AP', TAG('715', 'N715')).ack.strip;
+  assert.match(act(efsp, c.AP, 'AP', strip, { kind: 'CancelFlightFollowing' }).detail, /no code/, 'not on flight following yet');
+  strip = mustAct(efsp, c.AP, 'AP', live(efsp, strip), { kind: 'AssignCode' });
+  const alloc = efsp.flightDataStore.codeAllocator;
+  const code = fdOf(efsp, strip).identity.beaconAssigned;
+  const r = act(efsp, c.AP, 'AP', live(efsp, strip), { kind: 'CancelFlightFollowing' });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const after = live(efsp, strip);
+  assert.equal(after.state, strip.state, 'the strip stays');
+  assert.equal(after.ownerPositionId, 'AP');
+  assert.equal(fdOf(efsp, strip).identity.beaconAssigned, null);
+  assert.equal(alloc.holderOf(code), null, 'the code is free again');
+  assert.equal(efsp.correlationStore.getCorrelation(strip.flightDataId).binding.trackId, '715', 'still bound to its track');
+  assert.equal(act(efsp, c.GC, 'GC', after, { kind: 'CancelFlightFollowing' }).ok, false, 'only the holder');
+  mustAct(efsp, c.AP, 'AP', live(efsp, strip), { kind: 'AssignCode' });
+  assert.match(fdOf(efsp, strip).identity.beaconAssigned, /^[0-7]{4}$/);
+});
+
 test('HDG, SPD and ALT on a VFR strip are its clearance cells: assigned, cancelled (empty), and conformance holds it to them', () => {
   const { efsp, c } = freshEfsp(createEfsp, ATC, { currentTheater: () => 'Test' });
   let strip = send(efsp, c.AP, 'AP', TAG('720', 'N720')).ack.strip;

@@ -10,7 +10,7 @@ import './helpers/client-env.mjs';
 import { applyEfspSnapshot } from '../app/public/js/panels/efsp/efsp-state.js';
 import { sendEfspSetPositions, setEfspSender, sendEfspMutation as realSendMutation, sendEfspCreateStrip as realSendCreate } from '../app/public/js/panels/efsp/efsp-ws.js';
 import {
-  canAssignCode, canCancelIfr, canRecallVfrHandoff, canTagTrack, canTerminateRadarService, contactForToken, tagProblem, tagTrack,
+  canAssignCode, canCancelFlightFollowing, canCancelIfr, canRecallVfrHandoff, canTagTrack, canTerminateRadarService, contactForToken, tagProblem, tagTrack,
   acceptVfrHandoff, initiateVfrHandoff, pickVfrTagPosition, vfrBayOf, vfrHandoffAcceptAs, vfrHandoffTargets, vfrTagPosition, vfrTagPositions,
 } from '../app/public/js/panels/efsp/flight-following.js';
 import { atcRelation } from '../app/public/js/atc-scope.js';
@@ -110,6 +110,9 @@ test('code, IFR cancelled and Radar service terminated are offered where they ap
   const s1 = strip('s1', 'f1');
   assert.equal(canAssignCode(s1, fd('f1')), true);
   assert.equal(canAssignCode(s1, fd('f3', { identity: { beaconAssigned: '4321' } })), false, 'it has one');
+  assert.equal(canCancelFlightFollowing(s1, fd('f3', { identity: { beaconAssigned: '4321' } })), true, 'a code: flight following can end');
+  assert.equal(canCancelFlightFollowing(s1, fd('f1')), false, 'no code: not on flight following');
+  assert.equal(canCancelFlightFollowing(strip('s9', 'f9', { stripType: 'OVERFLIGHT', state: 'IN_SECTOR' }), fd('f3', { identity: { beaconAssigned: '4321' } })), false, 'not an IFR strip');
   assert.equal(canTerminateRadarService(s1), true);
   assert.equal(canTerminateRadarService(strip('s2', 'f2', { state: 'DROPPED' })), false);
   assert.equal(canTerminateRadarService(strip('s1', 'f1', { stripType: 'OVERFLIGHT', state: 'IN_SECTOR' })), false, 'an IFR strip ends otherwise');

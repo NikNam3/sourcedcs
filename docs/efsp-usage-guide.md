@@ -1254,8 +1254,8 @@ AIC's to change`).
 
 **Flight following** (VFR radar traffic advisories) starts on the contact itself. Signed on as Primary to a Position
 with a VFR Bay, click a contact that has no Strip: its menu offers **AT**, **ACID** and **TYPE**. Type the callsign and,
-optionally, the aircraft type and press **TRACK** (or Enter); TRACK with no ACID opens the track panel, whose **Tag VFR**
-section does the same. Or type `.ff <track number> <CALLSIGN> [TYPE] [@POSITION]`, where the track number is the one the
+optionally, the aircraft type and press **TRACK** (or Enter). (For a tactical controller, TRACK with no ACID opens the
+track panel, whose **Tag VFR** section does the same; an ATC controller never gets the track panel.) Or type `.ff <track number> <CALLSIGN> [TYPE] [@POSITION]`, where the track number is the one the
 data block shows.
 
 **AT is where the strip goes**: one button per Position you work that has a VFR Bay, the lit one taking it. The menu and
@@ -1282,6 +1282,10 @@ the face once set. A cleared `ALT` or `HDG` (the field emptied) is no clearance:
 selected Strip), offered on an overflight Strip or a VFR departure with no clearance that your `AP` or `CTR` owns, and greyed while a
 coordination or TOFI exchange is open on it. The Strip is dropped, the code released, any airspace entry cleared and
 the contact untracked at once. It is not the Strip's next step: that stays **Leaves Sector**, the handoff path.
+
+**Cancelling flight following, keeping the strip** ("squawk VFR"): on a VFR strip with a code, the data block's
+**CANCEL FF**, `⋯` → **Cancel flight following**, or emptying Block 5. The code is released and the flight has none
+again, so it alerts as untracked (no CA); the strip, its cells and the track stay yours. **CODE** gives it a new code.
 
 **A VFR departure** (CD's **VFR…**, §3) reaches `AP` as an ordinary handed-off DEPARTURE with no clearance. `AP`
 keeps flight following on it, or, when it leaves the MTMA or the pilot cancels, `⋯` → **Radar service terminated**. Its
@@ -1558,8 +1562,10 @@ starts with the code it is squawking (`4521 A060↓ H250`), as STARS does (¶5-4
   does), to acknowledge `EM`, `CA`/`MCI` or `SAA`, or to step a block down or expand it.
 - **Click the block** of a flight whose Strip you own to assign it a heading, speed or altitude: a small menu opens
   on **HDG**; type the value and Enter. Tab to **SPEED** and **ALT**; Enter sends every changed value, as if typed in
-  the Strip's cells (same refusals, same "Coordinated with …" line). Esc closes. **TRACK**, or Shift+click on the
-  block, opens the track panel. If you don't own the Strip, or the contact has none, the click opens the track panel.
+  the Strip's cells (same refusals, same "Coordinated with …" line). Esc closes. A click on the target does the same
+  after its STARS gesture. The track info panel is the tactical controller's: signed on to any ATC Position, a click
+  never opens it (no TRACK item, no Shift+click, nothing when there is no menu). A tactical controller gets it where
+  there is no menu, on Shift+click and from **TRACK**.
   A tactical label answers the same click. Acknowledgements and click-downs are local to your scope and are not synced, as on STARS.
 - A handoff you sent blinks for 5 s once accepted, then stays white until you click it green, then
   partial. It blinks only for something *this scope saw happen*: a reconnect shows the settled picture.

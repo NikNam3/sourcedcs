@@ -160,6 +160,14 @@ export function assignCode(strip) {
   return sendEfspMutation(strip.ownerPositionId, strip, { kind: 'AssignCode' });
 }
 
+/** Flight following ends, the strip stays (crc-sync docs/adr/0146): the code is released, at the holder of a VFR strip with one. */
+export function canCancelFlightFollowing(strip, flightData) {
+  return _held(strip) && !!(flightData && flightData.identity && flightData.identity.beaconAssigned);
+}
+export function cancelFlightFollowing(strip) {
+  return sendEfspMutation(strip.ownerPositionId, strip, { kind: 'CancelFlightFollowing' });
+}
+
 /** IFR -> VFR in place ("IFR cancelled"), on a live IFR strip the controller holds. */
 const IFR_STRIP_TYPES = ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT'];
 export function canCancelIfr(strip) {

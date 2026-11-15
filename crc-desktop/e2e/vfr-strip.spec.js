@@ -116,6 +116,16 @@ test('the data block\'s menu: ALT, a code, the handoff the receiver accepts, and
   await openMenu(page, tid, callsign);
   await expect(menu.locator('.label-menu-code')).toHaveCount(0);
 
+  // CANCEL FF: the code goes, the strip and its track stay; CODE gives a new one.
+  await menu.locator('.label-menu-cancel-ff').click();
+  await expect.poll(async () => (await recordFor(page, callsign)).code).toBe(null);
+  expect(await recordFor(page, callsign)).toMatchObject({ owner: 'AP', stripType: 'VFR' });
+  await openMenu(page, tid, callsign);
+  await expect(menu.locator('.label-menu-cancel-ff')).toHaveCount(0);
+  await menu.locator('.label-menu-code').click();
+  await expect.poll(async () => (await recordFor(page, callsign)).code).toMatch(/^[0-7]{4}$/);
+  await openMenu(page, tid, callsign);
+
   // The handoff: HO LC; the strip stays AP's and says HO LC; LC accepts from the same menu.
   await menu.locator('.label-menu-handoff', { hasText: 'HO LC' }).click();
   await expect.poll(async () => (await recordFor(page, callsign)).handoffTo).toBe('LC');

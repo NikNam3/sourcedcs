@@ -255,7 +255,7 @@ function applyDelta(updated, relabeled, gone) {
  * Clearance Delivery controller rather than a fault.
  */
 export function applyCoverage(msg) {
-  setCoverage(msg.radars || [], msg.signedOnPositions || [], !!msg.datalink);
+  setCoverage(msg.radars || [], msg.signedOnPositions || [], !!msg.datalink, !!msg.conflictAlert);
   noteCoveragePositions(coverageSignedOnPositions); // Primary or Observer, per Position
 
   // The datalink is a picture too (crc-sync's docs/adr/0059): a tactical
