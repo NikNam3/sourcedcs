@@ -3,6 +3,8 @@
  * thrown away. */
 
 import test from 'node:test';
+import fs from 'node:fs';
+import path from 'node:path';
 import assert from 'node:assert/strict';
 import { LABEL_DRAG_THRESHOLD_PX, createLabelDragGate } from '../app/public/js/label-drag-gate.js';
 
@@ -31,4 +33,11 @@ test('a drag released off the label does not swallow the next click', () => {
   g.move(20); // released somewhere else: no click on the label follows
   g.down();
   assert.equal(g.takeClick(), true);
+});
+
+test('the map\'s click tolerance is the drag threshold, so a press under it is a click and one over it a drag', () => {
+  // MapLibre drops `click` once mouse-up is clickTolerance px from mouse-down (default 3). Below the drag threshold and
+  // above the tolerance a press did nothing at all: the label did not move and no panel opened.
+  const src = fs.readFileSync(path.join(import.meta.dirname, '../app/public/js/map-setup.js'), 'utf8');
+  assert.match(src, /clickTolerance: LABEL_DRAG_THRESHOLD_PX/);
 });

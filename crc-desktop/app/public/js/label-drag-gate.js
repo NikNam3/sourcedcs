@@ -3,7 +3,7 @@
 // mouse-down, the distance moved and the click. The dragged state lives for ONE press: a drag released off the label gets
 // no click event to clear it, and the next label click used to be thrown away. down() starts every press clean.
 
-/** How far the mouse must travel before a press on a label is a drag rather than a click. Ours (5 px read a shaky click as a drag). */
+/** How far the mouse must travel before a press on a label is a drag rather than a click. Ours; map-setup.js sets MapLibre's clickTolerance to it, so every press is one or the other. */
 export const LABEL_DRAG_THRESHOLD_PX = 8;
 
 export function createLabelDragGate(thresholdPx = LABEL_DRAG_THRESHOLD_PX) {

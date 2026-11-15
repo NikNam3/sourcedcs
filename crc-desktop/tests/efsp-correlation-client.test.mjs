@@ -265,6 +265,18 @@ test('a contact click switches the panel to the Bay of its Strip at a held Posit
   setOpenEfspBays([{ containerEl: null, bayId: 'ap-departures' }]);
 });
 
+test('several Strips: the one a Search Bay shows wins over a held one elsewhere', () => {
+  const shown = { dataset: { stripId: 's1' }, scrollIntoView() {} };
+  setOpenEfspBays([{ containerEl: { querySelector: (q) => (q.includes('"s1"') ? shown : null) }, bayId: 'AP-search' }]);
+  setSignedOnAt('INCIRLIK', ['AP']);
+  load({
+    strips: [strip('s1', 'f1', 'ctr-departures'), strip('s2', 'f1', 'ap-departures')],
+    correlations: [correlation('f1')], bays: JUMP_BAYS,
+  });
+  assert.equal(selectStripForTrack('101'), 's1', 's1 is on screen in the search results');
+  setOpenEfspBays([{ containerEl: null, bayId: 'ap-departures' }]);
+});
+
 test('a contact with no Strip leaves the panel tabs alone', () => {
   setSignedOnAt('INCIRLIK', ['AP', 'TWR']);
   load({ strips: [strip('s1', 'f1', 'ap-departures')], correlations: [correlation('f1')], bays: JUMP_BAYS });

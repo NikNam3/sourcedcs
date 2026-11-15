@@ -7,7 +7,7 @@ import {
 } from './efsp-state.js';
 import { selectEfspStripById } from './bay/selection.js';
 import { map, mapReady } from '../../map-handle.js';
-import { getOpenEfspBayIds } from './bay/open-bays.js';
+import { _stripElById, getOpenEfspBayIds } from './bay/open-bays.js';
 import { revealEfspStrip } from './strip-reveal.js';
 import { getActingPositions } from './efsp-ws.js';
 
@@ -115,11 +115,11 @@ export function selectStripForTrack(trackId) {
   return stripId;
 }
 
-/** The candidate whose Bay is currently open, else one in a Bay of a Position this controller holds, else the first. */
+/** The candidate on screen (its Bay open, or a Search Bay showing it), else one in a Bay of a Position this controller holds, else the first. */
 function _preferVisibleStrip(stripIds) {
   const strips = stripIds.map(getEfspStrip);
   const open = new Set(getOpenEfspBayIds());
-  const shown = strips.find(s => s && open.has(s.bayId));
+  const shown = strips.find(s => s && (open.has(s.bayId) || _stripElById(s.stripId)));
   if (shown) return shown.stripId;
   const acting = getActingPositions();
   const bays = getEfspBays();
