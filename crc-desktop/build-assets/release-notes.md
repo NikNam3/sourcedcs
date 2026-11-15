@@ -1,3 +1,13 @@
+### Changed in 2.4.0
+- **VFR handoff to another Facility:** a VFR Strip can now be handed to CTR, and from CTR to any station with a VFR Bay. The receiver accepts and gets the Strip with its code, assigned values and track; the sender's Strip ends
+- **A handoff to a Position you also hold is accepted at once,** including one you cover for an unstaffed Position. VFR moves straight away; an IFR HANDOFF is accepted, and CHECKED IN stays yours to press when the pilot calls
+- **Click a contact on the map and the Strip panel jumps to its Strip:** the Position tab and Bay that hold it, selected and scrolled into view, for a Strip one of your Positions holds. It never switches while you are editing a Block or have a popover open. ATC targets too
+- **Fixed: the first click on a label after dragging one** is no longer swallowed; a label drag starts after 8 px
+- **A highlighted Strip's callsign shows its colour on the map** (both label styles), for a Strip one of your Positions owns
+- **Highlight swatches end with ×**, which clears the colour
+- **Fixed: clicking quickly through the highlight colours** (or any of offset, flip, attention) no longer says somebody else changed the Strip
+- This release changes the wire protocol: update CRC, an older version shows "Update required"
+
 ### Changed in 2.3.0
 - **Radio only:** CRC can start as the radio alone, in a small window, for controllers working in another tool. Press **RADIO ONLY** on the login screen or in Settings; **FULL CRC** goes back. It needs no login; log in to link frequencies through crc-sync
 - **Global PTT:** RADIO → SETUP → Global PTT keys the radio from any program while CRC is in the background. Choose the input with PRESS A KEY (Windows, X11) or CONFIGURE (Wayland). Off by default in full CRC, on in radio-only. Only that one input is watched; nothing is logged
