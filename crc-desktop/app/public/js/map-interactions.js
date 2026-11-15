@@ -12,7 +12,7 @@ import { createLabelDragGate } from './label-drag-gate.js';
 import { _drag, _measure, _setDrag, _setMeasure, map } from './map-handle.js';
 import { bullseyePickTarget } from './view-state.js';
 import { coverageAtc, labelOffsets, missionData, tracks } from './picture.js';
-import { startHdgDrag } from './scope-gestures/hdg-drag.js';
+import { isHdgDragPress, startHdgDrag } from './scope-gestures/hdg-drag.js';
 import { wireAltWheel } from './scope-gestures/alt-wheel.js';
 
 // The scope's pointer handling (DESK-SPLIT, split out of map-setup.js's initMap): label drag and click, ATC target clicks, airport
@@ -30,8 +30,8 @@ export function wireMapInteractions() {
   const _labelGate = createLabelDragGate();
 
   const _onLabelMouseDown = (e) => {
+    if (startHdgDrag(e)) return; // Ctrl + right drag: a heading, not a label drag (docs/adr/0164)
     if (e.originalEvent.button !== 0) return;
-    if (startHdgDrag(e)) return; // Ctrl + drag: a heading, not a label drag (docs/adr/0164)
     // No e.preventDefault() here — we need the click event to fire later.
     _labelGate.down();
 
@@ -113,7 +113,7 @@ export function wireMapInteractions() {
     _openContact(id, e.originalEvent);
     updateMap();
   };
-  // Ctrl + drag from a target or a tactical square assigns a heading, as from the label (docs/adr/0164).
+  // Ctrl + right drag from a target or a tactical square assigns a heading, as from the label (docs/adr/0164).
   for (const layer of ['atc-targets', 'atc-symbols', 'unit-squares']) map.on('mousedown', layer, startHdgDrag);
   // Alt + wheel over a contact moves its assigned altitude (docs/adr/0164).
   wireAltWheel();
@@ -212,6 +212,7 @@ export function wireMapInteractions() {
   // ── Right-click measure line ─────────────────────────────────────────
   map.getCanvas().addEventListener('mousedown', (e) => {
     if (e.button !== 2) return;
+    if (isHdgDragPress(e)) return; // Ctrl + right drag on your own contact is a heading (docs/adr/0164), not a measure
     e.preventDefault();
     const rect   = map.getCanvas().getBoundingClientRect();
     const point  = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);

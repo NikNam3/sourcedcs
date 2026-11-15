@@ -1,5 +1,5 @@
 ### Changed in 2.3.2
-- **Ctrl + drag a heading:** from your own track's dot or label, drag a line and let go: the heading (to 5°) is assigned to its Strip, replacing the one before. Esc cancels
+- **Ctrl + right-drag a heading:** from your own track's dot or label, drag a line with the right mouse button and let go: the heading (to 5°) is assigned to its Strip, replacing the one before. Esc cancels
 - **Alt + mouse wheel an altitude:** over your own track's dot or label, each notch moves the assigned altitude 1,000 ft (Shift: 100 ft), a block as a whole; the label shows it with a `?` and it is sent when you let go of Alt
 - **At or below / at or above:** ALT takes `<080` and `>FL240`. Conformance alerts only once the flight is past the limit
 - **CANCEL FF:** ends flight following on a VFR strip and keeps the strip and its track; the code is released (also in the strip's `⋯` menu, or by emptying the code)

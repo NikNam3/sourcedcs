@@ -1596,17 +1596,18 @@ starts with the code it is squawking (`4521 A060↓ H250`), as STARS does (¶5-4
   never opens it (no TRACK item, no Shift+click, nothing when there is no menu). A tactical controller gets it where
   there is no menu, on Shift+click and from **TRACK**.
   A tactical label answers the same click. Acknowledgements and click-downs are local to your scope and are not synced, as on STARS.
-- **Vector by drawing** (`adr/0164`). Hold **Ctrl** and drag from a flight's target, square or data block: a line
+- **Vector by drawing** (`adr/0164`). Hold **Ctrl** and drag with the **right** mouse button from a flight's target,
+  square or data block: a line
   follows the cursor with the magnetic heading at its end, rounded to 5°. Let go to assign it; it replaces the heading
-  the flight had. **Esc** while dragging cancels; a drag of only a few pixels does nothing (a plain Ctrl+click is still
-  a click).
+  the flight had. **Esc** while dragging cancels; a drag of only a few pixels does nothing. A right drag without Ctrl,
+  or anywhere else, is the measure line as before.
 - **Step the altitude with the wheel** (`adr/0164`). Hold **Alt** and turn the wheel over the flight: each notch moves
   the assigned altitude 1,000 ft (hold **Shift** as well for 100 ft), up to climb. It starts from the assigned altitude,
   or from the flight's current altitude if none is assigned; a block (`080B120`) moves as a whole. The data block shows
   the new value with a `?` while you turn. Release Alt to assign it, once. **Esc** before releasing Alt cancels; so does
   switching window. You may move off the flight while Alt is held: releasing Alt still sends.
 - Both work only on a flight whose Strip you own (the same flights that get the HDG / SPEED / ALT menu); everywhere
-  else Ctrl+drag and the wheel work the map as before. A refused value shows on the refusal banner as if typed on the
+  else the right drag and the wheel work the map as before. A refused value shows on the refusal banner as if typed on the
   Strip.
 - A handoff you sent blinks for 5 s once accepted, then stays white until you click it green, then
   partial. It blinks only for something *this scope saw happen*: a reconnect shows the settled picture.

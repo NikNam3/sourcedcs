@@ -2172,6 +2172,7 @@
   ],
   "scope-gestures/hdg-drag.js": [
    "hdgDragState",
+   "isHdgDragPress",
    "startHdgDrag"
   ],
   "settings-registry.js": [

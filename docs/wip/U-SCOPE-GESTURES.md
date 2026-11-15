@@ -91,3 +91,8 @@ track id), `atc-scope.js` (`withAltPreview` around `atcAssigned`), `track-label.
 - **U-LABEL-REMARKS:** my edits in geojson.js are in `buildAssignedLine` (signature now `(flightData, trackId)`) and the
   import list; in track-label.js a new `assignedPreviewText` before `atcType` and one branch at the top of
   `atcAssignedText`. Nothing in map-layers-tracks.js.
+
+
+## Supervisor 2026-11-15, after merge
+
+The human, trying it: "probably should be right click". The heading drag is **Ctrl + right-button drag** (`HDG_BUTTON = 2` in `hdg-drag.js`); a right drag without Ctrl, or not on an assignable contact, is still the measure line (`isHdgDragPress` keeps the measure handler off the gesture's press). ADR 0164 says Ctrl + drag (left); this note is the amendment.

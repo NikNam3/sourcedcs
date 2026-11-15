@@ -1,7 +1,7 @@
 'use strict';
 import { map } from './map-handle.js';
 
-// The scope gestures' own drawing (docs/adr/0164): the Ctrl+drag heading line from the contact to the cursor and its
+// The scope gestures' own drawing (docs/adr/0164): the Ctrl + right-drag heading line from the contact to the cursor and its
 // magnetic heading at the cursor. Grey-white like the measure line (dark cockpit). Run once, from the map's 'load',
 // after the track layers so it draws on top.
 

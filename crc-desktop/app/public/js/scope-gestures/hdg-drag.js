@@ -5,15 +5,17 @@ import { map } from '../map-handle.js';
 import { tracks } from '../picture.js';
 import { LABEL_DRAG_THRESHOLD_PX } from '../label-drag-gate.js';
 import { setGestureDrawing } from '../map-layers-gestures.js';
-import { canvasPoint } from './contact-hit.js';
+import { canvasPoint, contactIdAt } from './contact-hit.js';
 import { assignTargetFor, sendAssignment } from './assign-send.js';
 import { headingText, roundHeading } from './gesture-values.js';
 
-// Ctrl + drag from a contact assigns a heading (docs/adr/0164). Press with Ctrl on the contact's target, tactical square
-// or label, drag: a line from the contact to the cursor, its magnetic heading at the cursor (the nearest 5°, 360 for
+// Ctrl + RIGHT-button drag from a contact assigns a heading (docs/adr/0164; the human 2026-11-15: right, not left). Press
+// the right button with Ctrl on the contact's target, tactical square or label, drag: a line from the contact to the cursor, its magnetic heading at the cursor (the nearest 5°, 360 for
 // north). Release sends it to the Strip's heading cell, overwriting what was assigned. Esc cancels; a release closer
 // than the label drag threshold to the press sends nothing (and MapLibre then fires today's click).
-// Only on a contact whose Strip this controller may assign (assign-send.js); anywhere else Ctrl+drag is the map's.
+// Only on a contact whose Strip this controller may assign (assign-send.js); anywhere else a right drag is the measure line.
+
+const HDG_BUTTON = 2; // the right button
 
 let _drag = null;     // { trackId, startX, startY, heading }
 let _lastDown = null; // the DOM press last taken: one press reaches the disc, its character and the label
@@ -29,7 +31,7 @@ export function hdgDragState() {
  */
 export function startHdgDrag(e) {
   const ev = e.originalEvent;
-  if (!ev || ev.button !== 0 || !ev.ctrlKey) return false;
+  if (!ev || ev.button !== HDG_BUTTON || !ev.ctrlKey) return false;
   if (_lastDown === ev) return true;
   const feat = e.features && e.features[0];
   if (!feat) return false;
@@ -43,6 +45,15 @@ export function startHdgDrag(e) {
   window.addEventListener('keydown', _onKey, true);
   window.addEventListener('blur', _cancel);
   return true;
+}
+
+/** For the measure line's own right-button press: true when this press is a heading drag's start instead. */
+export function isHdgDragPress(ev) {
+  if (!ev || ev.button !== HDG_BUTTON || !ev.ctrlKey) return false;
+  if (_lastDown === ev) return true;
+  const p = canvasPoint(ev);
+  const id = contactIdAt(p.x, p.y);
+  return !!(id && tracks.get(id) && assignTargetFor(id, 'heading'));
 }
 
 function _farEnough(p) {
@@ -60,7 +71,7 @@ function _onMove(ev) {
 }
 
 function _onUp(ev) {
-  if (!_drag || ev.button !== 0) return;
+  if (!_drag || ev.button !== HDG_BUTTON) return;
   _onMove(ev);
   const { trackId, heading } = _drag;
   const far = _farEnough(canvasPoint(ev));

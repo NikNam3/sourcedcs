@@ -88,9 +88,9 @@ const altText = (page, ft) => page.evaluate((v) => {
 async function ctrlDrag(page, from, to) {
   await page.keyboard.down('Control');
   await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
+  await page.mouse.down({ button: 'right' }); // Ctrl + RIGHT drag (the human 2026-11-15)
   await page.mouse.move(to.x, to.y, { steps: 8 });
-  return async () => { await page.mouse.up(); await page.keyboard.up('Control'); };
+  return async () => { await page.mouse.up({ button: 'right' }); await page.keyboard.up('Control'); };
 }
 
 test('Ctrl + drag from the dot or the label assigns the heading, overwriting the last one; Esc and a short drag send nothing', async ({ page }) => {
