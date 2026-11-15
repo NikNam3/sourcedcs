@@ -22,6 +22,8 @@ import { setOpenEfspBays } from '../app/public/js/panels/efsp/bay/open-bays.js';
 import { _setUpdateMapForTest } from '../app/public/js/geojson.js';
 import { _setMap, _setMapReady } from '../app/public/js/map-handle.js';
 import { markEfspChanged } from '../app/public/js/panels/efsp/efsp-change-bus.js';
+import { setSignedOnAt } from '../app/public/js/panels/efsp/signed-on-state.js';
+import { _activeBayId, _activePositionTab, _setActiveBayId, _setActivePositionTab } from '../app/public/js/panels/efsp/panel/state.js';
 
 // The old test stubbed these as plain globals; the modules now read their imports, so each goes through the
 // module's explicit setter (docs/wip/ESM-1.md, "Setters").
@@ -57,9 +59,9 @@ function correlation(flightDataId, over = {}) {
   };
 }
 
-function load({ strips = [], flightDataList = [], correlations = [], tracks = [] } = {}) {
+function load({ strips = [], flightDataList = [], correlations = [], tracks = [], bays = [] } = {}) {
   state._resetEfspStateForTest();
-  state.applyEfspSnapshot({ strips, flightDataList, positions: [], bays: [], correlations, boardSeq: 1 });
+  state.applyEfspSnapshot({ strips, flightDataList, positions: [], bays, correlations, boardSeq: 1 });
   liveTracks.clear();
   for (const t of tracks) liveTracks.set(String(t.id), t);
   clearShownOnMap();
@@ -230,6 +232,47 @@ test('a contact with several Strips prefers the one in a Bay that is open', () =
     correlations: [correlation('f1')],
   });
   assert.equal(selectStripForTrack('101'), 's2', 'ap-departures is the open Bay');
+});
+
+// ── the panel jumps to the Strip (docs/wip/STRIP-JUMP.md) ──────────────────
+
+const JUMP_BAYS = [
+  { bayId: 'ap-departures', positionId: 'AP', facilityId: 'INCIRLIK', rackIds: ['main'] },
+  { bayId: 'ctr-departures', positionId: 'CTR', facilityId: 'INCIRLIK', rackIds: ['main'] },
+  { bayId: 'twr-main', positionId: 'TWR', facilityId: 'INCIRLIK', rackIds: ['main'] },
+];
+
+test('several Strips, none on screen: the one this controller holds wins over the first', () => {
+  setOpenEfspBays([]);
+  setSignedOnAt('INCIRLIK', ['AP']);
+  load({
+    strips: [strip('s1', 'f1', 'ctr-departures'), strip('s2', 'f1', 'ap-departures')],
+    correlations: [correlation('f1')], bays: JUMP_BAYS,
+  });
+  assert.equal(selectStripForTrack('101'), 's2', 'CTR is not held, AP is');
+  setOpenEfspBays([{ containerEl: null, bayId: 'ap-departures' }]);
+});
+
+test('a contact click switches the panel to the Bay of its Strip at a held Position', () => {
+  setOpenEfspBays([{ containerEl: null, bayId: 'twr-main' }]);
+  setSignedOnAt('INCIRLIK', ['AP', 'TWR']);
+  load({ strips: [strip('s1', 'f1', 'ap-departures')], correlations: [correlation('f1')], bays: JUMP_BAYS });
+  _setActivePositionTab('TWR');
+  _setActiveBayId('twr-main');
+  assert.equal(selectStripForTrack('101'), 's1');
+  assert.equal(_activePositionTab, 'AP');
+  assert.equal(_activeBayId, 'ap-departures');
+  setOpenEfspBays([{ containerEl: null, bayId: 'ap-departures' }]);
+});
+
+test('a contact with no Strip leaves the panel tabs alone', () => {
+  setSignedOnAt('INCIRLIK', ['AP', 'TWR']);
+  load({ strips: [strip('s1', 'f1', 'ap-departures')], correlations: [correlation('f1')], bays: JUMP_BAYS });
+  _setActivePositionTab('TWR');
+  _setActiveBayId('twr-main');
+  assert.equal(selectStripForTrack('999'), null);
+  assert.equal(_activePositionTab, 'TWR');
+  assert.equal(_activeBayId, 'twr-main');
 });
 
 // ── the badge ──────────────────────────────────────────────────────────────

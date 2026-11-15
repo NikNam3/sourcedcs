@@ -629,6 +629,7 @@
    "_stripHasOpenPopover",
    "_unmountPopover",
    "closePopoversForStrips",
+   "hasOpenPopover",
    "openPopover"
   ],
   "panels/efsp/bay/popovers/airspace-entry.js": [
@@ -1591,6 +1592,10 @@
   ],
   "panels/efsp/strip-remarks.js": [
    "_buildRemarksRow"
+  ],
+  "panels/efsp/strip-reveal.js": [
+   "revealEfspStrip",
+   "stripRevealTarget"
   ],
   "panels/efsp/strip-template.js": [
    "ARRIVAL_BLOCK_MAP",

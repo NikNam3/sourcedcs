@@ -3,11 +3,13 @@ import { trackRef } from '../../track-label.js';
 import { getLatestTrack } from '../../picture.js';
 import { ORDER, markEfspChanged, onEfspChanged } from './efsp-change-bus.js';
 import {
-  correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspStrip, stripIdsForTrackId
+  correlatedTrackIdForStrip, getEfspBays, getEfspCorrelationForStrip, getEfspStrip, stripIdsForTrackId
 } from './efsp-state.js';
 import { selectEfspStripById } from './bay/selection.js';
 import { map, mapReady } from '../../map-handle.js';
 import { getOpenEfspBayIds } from './bay/open-bays.js';
+import { revealEfspStrip } from './strip-reveal.js';
+import { getActingPositions } from './efsp-ws.js';
 
 // "Show on map" (H129, live test T10) and contact -> Strip.
 //
@@ -91,7 +93,9 @@ export function refreshCorrelatedHighlight() {
  *
  * Three cases, and the middle one is a judgement rather than an oversight:
  *
- *   one Strip     select it, and scroll it into view.
+ *   one Strip     switch the panel to its Bay when it is at a Position this
+ *                 controller holds and not on screen (strip-reveal.js,
+ *                 docs/wip/STRIP-JUMP.md), select it, scroll it into view.
  *   none          LEAVE THE CURRENT SELECTION ALONE. Clearing a Strip
  *                 selection because of a click somewhere else makes the panel
  *                 feel haunted, and the absence of a ring is already the
@@ -99,24 +103,28 @@ export function refreshCorrelatedHighlight() {
  *   several       one flight data with several Strips is ordinary after a
  *                 cross-Facility handoff. Prefer the one in a Bay that is
  *                 actually open, so the selection is somewhere the controller
- *                 can see it.
+ *                 can see it; else one at a Position this controller holds,
+ *                 so the panel can jump to it.
  */
 export function selectStripForTrack(trackId) {
   const stripIds = stripIdsForTrackId(trackId);
   if (stripIds.length === 0) return null;
   const stripId = stripIds.length === 1 ? stripIds[0] : _preferVisibleStrip(stripIds);
+  revealEfspStrip(stripId); // before the selection, so its scroll finds the freshly drawn Strip
   selectEfspStripById(stripId);
   return stripId;
 }
 
-/** The candidate whose Bay is currently open, else the first. */
+/** The candidate whose Bay is currently open, else one in a Bay of a Position this controller holds, else the first. */
 function _preferVisibleStrip(stripIds) {
+  const strips = stripIds.map(getEfspStrip);
   const open = new Set(getOpenEfspBayIds());
-  for (const stripId of stripIds) {
-    const strip = getEfspStrip(stripId);
-    if (strip && open.has(strip.bayId)) return stripId;
-  }
-  return stripIds[0];
+  const shown = strips.find(s => s && open.has(s.bayId));
+  if (shown) return shown.stripId;
+  const acting = getActingPositions();
+  const bays = getEfspBays();
+  const held = strips.find(s => s && acting.includes((bays.find(b => b.bayId === s.bayId) || {}).positionId));
+  return held ? held.stripId : stripIds[0];
 }
 
 /**

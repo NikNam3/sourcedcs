@@ -82,7 +82,8 @@ export function wireMapInteractions() {
 
   // A click on an ATC TARGET is STARS's own gesture (docs/adr/0088): accept
   // a handoff or point-out offered to me, acknowledge what blinks, step a
-  // finished exchange down, else open a PDB into an FDB and back.
+  // finished exchange down, else open a PDB into an FDB and back. It then
+  // opens the track panel and selects the Strip, as a label click does.
   // The disc and its character are two layers; one click is one gesture.
   let _atcLastClick = null;
   const _onAtcTargetClick = (e) => {
@@ -92,7 +93,12 @@ export function wireMapInteractions() {
     e.preventDefault();
     if (_atcLastClick === e.originalEvent) return;
     _atcLastClick = e.originalEvent;
-    atcTargetClick(String(feat.properties.id));
+    const id = String(feat.properties.id);
+    atcTargetClick(id);
+    // The target (disc, or `+` for primary only) also opens the track panel and jumps to the Strip, like the label and the
+    // tactical square (docs/wip/STRIP-JUMP.md). After the STARS gesture, so an accepted handoff lands on its Strip.
+    showTrackPanel(id);
+    _selectStripForTrackIfAny(id);
     updateMap();
   };
   map.on('click', 'atc-targets', _onAtcTargetClick);
