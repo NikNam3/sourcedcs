@@ -68,6 +68,39 @@ test('the ATC full data block\'s callsign takes the Strip\'s HIGHLIGHT colour, n
   assert.equal(L.atcBlockLines(t, v, { speedKt: 280 })[0][0].color, null, 'no highlight: the block\'s own colour');
 });
 
+test('docs/adr/0165: the remarks line is the first 20 characters, whitespace folded, nothing when empty', () => {
+  assert.equal(L.remarksLabelText('  NO   RADIO\nLOST COMMS PROC  '), 'NO RADIO LOST COMMS');
+  assert.equal(L.remarksLabelText('ABCDEFGHIJKLMNOPQRSTUVWXYZ'), 'ABCDEFGHIJKLMNOPQRST');
+  assert.equal(L.remarksLabelText(''), '');
+  assert.equal(L.remarksLabelText('   '), '');
+  assert.equal(L.remarksLabelText(null), '');
+});
+
+test('docs/adr/0165: the remarks colour is lavender unless the controller set one', () => {
+  const before = settings.colRemarks;
+  delete settings.colRemarks;
+  assert.equal(L.remarksColor(), '#c49cff');
+  settings.colRemarks = '#00ff00';
+  assert.equal(L.remarksColor(), '#00ff00');
+  settings.colRemarks = before;
+});
+
+test('docs/adr/0165: the ATC full data block ends with the remarks in their own colour; the other blocks carry none', () => {
+  const t = contact({ ssr: { code: '4521' }, altitude: MODE_C, label: { callsign: 'VIPER11', source: 'FLIGHT_DATA', trackNumber: 'TN1' } });
+  const fdb = { kind: 'FDB', line0: [], l1Suffix: [] };
+  const lines = L.atcBlockLines(t, fdb, { speedKt: 280, assignedCode: '4521', assigned: { altFt: 6000, hdg: 250 }, remarks: 'NORDO  CHECK LIGHTGUN SIGNALS' });
+  const last = lines[lines.length - 1];
+  assert.equal(last.length, 1);
+  assert.equal(last[0].text, 'NORDO CHECK LIGHTGUN');
+  assert.equal(last[0].color, L.remarksColor());
+  assert.equal(lines.length, 4, 'callsign, altitude, assigned, remarks');
+  assert.equal(L.atcBlockLines(t, fdb, { speedKt: 280, remarks: '' }).length, 2, 'no remarks: no line');
+  for (const kind of ['PDB', 'LDB']) {
+    const l = L.atcBlockLines(t, { kind, line0: [], l1Suffix: [] }, { speedKt: 280, remarks: 'NORDO' });
+    assert.ok(l.flat().every(s => s.text !== 'NORDO'), `${kind} carries no remarks`);
+  }
+});
+
 test('an altitude is shown only when a sensor gave one, and marked when it is not Mode C', () => {
   assert.equal(L.altitudeShort(contact()), '');
   assert.equal(L.altitudeShort(contact({ altitude: MODE_C })), '120');
