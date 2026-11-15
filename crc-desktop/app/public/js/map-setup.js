@@ -12,6 +12,7 @@ import { createBasemapFallback } from './basemap-fallback.js';
 import { _setMap, _setMapReady, map, mapReady } from './map-handle.js';
 import { applyScale } from './geojson.js';
 import { missionData } from './picture.js';
+import { LABEL_DRAG_THRESHOLD_PX } from './label-drag-gate.js';
 
 // ── Map initialisation ────────────────────────────────────────────────────
 // Sets up all MapLibre sources, layers, and event handlers.
@@ -56,6 +57,9 @@ export function initMap(container) {
     transformRequest: (url) => (url.startsWith('/fonts/') ? { url: location.origin + url } : transformMaptilerRequest(url)),
     center: [35.4258, 37.0021],
     zoom: 7,
+    // A press that moves less than this is a click, more is a label drag (label-drag-gate.js). MapLibre's default (3 px)
+    // dropped the click of a press that moved 3-7 px, which was then too short to drag the label either.
+    clickTolerance: LABEL_DRAG_THRESHOLD_PX,
   }));
 
   basemap = createBasemapFallback({

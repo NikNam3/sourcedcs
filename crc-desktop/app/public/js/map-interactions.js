@@ -8,6 +8,7 @@ import { closeTrackPanel, showTrackPanel } from './panels/track-panel.js';
 import { selectStripForTrack } from './panels/efsp/correlation-highlight.js';
 import { openLabelMenu } from './panels/efsp/label-menu.js';
 import { getTextSizePx, TEXT_OFFSET_EM } from './scope-constants.js';
+import { createLabelDragGate } from './label-drag-gate.js';
 import { _drag, _measure, _setDrag, _setMeasure, map } from './map-handle.js';
 import { bullseyePickTarget } from './view-state.js';
 import { labelOffsets, missionData, tracks } from './picture.js';
@@ -22,12 +23,14 @@ export function wireMapInteractions() {
   // Labels are dragged to reposition them; a click (no real movement) opens
   // the track panel.  We do NOT preventDefault on mousedown so that the
   // browser still fires the click event — the click handler uses a flag to
-  // distinguish a real click from a drag.
-  let _labelDragged = false;
+  // distinguish a real click from a drag (label-drag-gate.js, which starts
+  // every press clean so a drag released off the label eats no later click).
+  const _labelGate = createLabelDragGate();
 
   const _onLabelMouseDown = (e) => {
     if (e.originalEvent.button !== 0) return;
     // No e.preventDefault() here — we need the click event to fire later.
+    _labelGate.down();
 
     const id    = String(e.features[0].properties.id);
     const track = tracks.get(id);
@@ -67,7 +70,7 @@ export function wireMapInteractions() {
   const _onLabelClick = (e) => {
     if (bullseyePickTarget) return;
     e.preventDefault();
-    if (_labelDragged) { _labelDragged = false; return; }
+    if (!_labelGate.takeClick()) return;
     const id = String(e.features[0].properties.id);
     _selectStripForTrackIfAny(id);
     const ev = e.originalEvent;
@@ -82,7 +85,8 @@ export function wireMapInteractions() {
 
   // A click on an ATC TARGET is STARS's own gesture (docs/adr/0088): accept
   // a handoff or point-out offered to me, acknowledge what blinks, step a
-  // finished exchange down, else open a PDB into an FDB and back.
+  // finished exchange down, else open a PDB into an FDB and back. It then
+  // opens the track panel and selects the Strip, as a label click does.
   // The disc and its character are two layers; one click is one gesture.
   let _atcLastClick = null;
   const _onAtcTargetClick = (e) => {
@@ -92,7 +96,12 @@ export function wireMapInteractions() {
     e.preventDefault();
     if (_atcLastClick === e.originalEvent) return;
     _atcLastClick = e.originalEvent;
-    atcTargetClick(String(feat.properties.id));
+    const id = String(feat.properties.id);
+    atcTargetClick(id);
+    // The target (disc, or `+` for primary only) also opens the track panel and jumps to the Strip, like the label and the
+    // tactical square (docs/wip/STRIP-JUMP.md). After the STARS gesture, so an accepted handoff lands on its Strip.
+    showTrackPanel(id);
+    _selectStripForTrackIfAny(id);
     updateMap();
   };
   map.on('click', 'atc-targets', _onAtcTargetClick);
@@ -158,11 +167,10 @@ export function wireMapInteractions() {
       const rect  = map.getCanvas().getBoundingClientRect();
       const px    = e.clientX - rect.left;
       const py    = e.clientY - rect.top;
-      // Only move the label once the mouse has travelled more than 5 px
+      // Only move the label once the mouse has travelled LABEL_DRAG_THRESHOLD_PX
       const dist  = Math.hypot(px - _drag.startX, py - _drag.startY);
-      if (dist < 5) return;
+      if (!_labelGate.move(dist)) return;
       _drag.moved    = true;
-      _labelDragged  = true;
       const mouse = map.unproject([px, py]);
       const dLat  = mouse.lat - _drag.startMouseLat;
       const dLon  = mouse.lng - _drag.startMouseLon;
