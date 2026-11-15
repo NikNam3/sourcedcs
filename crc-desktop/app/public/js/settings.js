@@ -53,6 +53,7 @@ const DEFAULTS = {
   colEmergHijack: '#cc6600',   // 7500 hijack
   colRangeRing:   '#8aaa6a',
   colNavpoint:    '#3a5a3a',
+  colRemarks:     '#c49cff',   // the data block's remarks line (track-label.js remarksColor, docs/adr/0165)
 };
 
 export let settings = { ...DEFAULTS };

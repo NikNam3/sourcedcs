@@ -4,6 +4,7 @@ import { kinematics, projectPos } from './geo.js';
 import { atcBlockLines, atcEmergencyTag } from './track-label.js';
 import { withAltPreview } from './scope-gestures/alt-preview.js';
 import { trackHighlightColor } from './panels/efsp/track-highlight.js';
+import { trackRemarks } from './panels/efsp/track-remarks.js';
 
 import {
   conformanceAlertsForFlightData, getEfspFlightData, getEfspPositionLetter, getEfspStrip, conflictAlertsForTrack, refuelingAlertText,
@@ -421,7 +422,7 @@ export function atcDisplay(id, t, now = Date.now()) {
   const view = atcView(t, rel, { palette, now, conflicts, conflictTags, conflictsSuppressed, airspace, conform, coast });
 
   const speedKt = kinematics(hist).speedKt;
-  const lines = atcBlockLines(t, view, { speedKt, assigned: withAltPreview(id, atcAssigned(flightData)), assignedCode: flightData && flightData.identity ? flightData.identity.beaconAssigned : null, typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1, highlight: trackHighlightColor(strips, acting) });
+  const lines = atcBlockLines(t, view, { speedKt, assigned: withAltPreview(id, atcAssigned(flightData)), assignedCode: flightData && flightData.identity ? flightData.identity.beaconAssigned : null, typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1, highlight: trackHighlightColor(strips, acting), remarks: trackRemarks(strips, acting, getEfspFlightData) });
   return { id, lat, lon, rel, view, palette, lines };
 }
 

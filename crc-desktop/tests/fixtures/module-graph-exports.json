@@ -218,6 +218,13 @@
    "setIffOverride",
    "toggleUserCoalition"
   ],
+  "label-box.js": [
+   "CHAR_EM",
+   "LINE_EM",
+   "boxEdgeDistPx",
+   "labelBoxPx",
+   "labelNudgePx"
+  ],
   "label-drag-gate.js": [
    "LABEL_DRAG_THRESHOLD_PX",
    "createLabelDragGate"
@@ -1211,6 +1218,18 @@
    "setFrequencyOp",
    "sfaPoolOf"
   ],
+  "panels/efsp/highlight-colour.js": [
+   "HIGHLIGHT_SWATCHES",
+   "RED_HUE_DEG",
+   "RED_MIN_SATURATION",
+   "RED_MIN_VALUE",
+   "hexToHsv",
+   "highlightFromInput",
+   "highlightName",
+   "isNearRed",
+   "nextHighlightColour",
+   "parseHexColour"
+  ],
   "panels/efsp/jurisdiction-geometry.js": [
    "RING_POINTS",
    "centreOf",
@@ -1701,6 +1720,9 @@
   ],
   "panels/efsp/track-highlight.js": [
    "trackHighlightColor"
+  ],
+  "panels/efsp/track-remarks.js": [
+   "trackRemarks"
   ],
   "panels/efsp/transit-actions.js": [
    "requestTransit",
@@ -2197,6 +2219,8 @@
   ],
   "track-label.js": [
    "ATC_EMERGENCY_TAG",
+   "REMARKS_DEFAULT_COLOR",
+   "REMARKS_LABEL_CHARS",
    "altitudeLong",
    "altitudeShort",
    "altitudeText",
@@ -2214,6 +2238,8 @@
    "isAir",
    "pickerText",
    "receivedCodeText",
+   "remarksColor",
+   "remarksLabelText",
    "shouldLabel",
    "sideAltText",
    "tagEditable",

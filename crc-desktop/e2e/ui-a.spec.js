@@ -81,7 +81,8 @@ test('S-L15: Alt+click offsets a Strip and Ctrl+click steps its highlight, one i
     await fields().click({ modifiers: ['Alt'] });
     await expect(stripByCallsign(page, callsign)).not.toHaveClass(/efsp-strip-offset/);
     const colour = () => stripByCallsign(page, callsign).evaluate(el => el.style.getPropertyValue('--efsp-highlight'));
-    for (const want of ['yellow', 'cyan', 'lime', '']) {
+    // docs/adr/0165: the eight swatches in order, then off.
+    for (const want of ['#ffe14d', '#33e0ff', '#7cff4d', '#ff9f1a', '#ff6ec7', '#a77bff', '#f2f2f2', '#6cb8ff', '']) {
       await fields().click({ modifiers: ['Control'] });
       await expect.poll(colour).toBe(want);
     }

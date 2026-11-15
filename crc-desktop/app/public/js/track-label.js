@@ -37,6 +37,24 @@ export function emergencyColor(kind) {
 
 export function isAir(t)    { return !!t && t.domain === 'AIR'; }
 
+// ── Remarks on the data block (docs/adr/0165) ─────────────────────────────
+// The owner's Strip remarks (Block 9E / M8, filed.remarks) as the block's last line, in their own colour.
+
+/** How many characters of the remarks a data block carries. */
+export const REMARKS_LABEL_CHARS = 20;
+export const REMARKS_DEFAULT_COLOR = '#c49cff';
+
+/** The remarks line: whitespace folded onto one line, the first REMARKS_LABEL_CHARS characters. '' for none. */
+export function remarksLabelText(remarks) {
+  const line = String(remarks == null ? '' : remarks).replace(/\s+/g, ' ').trim();
+  return Array.from(line).slice(0, REMARKS_LABEL_CHARS).join('').trimEnd();
+}
+
+/** The remarks line's colour, from the user's settings. */
+export function remarksColor() {
+  return _settings().colRemarks || REMARKS_DEFAULT_COLOR;
+}
+
 /** The contact's name: its flight, datalink name or tag; else its code; else its track number. */
 export function trackName(t) {
   if (!t) return '';
@@ -280,8 +298,9 @@ export function atcType(t) {
  * @param {object} t  the wire track
  * @param {object} v  atc-scope.js's view: { kind: 'FDB'|'PDB'|'LDB'|'NONE',
  *   line0: [{text,color,blink}], l1Suffix: [{text,color,blink}], recipient: string, coast: boolean }
- * @param {{speedKt:number, assigned?:object, assignedCode?:string|null, typePhase?:boolean, highlight?:string|null}} info
+ * @param {{speedKt:number, assigned?:object, assignedCode?:string|null, typePhase?:boolean, highlight?:string|null, remarks?:string}} info
  *   highlight: the correlated Strip's HIGHLIGHT colour, for the callsign;
+ *   remarks: the owned Strip's remarks (panels/efsp/track-remarks.js), the FDB's last line in remarksColor() (docs/adr/0165);
  *   typePhase: the half of the time-share that shows the type instead of the speed;
  *   assignedCode: the flight's assigned beacon code, for the received code on line 3 (receivedCodeText)
  * @returns {Array<Array<{text:string,color:string|null,blink:boolean}>>}
@@ -335,5 +354,7 @@ export function atcBlockLines(t, v, info = {}) {
   const received = info.assignedCode && t.label && t.label.callsign ? receivedCodeText(t, info.assignedCode) : '';
   const l3 = [received, asg].filter(Boolean).join(' ');
   if (l3) lines.push([seg(l3)]);
+  const rmk = remarksLabelText(info.remarks);
+  if (rmk) lines.push([seg(rmk, remarksColor())]);
   return lines;
 }
