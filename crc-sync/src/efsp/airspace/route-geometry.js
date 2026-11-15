@@ -13,7 +13,7 @@
 // fallback, H151 MT-Q6 c).
 
 const containment = require('./containment');
-const { parseAltitude } = require('../flight-data-store');
+const { parseAltitude, entryBand } = require('../altitude-band');
 
 const _key = (name) => String(name == null ? '' : name).trim().toUpperCase();
 const _ok = (p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon);
@@ -81,15 +81,13 @@ function altitudeBandOf(flightData) {
   if (band) return band;
   const cell = flightData && flightData.clearance && flightData.clearance.altitude;
   const active = cell && (cell.entries || []).find(e => e.status === 'ACTIVE');
-  if (active && active.block) return { lowFt: active.block.lowFt, highFt: active.block.highFt };
-  if (active && Number.isFinite(active.parsed)) return { lowFt: active.parsed, highFt: active.parsed };
-  return null;
+  return entryBand(active);
 }
 
-/** Does the band reach into the definition's vertical limits (a null limit is open)? */
+/** Does the band reach into the definition's vertical limits (a null limit is open; so is a band's, docs/adr/0163)? */
 function bandOverlaps(band, def) {
-  if (def.altLowerFt != null && band.highFt < def.altLowerFt) return false;
-  if (def.altUpperFt != null && band.lowFt > def.altUpperFt) return false;
+  if (def.altLowerFt != null && band.highFt != null && band.highFt < def.altLowerFt) return false;
+  if (def.altUpperFt != null && band.lowFt != null && band.lowFt > def.altUpperFt) return false;
   return true;
 }
 

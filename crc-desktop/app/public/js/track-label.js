@@ -18,6 +18,7 @@
 
 import { aircraftTypes } from './picture.js';
 import { settings } from './settings.js';
+import { isAltitudeLimit, limitFt, limitTrend } from './altitude-limit.js';
 
 const EMERGENCY_TAG = { HIJACK: 'HIJ', RADIO: 'RDF', GENERAL: 'EMR' };
 
@@ -127,8 +128,15 @@ export function assignedAltText(ft) {
   return ft >= ta ? `FL${String(Math.round(ft / 100)).padStart(3, '0')}` : Number(ft).toLocaleString('en-US');
 }
 
-/** An assigned altitude block ({lowFt, highFt}, docs/adr/0091) as 'FL220-FL240'. */
-export function assignedBlockText(block) {
+/**
+ * An assigned altitude block ({lowFt, highFt}, docs/adr/0091) as 'FL220-FL240'. A limit (crc-sync docs/adr/0163, one
+ * end null) is its canonical text `value` as the strip shows it ('<080', '>FL240'), or built from the feet without one.
+ */
+export function assignedBlockText(block, value = null) {
+  if (isAltitudeLimit(block)) {
+    if (value != null && String(value) !== '') return String(value);
+    return `${block.lowFt == null ? '<' : '>'}${assignedAltText(limitFt(block))}`;
+  }
   return `${assignedAltText(block.lowFt)}-${assignedAltText(block.highFt)}`;
 }
 
@@ -228,7 +236,10 @@ export function atcSpeed(speedKt) {
 export function atcAssignedText(assigned, currentFt) {
   if (!assigned) return '';
   const parts = [];
-  if (assigned.altBlock) {
+  if (isAltitudeLimit(assigned.altBlock)) {
+    // crc-sync docs/adr/0163: the strip's own text ('<080'), the arrow only when the flight is past the limit.
+    parts.push(`${assignedBlockText(assigned.altBlock, assigned.altText)}${limitTrend(assigned.altBlock, currentFt)}`);
+  } else if (assigned.altBlock) {
     const { lowFt, highFt } = assigned.altBlock;
     let trend = '';
     if (Number.isFinite(currentFt)) {

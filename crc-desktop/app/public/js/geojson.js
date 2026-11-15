@@ -6,6 +6,7 @@ import {
 } from './track-label.js';
 import { atcDisplay, atcPalette } from './atc-scope.js';
 import { losVisibleRangeM } from './los.js';
+import { isAltitudeLimit } from './altitude-limit.js';
 import {
   conformanceAlertsForFlightData, getAllEfspConflicts, getEfspFlightData, getEfspStrip, conflictAlertsForTrack, isConflictSuppressed, stripIdsForTrackId, refuelingAlertText, airspaceEntryAlertsForTrack
 } from './panels/efsp/efsp-state.js';
@@ -67,7 +68,8 @@ function buildAssignedLine(flightData) {
   const hdg = active(flightData.clearance.heading);
   const parts = [];
   const h = (ft) => String(Math.round(ft / 100)).padStart(3, '0');
-  if (alt && alt.block) parts.push(`A${h(alt.block.lowFt)}B${h(alt.block.highFt)}`);
+  if (alt && isAltitudeLimit(alt.block)) parts.push(String(alt.value || '')); // '<080', crc-sync docs/adr/0163
+  else if (alt && alt.block) parts.push(`A${h(alt.block.lowFt)}B${h(alt.block.highFt)}`);
   else if (alt && Number.isFinite(alt.parsed)) parts.push('A' + h(alt.parsed));
   if (hdg && Number.isFinite(hdg.parsed)) parts.push('H' + String(hdg.parsed).padStart(3, '0'));
   return parts.join(' ');

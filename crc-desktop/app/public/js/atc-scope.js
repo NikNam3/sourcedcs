@@ -346,6 +346,7 @@ export function atcAssigned(flightData) {
   return {
     altFt: alt && Number.isFinite(alt.parsed) ? alt.parsed : null,
     altBlock: alt && alt.block ? alt.block : null,
+    altText: alt && alt.block ? String(alt.value || '') : null, // a limit's canonical text, crc-sync docs/adr/0163
     hdg: hdg && Number.isFinite(hdg.parsed) ? hdg.parsed : null,
   };
 }
