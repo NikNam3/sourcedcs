@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPttController, clampMaxTxSeconds, PTT_MAX_TX_DEFAULT_S, PTT_REPEAT_MS } from '../app/public/js/ptt-controller.js';
 
-function rig({ typing = false, maxS, onFuse } = {}) {
+function rig({ typing = false, maxS, onFuse, pttKey = 'Space' } = {}) {
   const handlers = { doc: {}, win: {} };
   const posts = []; const active = []; const logs = [];
   let now = 0; const timers = new Map(); let nextId = 1;
@@ -23,7 +23,7 @@ function rig({ typing = false, maxS, onFuse } = {}) {
   const doc = { hidden: false, addEventListener: (n, f) => { handlers.doc[n] = f; } };
   const win = { addEventListener: (n, f) => { handlers.win[n] = f; } };
   const ptt = createPttController({
-    post: (p) => posts.push(p), setActive: (on) => active.push(on), getKey: () => 'Space', isTyping: () => state.typing,
+    post: (p) => posts.push(p), setActive: (on) => active.push(on), getKey: () => pttKey, isTyping: () => state.typing,
     win, doc, getMaxTxSeconds: maxS === undefined ? undefined : () => maxS, log: (m) => logs.push(m), onFuse,
     setInterval: (fn, ms) => addTimer(fn, ms, true), clearInterval: (id) => timers.delete(id),
     setTimeout: (fn, ms) => addTimer(fn, ms, false), clearTimeout: (id) => timers.delete(id),
@@ -214,4 +214,17 @@ test('global: a release with nothing held sends nothing', () => {
   const r = rig();
   r.ptt.up('global');
   assert.deepEqual(r.posts, []);
+});
+
+test('a mouse button bound as the PTT keys while held, typing or not; left, right and other buttons do nothing', () => {
+  const r = rig({ pttKey: 'Mouse4', typing: true });
+  let prevented = 0;
+  const mouse = (type, button) => r.handlers.doc[type]({ button, preventDefault() { prevented++; } });
+  mouse('mousedown', 0); mouse('mousedown', 2); mouse('mousedown', 1);
+  assert.deepEqual(r.posts, [], 'not the bound button');
+  mouse('mousedown', 3);
+  assert.deepEqual(r.posts, ['/ptt/start']);
+  mouse('mouseup', 3);
+  assert.equal(r.posts.at(-1), '/ptt/stop');
+  assert.equal(prevented, 2, 'only the bound button loses its default (back navigation)');
 });

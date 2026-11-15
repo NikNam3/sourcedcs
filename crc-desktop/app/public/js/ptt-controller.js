@@ -12,6 +12,8 @@
 // has let go.
 // lxsrs has no timeout of its own: it transmits for as long as `/ptt/start` keeps arriving every REPEAT_MS.
 
+import { mouseCode } from './radio/ptt-mouse.js';
+
 export const PTT_REPEAT_MS = 400;
 /** Longest continuous transmission. A GCI call is seconds long; DCS-SRS itself has no limit (the key is the limit),
  *  so this is a CRC-side fuse, set well past any real call and short enough to end a stuck radio quickly. */
@@ -29,7 +31,7 @@ export function clampMaxTxSeconds(v) {
  * @param {object} o
  * @param {(path:string)=>void} o.post        sends /ptt/start or /ptt/stop
  * @param {(on:boolean)=>void} o.setActive    paints the button
- * @param {()=>string} o.getKey               the configured KeyboardEvent.code
+ * @param {()=>string} o.getKey               the configured KeyboardEvent.code, or a mouse code (radio/ptt-mouse.js)
  * @param {()=>boolean} o.isTyping            focus is in a text field (only a keydown is refused there)
  * @param {{addEventListener:Function}} o.win
  * @param {{addEventListener:Function, hidden?:boolean}} o.doc
@@ -91,6 +93,22 @@ export function createPttController(o) {
   });
   // No isTyping() test: the release must work wherever focus has moved to since the key went down.
   o.doc.addEventListener('keyup', (e) => { if (e.code === o.getKey()) { keyDown = false; up('window'); } });
+  // A mouse button as the PTT (radio/ptt-mouse.js): the middle or a side button, anywhere in the window, typing or not.
+  // preventDefault keeps the middle button's autoscroll and the side buttons' back / forward off it.
+  const isPttButton = (e) => { const code = mouseCode(e.button); return !!code && code === o.getKey(); };
+  o.doc.addEventListener('mousedown', (e) => {
+    if (!isPttButton(e)) return;
+    if (e.preventDefault) e.preventDefault();
+    keyDown = true;
+    down('window');
+  }, true);
+  o.doc.addEventListener('mouseup', (e) => {
+    if (!isPttButton(e)) return;
+    if (e.preventDefault) e.preventDefault();
+    keyDown = false;
+    up('window');
+  }, true);
+  o.doc.addEventListener('auxclick', (e) => { if (isPttButton(e) && e.preventDefault) e.preventDefault(); }, true);
   o.win.addEventListener('blur', releaseWindow);
   o.doc.addEventListener('visibilitychange', () => { if (o.doc.hidden) releaseWindow(); });
 

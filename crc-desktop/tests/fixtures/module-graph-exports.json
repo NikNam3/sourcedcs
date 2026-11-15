@@ -1919,6 +1919,11 @@
    "buildPttKeyButton",
    "keyLabel"
   ],
+  "radio/ptt-mouse.js": [
+   "isMouseCode",
+   "mouseCode",
+   "mouseLabel"
+  ],
   "radio/radio-audio-constants.js": [
    "BLOCK_MS",
    "BLOCK_SAMPLES",
