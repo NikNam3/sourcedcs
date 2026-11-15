@@ -1956,6 +1956,14 @@
   overflow-wrap: anywhere;
   line-height: 16px;
 }
+.efsp-strip .efsp-field .efsp-block-editable.efsp-block-wrap,
+.efsp-strip .efsp-expanded-value .efsp-block-editable.efsp-block-wrap {
+  /* An editable cell is a 44px target pulled 12px up and down (.efsp-block-editable). A wrapped value runs at 16px lines,
+     so the 12px go into padding instead: the first line sits where a one-line value sits, under the label, not on it. */
+  box-sizing: border-box;
+  padding: 12px 4px;
+  align-items: flex-start;
+}
 .efsp-strip .efsp-expanded-value:has(> .efsp-block-wrap, > .efsp-block-input-wrap) { flex: 1 1 auto; }
 .efsp-block-input.efsp-block-input-wrap {
   display: block;
