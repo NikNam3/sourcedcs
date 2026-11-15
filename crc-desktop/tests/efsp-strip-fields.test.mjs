@@ -9,9 +9,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { BLOCK_MAPS } from '../app/public/js/panels/efsp/strip-template.js';
-import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor, fieldSpanFor, MTR_BLOCKS_BY_POSITION, leadingFlightName, isCarrierStrip, CASE_I_HIDDEN_BLOCKS } from '../app/public/js/panels/efsp/strip-fields.js';
+import { COMPACT_BLOCKS_BY_POSITION, COMPACT_BLOCKS_BY_STRIP_TYPE, compactBlocksFor, faceLayoutFor, fieldSpanFor, MTR_BLOCKS_BY_POSITION, leadingFlightName, isCarrierStrip, CASE_I_HIDDEN_BLOCKS } from '../app/public/js/panels/efsp/strip-fields.js';
 import { hasMtrData, mtrLostCommsAdvisory } from '../app/public/js/panels/efsp/mtr-advisory.js';
 import { setAirportSurfacePositions } from '../app/public/js/airport-surface.js';
+import { FULL_ROW_BLOCKS, oneLine } from '../app/public/js/panels/efsp/route-row.js';
 
 const everyList = () => Object.entries(COMPACT_BLOCKS_BY_POSITION)
   .flatMap(([stripType, byPos]) => Object.entries(byPos).map(([positionId, list]) => ({ stripType, positionId, list })));
@@ -264,4 +265,26 @@ test('ATIS (10) is on every ARRIVAL face and on a DEPARTURE at CD, GC and LC', (
   for (const positionId of ['OPS', 'AP', 'CTR']) {
     assert.equal(compactBlocksFor('DEPARTURE', positionId, null).includes('10'), false, `DEPARTURE at ${positionId}`);
   }
+});
+
+// Lane U-STRIP-FACE (SF-Q2 a): the route is never a grid field; it is the face's bottom row, on every face that shows it.
+test('faceLayoutFor splits the face: the route goes to the bottom rows, everything else stays in the grid, in order', () => {
+  const lists = [...everyList(), ...Object.entries(COMPACT_BLOCKS_BY_STRIP_TYPE).map(([stripType, list]) => ({ stripType, positionId: 'NOLIST', list }))];
+  let withRoute = 0;
+  for (const { stripType, positionId } of lists) {
+    const all = compactBlocksFor(stripType, positionId, null);
+    const { fields, rows } = faceLayoutFor(stripType, positionId, null);
+    const where = `${stripType} at ${positionId}`;
+    assert.deepEqual([...fields, ...rows].sort(), [...all].sort(), `${where}: the split loses or adds a Block`);
+    assert.deepEqual(fields, all.filter(id => !FULL_ROW_BLOCKS.includes(id)), `${where}: grid order`);
+    assert.deepEqual(rows, all.filter(id => FULL_ROW_BLOCKS.includes(id)), `${where}: rows`);
+    if (all.includes('9')) { withRoute++; assert.deepEqual(rows, ['9'], `${where}: the route is the bottom row`); }
+  }
+  assert.ok(withRoute >= 9, `the route is on ${withRoute} faces`);
+  assert.equal(fieldSpanFor('9'), 1, 'no grid width left for a Block that is not in the grid');
+});
+
+test('a route is stored as one line: a pasted newline is a space', () => {
+  assert.equal(oneLine('LTAG DCT\r\nERGEP\nDCT'), 'LTAG DCT ERGEP DCT');
+  assert.equal(oneLine(null), '');
 });

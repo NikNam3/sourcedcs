@@ -50,7 +50,7 @@ test('F-201: a space can be typed into a free-text Block', async ({ page }) => {
   await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'SPC201' });
   await s.locator('.efsp-block-9').click();
-  const input = s.locator('input.efsp-block-input');
+  const input = s.locator('textarea.efsp-block-input'); // the route edits in a wrapping box (U-STRIP-FACE)
   await expect(input).toBeFocused();
   await page.keyboard.type('DCT ALPHA DCT');
   // Measured: "DCTALP" — the space is swallowed, focus lands on the Strip one

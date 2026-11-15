@@ -27,6 +27,7 @@ import { carrierFlightCase } from './carrier-state.js';
 import { hasMtrData } from './mtr-advisory.js';
 import { facilityOfPosition } from './facility-topology.js';
 import { getAirportSurfacePositions } from '../../airport-surface.js';
+import { isFullRowBlock } from './route-row.js';
 
 export const COMPACT_BLOCKS_SHARED = [
   '1', '3', '5', '5A', '7', '8', '8A', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG',
@@ -117,7 +118,8 @@ export const COMPACT_BLOCKS_BY_POSITION = {
 export const VFR_RUNWAY_BLOCK = '8A';
 
 // Grid columns a field spans. Everything else takes one.
-export const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2, C1: 2, C2: 1, C24: 2 };
+// The route (9) is not in the grid at all: it is the face's bottom row (faceLayoutFor).
+export const FIELD_SPANS = { '1': 2, '3': 2, '24A': 2, M1: 2, M3: 2, M5: 2, C1: 2, C2: 1, C24: 2 };
 
 function _blockMapFor(stripType) {
   return (BLOCK_MAPS && BLOCK_MAPS[stripType]) || null;
@@ -152,6 +154,16 @@ export function compactBlocksFor(stripType, positionId, flightData, strip = null
   if (stripType === 'VFR' && !(facilityId && (getAirportSurfacePositions()[facilityId] || []).includes(positionId))
     && !(flightData && flightData.filed && flightData.filed.departureRunway)) out = out.filter(id => id !== VFR_RUNWAY_BLOCK);
   return out;
+}
+
+/**
+ * The face in two parts (lane U-STRIP-FACE, SF-Q2 a): `fields`, the grid in render order, and `rows`, the Blocks drawn
+ * whole as full-width rows at the bottom of the Strip (route-row.js: the route), in the same order. Together they are
+ * exactly compactBlocksFor()'s list, so what is "on the face" (the expanded view's filter) does not change.
+ */
+export function faceLayoutFor(stripType, positionId, flightData, strip = null) {
+  const all = compactBlocksFor(stripType, positionId, flightData, strip);
+  return { fields: all.filter(id => !isFullRowBlock(id)), rows: all.filter(isFullRowBlock) };
 }
 
 /** The Blocks a Case I carrier flight does not show (crc-sync block-map.js CARRIER_RADAR_SERVICE_BLOCKS, plus the EAT). */
