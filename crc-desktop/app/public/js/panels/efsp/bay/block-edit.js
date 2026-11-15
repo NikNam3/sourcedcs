@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../../force-caps.js';
 import { getCurrentEfspRefusal } from '../panel/refusal.js';
 import {
   CONFIRM_VACATED_ELIGIBLE_BLOCKS, blockValueHintFor, editRedirectFor, enumSelectOptionsFor, blockInputPlaceholderFor,
@@ -442,6 +443,7 @@ function _startBlockEdit(strip, blockId, span, draft) {
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'efsp-block-input';
+  forceCaps(input); // SF-Q1: everything on a Strip is typed in capitals
   const placeholder = blockInputPlaceholderFor(blockId); // T31 a: the format before a refusal, not after
   if (placeholder) input.placeholder = placeholder;
   // Carry the refusal mark onto the input, not just the span it replaces.

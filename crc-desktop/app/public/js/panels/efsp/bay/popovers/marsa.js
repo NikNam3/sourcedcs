@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../../../force-caps.js';
 import { activeMarsaForFlightData, getAllEfspStrips, getEfspFlightData, marsaForStrip } from '../../efsp-state.js';
 import { MARSA_EXPANSION, marsaActionsFor } from '../../marsa-badge.js';
 import { openPopover, _sendFromPopover } from '../popover-portal.js';
@@ -162,6 +163,7 @@ function _buildMarsaDeclareForm(strip) {
 
   const declaring = document.createElement('input');
   declaring.className = 'efsp-coordinate-note';
+  forceCaps(declaring);
   declaring.placeholder = 'who declared it (heard on frequency)';
   wrap.appendChild(declaring);
 

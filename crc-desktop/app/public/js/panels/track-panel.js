@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../force-caps.js';
 import { clearTrackRename, kinematics, setTrackRename, verticalFpm } from '../geo.js';
 import { getLatestTrack } from '../picture.js';
 import { magneticText } from '../magnetic.js';
@@ -87,8 +88,8 @@ export function initTrackPanel() {
 
   // Tag a VFR (crc-sync docs/adr/0146): callsign and, optionally, the Block 3 type, one press. The answer shows on the line
   // below; on success the contact is the strip's, so the section goes away with the next refresh.
-  const $ffCallsign = document.getElementById('tp-ff-callsign');
-  const $ffType = document.getElementById('tp-ff-type');
+  const $ffCallsign = forceCaps(document.getElementById('tp-ff-callsign')); // SF-Q1
+  const $ffType = forceCaps(document.getElementById('tp-ff-type'));
   const $ffMsg = document.getElementById('tp-ff-msg');
   const startFf = () => {
     if (_trackPanelId == null || !$ffCallsign || !$ffType) return;
