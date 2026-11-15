@@ -113,4 +113,4 @@ function filedThrough(flightData, def, index) {
   return !band || bandOverlaps(band, def);
 }
 
-module.exports = { buildPointIndex, tokenName, resolvePoint, routePoints, altitudeBandOf, filedThrough };
+module.exports = { buildPointIndex, tokenName, resolvePoint, routePoints, altitudeBandOf, bandOverlaps, filedThrough };
