@@ -1,3 +1,17 @@
+### Changed in 2.3.2
+- **Ctrl + drag a heading:** from your own track's dot or label, drag a line and let go: the heading (to 5°) is assigned to its Strip, replacing the one before. Esc cancels
+- **Alt + mouse wheel an altitude:** over your own track's dot or label, each notch moves the assigned altitude 1,000 ft (Shift: 100 ft), a block as a whole; the label shows it with a `?` and it is sent when you let go of Alt
+- **At or below / at or above:** ALT takes `<080` and `>FL240`. Conformance alerts only once the flight is past the limit
+- **CANCEL FF:** ends flight following on a VFR strip and keeps the strip and its track; the code is released (also in the strip's `⋯` menu, or by emptying the code)
+- **A click on a contact's dot does what a click on its label does.** An ATC controller never gets the track info panel; it stays the tactical controller's
+- **Remarks on the label:** your own flights' labels show the first 20 characters of the Strip's remarks, in lavender (Settings → Colours → Track Labels → Remarks)
+- **More highlight colours:** eight swatches and a #RRGGBB box; red stays ATTENTION's
+- **Capitals everywhere:** every field that ends up on a Strip types in capitals
+- **The route is the Strip's last row,** full width and never cut; it wraps onto more lines
+- **Intercom:** on by default, on SRS's shared intercom (unit 100000001), so you share it with SRS-standalone controllers; if you removed it before, remove it once more and it stays removed. New intercom PTT key (RADIO → SETUP → Intercom PTT), also as a Global PTT input; it keys only the intercom
+- **What's New shows only what changed since your last version**
+- This release changes the wire protocol: update CRC, an older version shows "Update required"
+
 ### Changed in 2.3.1
 - **VFR handoff to another Facility:** a VFR Strip can now be handed to CTR, and from CTR to any station with a VFR Bay. The receiver accepts and gets the Strip with its code, assigned values and track; the sender's Strip ends
 - **A handoff to a Position you also hold is accepted at once,** including one you cover for an unstaffed Position. VFR moves straight away; an IFR HANDOFF is accepted, and CHECKED IN stays yours to press when the pilot calls
