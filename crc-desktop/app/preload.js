@@ -22,15 +22,17 @@ contextBridge.exposeInMainWorld('crcLaunch', {
     switchTo: (mode) => ipcRenderer.send('launch-mode-switch', mode),
 });
 
-// Global push-to-talk (docs/adr/0161 §3). The renderer hears only press and release of the one bound input.
+// Global push-to-talk (docs/adr/0161 §3). The renderer hears only press and release of the bound inputs, one per
+// channel (the PTT and the intercom PTT, docs/adr/0166 §1).
 contextBridge.exposeInMainWorld('crcGlobalPtt', {
     status:        () => ipcRenderer.invoke('global-ptt-status'),
     configure:     (cfg) => ipcRenderer.invoke('global-ptt-configure', cfg),
-    capture:       () => ipcRenderer.invoke('global-ptt-capture'),
+    // channel: 'ptt' or 'intercom' (docs/adr/0166 §1); anything else is 'ptt'
+    capture:       (channel) => ipcRenderer.invoke('global-ptt-capture', channel === 'intercom' ? 'intercom' : 'ptt'),
     cancelCapture: () => ipcRenderer.send('global-ptt-cancel-capture'),
-    fuseFired:     () => ipcRenderer.send('global-ptt-fuse'),
+    fuseFired:     (channel) => ipcRenderer.send('global-ptt-fuse', channel === 'intercom' ? 'intercom' : 'ptt'),
     onEdge: (cb) => {
-        const handler = (_event, down) => cb(down === true);
+        const handler = (_event, down, channel) => cb(down === true, channel === 'intercom' ? 'intercom' : 'ptt');
         ipcRenderer.on('global-ptt-edge', handler);
         return () => ipcRenderer.removeListener('global-ptt-edge', handler);
     },

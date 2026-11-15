@@ -12,7 +12,7 @@
 import * as radioEngine from './radio-engine.js';
 import { el } from './radio-dom.js';
 import { readRadioInputs } from './radio-inputs.js';
-import { buildRadioSet, positionsWithoutRow, rowsWithoutRadio } from './radio-set.js';
+import { buildRadioSet, positionsWithoutRow, rowsWithoutRadio, INTERCOM_RADIO_ID } from './radio-set.js';
 import {
   createGroup, deleteGroup, groupPttRadio, intendedGroupOf, moveRadio, renameGroup, resolvePttTarget,
 } from './link-groups.js';
@@ -229,7 +229,10 @@ export function initRadioPanel({ engine: injected, radioOnly = false } = {}) {
   _relay = createRelaySync({ onStatusChanged: () => render() });
   setRadioPanelIsClient(radioClientIsNode());
   bindRadioPrefsToSettings();
-  const ptt = createRadioPtt({ engine, getTarget: () => _target, setActive: (on) => _pttBtn && _pttBtn.classList.toggle('radio-ptt-held', on) });
+  const ptt = createRadioPtt({
+    engine, getTarget: () => _target, setActive: (on) => _pttBtn && _pttBtn.classList.toggle('radio-ptt-held', on),
+    getIntercomTarget: () => (_set.radios.some(r => r.id === INTERCOM_RADIO_ID) ? INTERCOM_RADIO_ID : null),
+  });
   const { head, setupBtn } = buildHeader(ptt);
   _bodyEl = el('div', 'radio-body');
   const setup = buildRadioSetup(engine);

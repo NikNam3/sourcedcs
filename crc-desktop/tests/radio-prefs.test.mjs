@@ -8,8 +8,8 @@ import { buildRadioSet } from '../app/public/js/radio/radio-set.js';
 test('nothing stored: the defaults', () => {
   assert.deepEqual(P.normalizeRadioPrefs(null), {
     audio: {}, groups: [], membership: {}, manual: [],
-    devices: { input: null, output: null }, intercom: null, pttKey: 'Space', maxTxS: null, pttTarget: null,
-    globalPtt: { enabled: null, uiohook: null, portal: null },
+    devices: { input: null, output: null }, intercom: { unitId: null }, pttKey: 'Space', intercomPttKey: null, maxTxS: null, pttTarget: null,
+    globalPtt: { enabled: null, uiohook: null, portal: null, intercom: { uiohook: null, portal: null } },
     soundSet: 'RADIO_TRANS', noise: true, inputGain: 0.5, outputGain: 1,
   });
   assert.deepEqual(P.normalizeRadioPrefs('junk'), P.normalizeRadioPrefs(undefined));
@@ -137,4 +137,28 @@ test('Global PTT: every listener\'s binding survives a save, and junk is dropped
   assert.deepEqual(keep({ portal }, 'portal'), portal);
   for (const b of [{ type: 'key', keycode: 'x', label: 'F13' }, { type: 'key', keycode: 91 }, { type: 'joystick', button: 1, label: 'B1' }, 'junk']) assert.equal(keep({ uiohook: b }, 'uiohook'), null);
   assert.equal(keep({ portal: { label: 'x' } }, 'portal'), null);
+});
+
+test('the intercom PTT key: none until set, cleared with null, never the main PTT key', () => {
+  let p = P.normalizeRadioPrefs(null);
+  assert.equal(p.intercomPttKey, null);
+  p = P.withIntercomPttKey(p, 'KeyI');
+  assert.equal(p.intercomPttKey, 'KeyI');
+  assert.equal(P.normalizeRadioPrefs(JSON.parse(JSON.stringify(p))).intercomPttKey, 'KeyI');
+  assert.equal(P.withIntercomPttKey(p, 'Space'), p); // the main key is refused, nothing changes
+  assert.equal(P.withIntercomPttKey(p, null).intercomPttKey, null);
+  // The main key moved onto the intercom key: the intercom key goes, so one key never keys two things.
+  assert.equal(P.normalizeRadioPrefs(P.withPttKey(p, 'KeyI')).intercomPttKey, null);
+  assert.equal(P.normalizeRadioPrefs({ intercomPttKey: 7 }).intercomPttKey, null);
+});
+
+test('Global PTT: the intercom binding is kept per listener, beside the main one', () => {
+  const F14 = { type: 'key', keycode: 92, label: 'F14' };
+  let p = P.withGlobalIntercomBinding(P.normalizeRadioPrefs(null), 'uiohook', F14);
+  p = P.normalizeRadioPrefs(JSON.parse(JSON.stringify(p)));
+  assert.deepEqual(p.globalPtt.intercom, { uiohook: F14, portal: null });
+  assert.equal(p.globalPtt.uiohook, null);
+  p = P.withGlobalPtt(p, { uiohook: { type: 'key', keycode: 91, label: 'F13' } });
+  assert.deepEqual(p.globalPtt.intercom.uiohook, F14); // a main-binding change keeps the intercom one
+  assert.equal(P.withGlobalIntercomBinding(p, 'uiohook', null).globalPtt.intercom.uiohook, null);
 });

@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildGlobalPttSetup } from '../app/public/js/radio/global-ptt-setup.js';
 import { setRadioPanelIsClient } from '../app/public/js/radio/radio-ptt.js';
-import { _resetRadioPrefsForTest, getRadioPrefs, updateRadioPrefs, withGlobalPtt } from '../app/public/js/radio/radio-prefs.js';
+import { _resetRadioPrefsForTest, getRadioPrefs, updateRadioPrefs, withGlobalIntercomBinding, withGlobalPtt } from '../app/public/js/radio/radio-prefs.js';
 
 const flush = () => new Promise(res => setImmediate(res));
 const row = (label, ...controls) => ({ label, controls });
@@ -13,14 +13,14 @@ const F13 = { type: 'key', keycode: 91, label: 'F13' };
 async function rig(status, capture = async () => null) {
   _resetRadioPrefsForTest();
   setRadioPanelIsClient(true);
-  const bridge = { status: async () => status, capture, cancelCapture() { bridge.cancelled = true; } };
+  const bridge = { status: async () => status, capture: (channel) => { bridge.channels.push(channel); return capture(channel); }, channels: [], cancelCapture() { bridge.cancelled = true; } };
   const s = buildGlobalPttSetup(row, bridge);
   const seen = [];
   s.element.replaceChildren = (...kids) => { seen.splice(0, seen.length, ...kids); };
   await flush();
   const rows = seen.filter(k => k.label);
   const note = seen.find(k => !k.label);
-  return { s, seen, note, enable: rows[0]?.controls[0], name: rows[1]?.controls[0], bind: rows[1]?.controls[1], bridge };
+  return { s, seen, note, enable: rows[0]?.controls[0], name: rows[1]?.controls[0], bind: rows[1]?.controls[1], icName: rows[2]?.controls[0], icBind: rows[2]?.controls[1], bridge };
 }
 const UIOHOOK = { available: true, kind: 'uiohook' };
 const PORTAL = { available: true, kind: 'portal' };
@@ -98,4 +98,36 @@ test('a listener that failed to start says so', async (t) => {
   updateRadioPrefs(p => withGlobalPtt(p, { enabled: true, uiohook: F13 }));
   await flush();
   assert.match(r.note.textContent, /could not start/);
+});
+
+test('the intercom PTT: its own row, its capture is asked for the intercom and stored beside the PTT one', async (t) => {
+  const F14 = { type: 'key', keycode: 92, label: 'F14' };
+  const r = await rig(UIOHOOK, async () => F14);
+  t.after(() => r.s.dispose());
+  updateRadioPrefs(p => withGlobalPtt(p, { enabled: true, uiohook: F13 }));
+  assert.equal(r.icName.textContent, '');
+  click(r.icBind);
+  await flush();
+  assert.deepEqual(r.bridge.channels, ['intercom']);
+  assert.deepEqual(getRadioPrefs().globalPtt.intercom.uiohook, F14);
+  assert.deepEqual(getRadioPrefs().globalPtt.uiohook, F13);
+  assert.equal(r.icName.textContent, 'F14');
+  assert.equal(r.name.textContent, 'F13');
+});
+
+test('the intercom PTT: the PTT input is refused there, and the line says why', async (t) => {
+  const r = await rig(UIOHOOK, async () => ({ refused: true, taken: true }));
+  t.after(() => r.s.dispose());
+  updateRadioPrefs(p => withGlobalPtt(p, { enabled: true, uiohook: F13 }));
+  click(r.icBind);
+  await flush();
+  assert.equal(getRadioPrefs().globalPtt.intercom.uiohook, null);
+  assert.match(r.note.textContent, /already the other PTT/);
+});
+
+test('the intercom input alone needs no PTT key: no "choose a key" line', async (t) => {
+  const r = await rig(UIOHOOK);
+  t.after(() => r.s.dispose());
+  updateRadioPrefs(p => withGlobalIntercomBinding(withGlobalPtt(p, { enabled: true }), 'uiohook', F13));
+  assert.equal(r.note.hidden, true);
 });

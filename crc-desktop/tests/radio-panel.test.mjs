@@ -47,12 +47,13 @@ function setup() {
 
 test('the panel: guards only, then a sign-on brings the Position radios into the automatic group', () => {
   setup();
-  assert.deepEqual(byClass('radio-row').map(r => r.dataset.radioId), ['GUARD:UHF', 'GUARD:VHF']);
+  // The intercom is there from the start (docs/adr/0166 §2), unlinked, receiving.
+  assert.deepEqual(byClass('radio-row').map(r => r.dataset.radioId), ['GUARD:UHF', 'GUARD:VHF', 'INTERCOM']);
   assert.deepEqual(sectionNames(), ['POSITIONS', 'UNLINKED']);
   noteEfspPositionsAck({ facilityId: 'FAC1', signedOn: ['P1', 'P9'] });
   markEfspChanged('positions');
-  assert.deepEqual(byClass('radio-row').map(r => r.dataset.radioId), ['POSITION:P1:UHF', 'POSITION:P1:VHF', 'GUARD:UHF', 'GUARD:VHF']);
-  assert.deepEqual(_stubInspect().radios.map(r => r.id), ['POSITION:P1:UHF', 'POSITION:P1:VHF', 'GUARD:UHF', 'GUARD:VHF']);
+  assert.deepEqual(byClass('radio-row').map(r => r.dataset.radioId), ['POSITION:P1:UHF', 'POSITION:P1:VHF', 'GUARD:UHF', 'GUARD:VHF', 'INTERCOM']);
+  assert.deepEqual(_stubInspect().radios.map(r => r.id), ['POSITION:P1:UHF', 'POSITION:P1:VHF', 'GUARD:UHF', 'GUARD:VHF', 'INTERCOM']);
   assert.ok(byClass('radio-panel-note').some(n => n.textContent === 'P9: no frequency (FREQUENCIES panel)'));
 });
 
@@ -136,7 +137,11 @@ test('an Observer\'s Position radios are receive-only: unlinked, the link menu o
   fire(ptt, 'mouseup');
 });
 
-test('the intercom: + INTERCOM adds it unlinked with no link menu, its unit is picked from the SRS clients, then removed', () => {
+test('the intercom: on by default; removed, + INTERCOM adds it back unlinked with no link menu, its unit is picked from the SRS clients, then removed', () => {
+  assert.equal(byClass('radio-small-btn').find(b => b.textContent === '+ INTERCOM'), undefined); // already there
+  fire(within(rowOf('INTERCOM'), 'radio-remove'), 'click');
+  assert.equal(rowOf('INTERCOM'), undefined);
+  assert.equal(getRadioPrefs().intercom, false); // removed stays removed
   fire(byClass('radio-small-btn').find(b => b.textContent === '+ INTERCOM'), 'click');
   const row = rowOf('INTERCOM');
   assert.ok(row);

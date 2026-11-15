@@ -9,8 +9,8 @@
 // counted: the server sent something we did not tune.
 // Intercom (H183, client.py add_intercom/set_intercom_unit): SRS routes an intercom packet to the clients with the
 // sender's unit id. Joining another client's intercom is taking its unit id as our own, `setIntercomUnit(id)`; null
-// goes back to the shared 1. The SRS client list (other clients with a unit id, as client.py's snapshot) is in the
-// state as `srsClients`, for the picker.
+// goes back to the shared intercom, SHARED_INTERCOM_UNIT_ID (docs/adr/0166). The SRS client list (other clients with a
+// unit id, as client.py's snapshot) is in the state as `srsClients`, for the picker.
 // The relay is crc-sync's (docs/adr/0160), not ours. Two things on receive come from it: a packet whose
 // `originalGuid` is ours is our own voice relayed onto a frequency we also listen on, and is dropped (no echo); and
 // the relay's copy of a pilot we already heard directly (same original, same packet number) is dropped by
@@ -23,8 +23,13 @@ const { buildSlots, matchRadioIds, txChannels, selectedSlot } = require('./radio
 const { encodeVoicePacket } = require('./voice-packet');
 const { createRxDedupe } = require('./rx-dedupe');
 
-/** The unit id every CRC sends unless it joined an intercom: client.py's fixed shared 1 (S-RADIO-1 RQ3). */
-const UNIT_ID = 1;
+/**
+ * The unit id every CRC sends unless it joined an intercom: SRS's own shared intercom for clients outside DCS,
+ * `DCSPlayerRadioInfo.UnitIdOffset` (100000000) + `IntercomOffset` 1, as SRS's external AWACS mode sends it
+ * (docs/adr/0166). SRS routes an intercom packet by unit id, so every CRC and every SRS client in external AWACS mode on
+ * intercom 1 share it. The unit id means nothing on a packet that is not intercom.
+ */
+const SHARED_INTERCOM_UNIT_ID = 100000001;
 
 /**
  * @param {object} o
@@ -40,7 +45,7 @@ function createSrsSession(o) {
   const log = o.log || (() => {});
   let slots = [], slotError = null, invalid = [], overflow = [];
   let pttDown = false, tx = { frequencies: [], modulations: [], encryptions: [], radioIds: [] };
-  let packetNumber = 0, unmatched = 0, pttError = null, unitId = UNIT_ID, duplicates = 0;
+  let packetNumber = 0, unmatched = 0, pttError = null, unitId = SHARED_INTERCOM_UNIT_ID, duplicates = 0;
   const now = deps.now || Date.now; // housekeeping: the dedupe window
   const dedupe = createRxDedupe();
   // CRC_SRS_DEBUG=1 (server.js): one log line per received transmission, to see whose audio arrives on what.
@@ -152,7 +157,7 @@ function createSrsSession(o) {
     },
     /** Join another client's intercom by taking its unit id; null for the shared default. */
     setIntercomUnit(id) {
-      const next = Number.isInteger(id) && id > 0 ? id : UNIT_ID;
+      const next = Number.isInteger(id) && id > 0 ? id : SHARED_INTERCOM_UNIT_ID;
       if (next === unitId) return;
       unitId = next;
       sync.radiosChanged();
@@ -171,4 +176,4 @@ function createSrsSession(o) {
   };
 }
 
-module.exports = { createSrsSession, UNIT_ID };
+module.exports = { createSrsSession, SHARED_INTERCOM_UNIT_ID };

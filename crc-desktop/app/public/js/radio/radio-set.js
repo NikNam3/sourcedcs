@@ -6,7 +6,7 @@
 //  - `rows`: the frequency table rows (panels/efsp/frequency-state.js, ADR 0131/0138);
 //  - the two guards, always 243.000 UHF and 121.500 VHF, each its own radio, linked to nothing by default;
 //  - `manual`: the controller's manual radios `[{ id, label, mhz, modulation }]` (radio-prefs.js; AM or FM, RQ18);
-//  - `intercom`: the controller's intercom `{ unitId }`, or null when there is none (H183). Its own kind and
+//  - `intercom`: the controller's intercom `{ unitId }`, or null/false when there is none (H183). Its own kind and
 //    modulation `INTERCOM`, identity `INTERCOM`, no frequency (`mhz` null: the engine owns its SRS tuning), never linked.
 // A Position's radio in a band is its first row in that band, in table order: shipped rows first, then added rows in
 // the order they were added. Further rows of the band stay in the FREQUENCIES panel. A row outside both bands gets no

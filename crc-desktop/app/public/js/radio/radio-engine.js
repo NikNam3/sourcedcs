@@ -88,7 +88,7 @@ function onServerState(m) {
   setEngineState({
     connected: !!m.connected, udpReady: !!m.udpReady, enabled: m.enabled ?? null, error: m.error || null,
     overflowRadioIds: m.overflowRadioIds || [], invalidRadioIds: m.invalidRadioIds || [],
-    srsClients: m.srsClients || [], intercomUnitId: m.unitId || 1,
+    srsClients: m.srsClients || [], intercomUnitId: m.unitId || null,
   });
   if (m.connected) openMic(); else closeMic();
 }

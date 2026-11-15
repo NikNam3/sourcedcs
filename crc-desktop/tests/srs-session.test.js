@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
-const { createSrsSession } = require('../app/srs/srs-session');
+const { createSrsSession, SHARED_INTERCOM_UNIT_ID } = require('../app/srs/srs-session');
 const { encodeVoicePacket, decodeVoicePacket } = require('../app/srs/voice-packet');
 const { MsgType } = require('../app/srs/sync-message');
 
@@ -134,5 +134,16 @@ test('intercom: the unit id follows setIntercomUnit into RADIO_UPDATE and packet
   tcp[0].emit('data', Buffer.from(JSON.stringify({ MsgType: MsgType.CLIENT_DISCONNECT, Client: { ClientGuid: OTHER } }) + '\n'));
   assert.deepEqual(states.at(-1).srsClients, []);
   s.setIntercomUnit(null);
-  assert.equal(states.at(-1).unitId, 1);
+  assert.equal(states.at(-1).unitId, SHARED_INTERCOM_UNIT_ID);
+});
+
+test('intercom: the shared unit is SRS\'s own for clients outside DCS, 100000001 (UnitIdOffset + intercom 1)', () => {
+  const { s, tcp, udp, echo } = rig();
+  assert.equal(SHARED_INTERCOM_UNIT_ID, 100000001);
+  echo();
+  s.setRadios([{ id: 'IC', mhz: 0, modulation: 'INTERCOM', label: 'Intercom' }]);
+  const ri = tcp[0].written.at(-1).Client.RadioInfo;
+  assert.deepEqual([ri.unitId, ri.radios[0].IntercomUnitId], [100000001, 100000001]);
+  s.ptt(true, ['IC']); s.txFrame(Buffer.from([1]));
+  assert.equal(decodeVoicePacket(udp[0].sent.at(-1)).unitId, 100000001);
 });

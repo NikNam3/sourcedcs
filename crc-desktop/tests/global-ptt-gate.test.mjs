@@ -10,19 +10,26 @@ const { createPttGate } = require('../global-ptt/ptt-gate.js');
 
 const F13 = { type: 'key', keycode: 91, label: 'F13' };
 const F14 = { type: 'key', keycode: 92, label: 'F14' };
+const F15 = { type: 'key', keycode: 93, label: 'F15' };
 
 function rig({ startFails = false } = {}) {
   const calls = [], edges = [], timers = [];
   const listener = {
     captureTimeoutMs: 1000,
     accepts: (b) => !!b && b.type === 'key',
-    start: async (b, onEdge) => { if (startFails) throw new Error('boom'); calls.push(['start', b.keycode]); listener.edge = onEdge; },
+    // One edge helper per channel: `edge(down)` is the PTT, `icEdge(down)` the intercom PTT (docs/adr/0166 §1).
+    start: async (b, onEdge) => {
+      if (startFails) throw new Error('boom');
+      calls.push(['start', b.ptt ? b.ptt.keycode : null, ...(b.intercom ? [b.intercom.keycode] : [])]);
+      listener.edge = (d) => onEdge('ptt', d);
+      listener.icEdge = (d) => onEdge('intercom', d);
+    },
+    capture: (channel) => new Promise((resolve) => { calls.push(['capture', ...(channel && channel !== 'ptt' ? [channel] : [])]); listener.finish = resolve; }),
     stop: async () => { calls.push(['stop']); },
-    capture: () => new Promise((resolve) => { calls.push(['capture']); listener.finish = resolve; }),
     cancelCapture: () => { calls.push(['cancel']); listener.finish(null); },
   };
   const gate = createPttGate({
-    listener, sendEdge: (d) => edges.push(d),
+    listener, sendEdge: (d, channel) => edges.push(channel === 'ptt' ? d : [channel, d]),
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout: (id) => { timers[id - 1].cleared = true; },
   });
   return { gate, listener, calls, edges, timers };
@@ -166,6 +173,51 @@ test('the fuse holds repeats back, and a release ends it', async () => {
   assert.deepEqual(r.edges, [true, false]);
   r.listener.edge(true);
   assert.deepEqual(r.edges, [true, false, true]);
+});
+
+test('the intercom channel: its own binding, its own edges; an intercom input alone starts the listener', async () => {
+  const r = rig();
+  await r.gate.configure({ enabled: true, binding: null, intercom: F15 });
+  assert.deepEqual(r.calls, [['start', null, 93]]);
+  await r.gate.configure({ enabled: true, binding: F13, intercom: F15 });
+  assert.deepEqual(r.calls.slice(1), [['stop'], ['start', 91, 93]]);
+  r.listener.icEdge(true); r.listener.edge(true); r.listener.icEdge(true); r.listener.icEdge(false); r.listener.edge(false);
+  assert.deepEqual(r.edges, [['intercom', true], true, ['intercom', false], false]);
+  const st = await r.gate.status();
+  assert.deepEqual([st.binding, st.intercom], [F13, F15]);
+});
+
+test('one input is never both: a stored intercom binding equal to the PTT one counts as none', async () => {
+  const r = rig();
+  const st = await r.gate.configure({ enabled: true, binding: F13, intercom: { ...F13 } });
+  assert.equal(st.intercom, null);
+  assert.deepEqual(r.calls, [['start', 91]]);
+});
+
+test('an intercom capture binds the intercom; the PTT input is refused there as taken', async () => {
+  const r = rig();
+  await r.gate.configure({ enabled: true, binding: F13 });
+  let p = r.gate.capture('intercom');
+  await tick();
+  assert.deepEqual(r.calls.at(-1), ['capture', 'intercom']);
+  r.listener.finish(F13);
+  assert.deepEqual(await p, { refused: true, taken: true });
+  assert.equal((await r.gate.status()).intercom, null);
+  p = r.gate.capture('intercom');
+  await tick();
+  r.listener.finish(F15);
+  assert.deepEqual(await p, F15);
+  assert.deepEqual(r.calls.at(-1), ['start', 91, 93]);
+});
+
+test('the fuse is per channel', async () => {
+  const r = rig();
+  await r.gate.configure({ enabled: true, binding: F13, intercom: F15 });
+  r.listener.icEdge(true);
+  r.gate.fuse('intercom');
+  r.listener.icEdge(true);
+  r.listener.edge(true);
+  assert.deepEqual(r.edges, [['intercom', true], true]);
 });
 
 test('no code that handles an input can log it', () => {
