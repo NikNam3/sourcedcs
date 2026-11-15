@@ -9,6 +9,8 @@
 - **Capitals everywhere:** every field that ends up on a Strip types in capitals
 - **The route is the Strip's last row,** full width and never cut; it wraps onto more lines
 - **Intercom:** on by default, on SRS's shared intercom (unit 100000001), so you share it with SRS-standalone controllers; if you removed it before, remove it once more and it stays removed. New intercom PTT key (RADIO → SETUP → Intercom PTT), also as a Global PTT input; it keys only the intercom
+- **Mouse buttons as PTT:** the middle button and the two side buttons can be the PTT or the intercom PTT in the CRC window (RADIO → SETUP, press the button). Global PTT already took them on Windows and X11
+- **Fixed: Global PTT's configure on KDE (Wayland) did nothing:** CRC now installs its own hidden desktop entry, so the desktop knows which app the shortcut belongs to
 - **What's New shows only what changed since your last version**
 - This release changes the wire protocol: update CRC, an older version shows "Update required"
 
