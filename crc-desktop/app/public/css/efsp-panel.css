@@ -717,11 +717,24 @@
   left: 8px;
   z-index: 50;
   display: flex;
+  flex-direction: column;
   gap: 4px;
   padding: 4px;
   background: #1c2228;
   border: 1px solid #4a7dbf;
 }
+/* ADR 0165: eight swatches (and ×) in a row, the #RRGGBB box under them. */
+.efsp-highlight-palette { display: flex; gap: 4px; }
+.efsp-highlight-current { outline: 2px solid #c8d0d8; outline-offset: -3px; }
+.efsp-highlight-hex {
+  font: inherit;
+  width: 9ch;
+  padding: 2px 4px;
+  background: #11161b;
+  color: #c8d0d8;
+  border: 1px solid #4a5560;
+}
+.efsp-highlight-error { margin-top: 2px; color: #c8d0d8; }
 .efsp-highlight-swatch {
   width: 28px;
   height: 28px;
