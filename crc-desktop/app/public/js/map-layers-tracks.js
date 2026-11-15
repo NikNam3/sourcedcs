@@ -115,6 +115,9 @@ export function addTrackLayers() {
         // The assigned values, on their own line: "A180 H050".
         ['case', ['!=', ['get', 'asgnLine'], ''], '\n', ''], {},
         ['get', 'asgnLine'], {},
+        // docs/adr/0165: the owned Strip's remarks, last, in their own colour (Settings → Colours → Remarks).
+        ['case', ['!=', ['get', 'rmkLine'], ''], '\n', ''], {},
+        ['get', 'rmkLine'], {'text-color': ['get', 'rmkColor']},
       ],
       'text-font': ['Roboto Regular', 'Noto Sans Regular'],
       'text-size': TEXT_SIZE_PX, 'text-anchor': 'center', 'text-justify': 'left',
