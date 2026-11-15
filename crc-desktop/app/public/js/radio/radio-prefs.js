@@ -4,8 +4,10 @@
 // frequency, so a retune keeps them) the volume, pan and mute; the link-group membership (an explicit null is
 // "unlinked") and the controller's groups; the manual radios; the devices `{ deviceId, label }` (RQ9); the PTT key, its
 // maximum transmit time and the PTT target; the audio options (gains, TX sound set, noise, RQ18); the intercom
-// `{ unitId }` or null for none (H183: unitId null is the shared, non-DCS intercom); Global PTT (docs/adr/0161 §3:
-// `enabled`, null until the controller chooses, and one binding per listener, S-RO-1 RO13). A leaf: it imports
+// `{ unitId }` (H183: unitId null is the shared, non-DCS intercom), on by default: `false` once the controller removed
+// it, and a stored null or no key at all is "never set", which gives the default (docs/adr/0166 §2); the intercom PTT
+// key, null until set (docs/adr/0166 §1); Global PTT (docs/adr/0161 §3: `enabled`, null until the controller chooses,
+// and one binding per listener, S-RO-1 RO13, plus `intercom`, the intercom PTT's binding per listener). A leaf: it imports
 // nothing. It persists through whatever `bindRadioPrefsStorage` gives it (the panel binds settings.js's one `radio`
 // object + `saveSettings`), so node:test drives it with a plain object.
 //
@@ -54,7 +56,18 @@ function normalizePortalBinding(b) {
 
 function normalizeGlobalPtt(g) {
   const r = isObj(g) ? g : {};
-  return { enabled: typeof r.enabled === 'boolean' ? r.enabled : null, uiohook: normalizeUiohookBinding(r.uiohook), portal: normalizePortalBinding(r.portal) };
+  const ic = isObj(r.intercom) ? r.intercom : {};
+  return {
+    enabled: typeof r.enabled === 'boolean' ? r.enabled : null, uiohook: normalizeUiohookBinding(r.uiohook), portal: normalizePortalBinding(r.portal),
+    intercom: { uiohook: normalizeUiohookBinding(ic.uiohook), portal: normalizePortalBinding(ic.portal) },
+  };
+}
+
+/** The intercom: `{ unitId }`, false when removed, the default (the shared one) when never set. */
+function normalizeIntercom(ic) {
+  if (ic === false) return false;
+  if (!isObj(ic)) return { unitId: null };
+  return { unitId: Number.isInteger(ic.unitId) && ic.unitId > 0 ? ic.unitId : null };
 }
 
 /** A whole, valid prefs object from whatever was stored (anything: null, an old shape, a hand edit). */
@@ -71,11 +84,14 @@ export function normalizeRadioPrefs(raw) {
     }))
     : [];
   const d = isObj(r.devices) ? r.devices : {};
+  const pttKey = str(r.pttKey) || PTT_KEY_DEFAULT;
   return {
     audio, groups, membership, manual,
     devices: { input: normalizeDevice(d.input), output: normalizeDevice(d.output) },
-    intercom: isObj(r.intercom) ? { unitId: Number.isInteger(r.intercom.unitId) && r.intercom.unitId > 0 ? r.intercom.unitId : null } : null,
-    pttKey: str(r.pttKey) || PTT_KEY_DEFAULT,
+    intercom: normalizeIntercom(r.intercom),
+    pttKey,
+    // One key keys one thing: the intercom key is dropped when it is the main PTT key.
+    intercomPttKey: str(r.intercomPttKey) && r.intercomPttKey !== pttKey ? r.intercomPttKey : null,
     maxTxS: Number.isFinite(r.maxTxS) ? r.maxTxS : null, // null: ptt-controller.js's default; clamped where used
     pttTarget: str(r.pttTarget),
     globalPtt: normalizeGlobalPtt(r.globalPtt),
@@ -103,6 +119,15 @@ export function withGroups(prefs, groups) { return { ...prefs, groups: groups.ma
 /** `patch`: `{ input }` and/or `{ output }`, each `{ deviceId, label }` or null for the system default. */
 export function withDevices(prefs, patch) { return { ...prefs, devices: { ...prefs.devices, ...patch } }; }
 export function withPttKey(prefs, code) { return { ...prefs, pttKey: str(code) || PTT_KEY_DEFAULT }; }
+/** The intercom PTT key (a KeyboardEvent.code), or null to clear it. The main PTT key is refused: prefs unchanged. */
+export function withIntercomPttKey(prefs, code) {
+  if (str(code) && code === prefs.pttKey) return prefs;
+  return { ...prefs, intercomPttKey: str(code) };
+}
+/** Global PTT's intercom binding for one listener kind (`uiohook` or `portal`), or null to clear it. */
+export function withGlobalIntercomBinding(prefs, kind, binding) {
+  return withGlobalPtt(prefs, { intercom: { ...prefs.globalPtt.intercom, [kind]: binding } });
+}
 export function withMaxTx(prefs, seconds) { return { ...prefs, maxTxS: Number.isFinite(seconds) ? seconds : null }; }
 export function withPttTarget(prefs, radioId) { return { ...prefs, pttTarget: str(radioId) }; }
 /** Some of Global PTT's `{ enabled, uiohook, portal }`. */
@@ -164,7 +189,7 @@ export function removeManualRadio(prefs, id) {
   };
 }
 
-/** Adds the intercom (one at most), on the shared unit. */
+/** Adds the intercom (one at most), on the shared unit; also after a removal. */
 export function addIntercom(prefs) { return prefs.intercom ? prefs : { ...prefs, intercom: { unitId: null } }; }
 
 /** Joins the intercom of SRS unit `unitId` (a positive integer), or the shared one with null. */
@@ -173,11 +198,11 @@ export function withIntercomUnit(prefs, unitId) {
   return { ...prefs, intercom: { unitId: Number.isInteger(unitId) && unitId > 0 ? unitId : null } };
 }
 
-/** Removes the intercom, and what is kept for it (audio, the PTT target). */
+/** Removes the intercom, and what is kept for it (audio, the PTT target). It stays removed (`false`, not the default). */
 export function removeIntercom(prefs) {
   const audio = { ...prefs.audio };
   delete audio.INTERCOM;
-  return { ...prefs, intercom: null, audio, pttTarget: prefs.pttTarget === 'INTERCOM' ? null : prefs.pttTarget };
+  return { ...prefs, intercom: false, audio, pttTarget: prefs.pttTarget === 'INTERCOM' ? null : prefs.pttTarget };
 }
 
 // ── the store ────────────────────────────────────────────────────────────────

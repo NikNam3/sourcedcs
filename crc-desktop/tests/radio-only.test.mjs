@@ -203,10 +203,10 @@ async function panelHarness(radioOnly) {
 }
 const sectionNames = (all) => all().filter(n => hasClass(n, 'radio-group-name')).map(n => n.textContent);
 
-test('radio-only: no POSITIONS section, the guards stay, the name is CRC RADIO', async () => {
+test('radio-only: no POSITIONS section, the guards and the default intercom stay, the name is CRC RADIO', async () => {
   const { all, names } = await panelHarness(true);
   assert.deepEqual(sectionNames(all), ['UNLINKED']);
-  assert.deepEqual(all().filter(n => hasClass(n, 'radio-row')).map(r => r.dataset.radioId), ['GUARD:UHF', 'GUARD:VHF']);
+  assert.deepEqual(all().filter(n => hasClass(n, 'radio-row')).map(r => r.dataset.radioId), ['GUARD:UHF', 'GUARD:VHF', 'INTERCOM']);
   assert.ok(names.length > 0);
   assert.ok(names.every(n => n === 'CRC RADIO'), names.join());
   const options = all().filter(n => n.tagName === 'option').map(o => o.textContent);

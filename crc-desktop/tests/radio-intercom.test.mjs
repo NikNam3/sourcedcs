@@ -53,7 +53,7 @@ test('the intercom takes its own SRS slot, right after the guards', () => {
 
 test('prefs: one intercom, its unit (a positive integer, else shared), removed with its audio and target', () => {
   let p = P.normalizeRadioPrefs(null);
-  assert.equal(p.intercom, null);
+  assert.deepEqual(p.intercom, { unitId: null }); // on by default (docs/adr/0166 §2)
   p = P.addIntercom(p);
   assert.deepEqual(p.intercom, { unitId: null });
   assert.equal(P.addIntercom(P.withIntercomUnit(p, 5)).intercom.unitId, 5); // a second add changes nothing
@@ -63,10 +63,21 @@ test('prefs: one intercom, its unit (a positive integer, else shared), removed w
   assert.deepEqual(P.normalizeRadioPrefs({ intercom: { unitId: 'x' } }).intercom, { unitId: null });
   p = P.withPttTarget(P.withRadioAudio(p, 'INTERCOM', { volume: 2 }), 'INTERCOM');
   p = P.removeIntercom(p);
-  assert.equal(p.intercom, null);
+  assert.equal(p.intercom, false);
   assert.equal(p.audio.INTERCOM, undefined);
   assert.equal(p.pttTarget, null);
-  assert.equal(P.withIntercomUnit(p, 3).intercom, null); // no intercom, no unit
+  assert.equal(P.withIntercomUnit(p, 3).intercom, false); // no intercom, no unit
+  assert.deepEqual(P.addIntercom(p).intercom, { unitId: null }); // + INTERCOM after a removal
+});
+
+test('prefs: the intercom is on until removed; a removal survives a save, a never-set intercom is the default', () => {
+  const saved = (p) => P.normalizeRadioPrefs(JSON.parse(JSON.stringify(p)));
+  assert.equal(saved(P.removeIntercom(P.normalizeRadioPrefs(null))).intercom, false);
+  // A store from before the default (null meant "none", whether never added or removed) counts as never set.
+  assert.deepEqual(P.normalizeRadioPrefs({ intercom: null }).intercom, { unitId: null });
+  assert.deepEqual(P.normalizeRadioPrefs({}).intercom, { unitId: null });
+  assert.ok(buildRadioSet({ intercom: P.normalizeRadioPrefs(null).intercom }).radios.some(r => r.id === INTERCOM_RADIO_ID));
+  assert.ok(!buildRadioSet({ intercom: false }).radios.some(r => r.id === INTERCOM_RADIO_ID));
 });
 
 test('the unit picker: shared first, then the SRS clients by name; a chosen unit off SRS stays listed', () => {
