@@ -31,6 +31,13 @@ export function headingText(deg) {
   return Number.isFinite(deg) ? String(deg).padStart(3, '0') : '---';
 }
 
+/** How an end was typed: 'A' (A050), 'hundreds' (080), else feet or FL. Below the transition altitude the typed form is kept. */
+function endStyle(t) {
+  if (/^A\d{1,3}$/.test(t)) return 'A';
+  if (/^\d{1,3}$/.test(t)) return 'hundreds';
+  return '';
+}
+
 /** One end in feet, as crc-sync's parseAltitudeFt reads it: FL/F + 1–3 digits, A + 1–3 digits, 1–3 digits are hundreds, 4–5 are feet. */
 function parseEndFt(t) {
   let m = /^F(?:L)?(\d{1,3})$/.exec(t);
@@ -52,28 +59,38 @@ export function parseAssignedAltitude(text) {
   if (t[0] === '<' || t[0] === '>') { prefix = t[0]; t = t.slice(1); }
   if (!t) return null;
   const single = parseEndFt(t);
-  if (single != null) return { prefix, lowFt: single, highFt: single };
+  if (single != null) return { prefix, lowFt: single, highFt: single, style: endStyle(t) };
   for (let i = 1; i < t.length - 1; i += 1) {
     for (const sep of ['-', 'B', 'TO']) {
       if (!t.startsWith(sep, i)) continue;
       const low = parseEndFt(t.slice(0, i));
       const high = parseEndFt(t.slice(i + sep.length));
-      if (low != null && high != null && low < high) return { prefix, lowFt: low, highFt: high };
+      if (low != null && high != null && low < high) return { prefix, lowFt: low, highFt: high, style: endStyle(t.slice(0, i)) };
     }
   }
   return null;
 }
 
-/** One end as the strip writes it (crc-sync's formatAltitudeEnd): `FL240` at and above the transition altitude, `8000` below. */
-export function altitudeEndText(ft, transitionAltFt) {
-  return ft >= transitionAltFt && ft % 100 === 0 ? `FL${String(ft / 100).padStart(3, '0')}` : String(ft);
+/**
+ * One end as the strip writes it (crc-sync's formatAltitudeEnd): `FL240` at and above the transition altitude, `8000`
+ * below. Below it, an end first typed in hundreds keeps that form (`style` 'hundreds' → `090`, 'A' → `A090`), as the
+ * strip keeps the typed text of a single altitude or a limit.
+ */
+export function altitudeEndText(ft, transitionAltFt, style = '') {
+  if (ft >= transitionAltFt && ft % 100 === 0) return `FL${String(ft / 100).padStart(3, '0')}`;
+  if (style && ft % 100 === 0 && ft < 100000) {
+    const h = String(ft / 100).padStart(3, '0');
+    return style === 'A' ? `A${h}` : h;
+  }
+  return String(ft);
 }
 
 /** `{prefix, lowFt, highFt}` as the text the altitude cell is sent: `FL240`, `8000`, `FL220-FL240`, `<FL240`. */
 export function formatAssignedAltitude(alt, transitionAltFt) {
+  const st = alt.style || '';
   const body = alt.lowFt === alt.highFt
-    ? altitudeEndText(alt.lowFt, transitionAltFt)
-    : `${altitudeEndText(alt.lowFt, transitionAltFt)}-${altitudeEndText(alt.highFt, transitionAltFt)}`;
+    ? altitudeEndText(alt.lowFt, transitionAltFt, st)
+    : `${altitudeEndText(alt.lowFt, transitionAltFt, st)}-${altitudeEndText(alt.highFt, transitionAltFt, st)}`;
   return `${alt.prefix || ''}${body}`;
 }
 
@@ -86,7 +103,7 @@ export function shiftAltitude(alt, notches, stepFt) {
   const lowFt = alt.lowFt + d;
   const highFt = alt.highFt + d;
   if (lowFt <= 0 || highFt > ALT_MAX_FT) return alt;
-  return { prefix: alt.prefix || '', lowFt, highFt };
+  return { prefix: alt.prefix || '', lowFt, highFt, style: alt.style || '' };
 }
 
 /**
@@ -99,9 +116,11 @@ export function altitudeStart(entry, currentFt, stepFt) {
   if (entry) {
     const fromText = parseAssignedAltitude(entry.value);
     if (fromText) return fromText;
-    if (entry.block && Number.isFinite(entry.block.lowFt) && Number.isFinite(entry.block.highFt)) {
-      return { prefix: '', lowFt: entry.block.lowFt, highFt: entry.block.highFt };
-    }
+    const b = entry.block;
+    if (b && Number.isFinite(b.lowFt) && Number.isFinite(b.highFt)) return { prefix: '', lowFt: b.lowFt, highFt: b.highFt };
+    // A limit (U-ALT-LIMITS): `<X` stores lowFt null, `>X` highFt null; `parsed` is null.
+    if (b && b.lowFt == null && Number.isFinite(b.highFt)) return { prefix: '<', lowFt: b.highFt, highFt: b.highFt };
+    if (b && b.highFt == null && Number.isFinite(b.lowFt)) return { prefix: '>', lowFt: b.lowFt, highFt: b.lowFt };
     if (Number.isFinite(entry.parsed)) return { prefix: '', lowFt: entry.parsed, highFt: entry.parsed };
   }
   if (!Number.isFinite(currentFt)) return null;

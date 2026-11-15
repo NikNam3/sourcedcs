@@ -71,6 +71,17 @@ track id), `atc-scope.js` (`withAltPreview` around `atcAssigned`), `track-label.
 - MapLibre 3.6.2: a layer mousedown's `preventDefault` keeps drag-pan/rotate off the press (documented behaviour);
   `dragRotate` is disabled anyway.
 
+## After U-ALT-LIMITS reported (coordinator message)
+
+- Below the transition altitude the typed form is kept: an end typed in hundreds stays hundreds (`<080` → `<090`,
+  `080` → `090`, `A050` → `A060`); feet stay feet (`8000` → `9000`); at and above the transition altitude it is always
+  `FL`. `altitudeEndText(ft, ta, style)`, where `style` comes from parseAssignedAltitude.
+- A limit entry stores `parsed: null` and `block` with one end null: the start falls back to it when the `value` text
+  is unreadable (`lowFt == null` → `<highFt`, `highFt == null` → `>lowFt`). The text path already reads `<`/`>`.
+- ADR 0164 §5 says "feet below" without this refinement. It was committed in this lane, so per P4 I did not edit it:
+  supervisor, either allow a one-line amendment before merge or let this note stand as the record.
+- Not yet against `altitude-limit.js` (not on my base); gesture-values.js has its own parse, so there is nothing to wire.
+
 ## Findings for other lanes
 
 - **U-ALT-LIMITS:** `gesture-values.js` `parseAssignedAltitude` keeps a leading `<`/`>` and `formatAssignedAltitude`

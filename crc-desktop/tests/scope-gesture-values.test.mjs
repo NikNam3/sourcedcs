@@ -27,13 +27,14 @@ test('heading: nearest 5 degrees, north is 360 never 000', () => {
 });
 
 test('altitude text reads like crc-sync parseAltitude: FL, A, hundreds, feet, blocks', () => {
-  assert.deepEqual(parseAssignedAltitude('FL240'), { prefix: '', lowFt: 24000, highFt: 24000 });
-  assert.deepEqual(parseAssignedAltitude('080'), { prefix: '', lowFt: 8000, highFt: 8000 });
-  assert.deepEqual(parseAssignedAltitude('A050'), { prefix: '', lowFt: 5000, highFt: 5000 });
-  assert.deepEqual(parseAssignedAltitude('8500'), { prefix: '', lowFt: 8500, highFt: 8500 });
-  assert.deepEqual(parseAssignedAltitude('080B120'), { prefix: '', lowFt: 8000, highFt: 12000 });
-  assert.deepEqual(parseAssignedAltitude('FL220-FL240'), { prefix: '', lowFt: 22000, highFt: 24000 });
-  assert.deepEqual(parseAssignedAltitude('220TO240'), { prefix: '', lowFt: 22000, highFt: 24000 });
+  const ft = (t) => { const a = parseAssignedAltitude(t); return a && [a.prefix, a.lowFt, a.highFt]; };
+  assert.deepEqual(ft('FL240'), ['', 24000, 24000]);
+  assert.deepEqual(ft('080'), ['', 8000, 8000]);
+  assert.deepEqual(ft('A050'), ['', 5000, 5000]);
+  assert.deepEqual(ft('8500'), ['', 8500, 8500]);
+  assert.deepEqual(ft('080B120'), ['', 8000, 12000]);
+  assert.deepEqual(ft('FL220-FL240'), ['', 22000, 24000]);
+  assert.deepEqual(ft('220TO240'), ['', 22000, 24000]);
   assert.equal(parseAssignedAltitude('240B220'), null);
   assert.equal(parseAssignedAltitude(''), null);
   assert.equal(parseAssignedAltitude('VFR'), null);
@@ -41,10 +42,23 @@ test('altitude text reads like crc-sync parseAltitude: FL, A, hundreds, feet, bl
 
 test('a leading < or > is kept and only the number moves (the altitude-limit syntax)', () => {
   const below = parseAssignedAltitude('<FL240');
-  assert.deepEqual(below, { prefix: '<', lowFt: 24000, highFt: 24000 });
+  assert.deepEqual([below.prefix, below.lowFt, below.highFt], ['<', 24000, 24000]);
   assert.equal(formatAssignedAltitude(shiftAltitude(below, 1, ALT_STEP_FT), TA), '<FL250');
-  const above = parseAssignedAltitude('>080');
-  assert.equal(formatAssignedAltitude(shiftAltitude(above, -2, ALT_STEP_FT), TA), '>6000');
+  // Below the transition altitude the typed form is kept (U-ALT-LIMITS): <080 shifts to <090.
+  assert.equal(formatAssignedAltitude(shiftAltitude(parseAssignedAltitude('<080'), 1, ALT_STEP_FT), TA), '<090');
+  assert.equal(formatAssignedAltitude(shiftAltitude(parseAssignedAltitude('>080'), -2, ALT_STEP_FT), TA), '>060');
+  assert.equal(formatAssignedAltitude(shiftAltitude(parseAssignedAltitude('>8000'), -2, ALT_STEP_FT), TA), '>6000');
+  assert.equal(formatAssignedAltitude(shiftAltitude(parseAssignedAltitude('A050'), 1, ALT_STEP_FT), TA), 'A060');
+  // Climbing through the transition altitude: a flight level.
+  assert.equal(formatAssignedAltitude(shiftAltitude(parseAssignedAltitude('170'), 1, ALT_STEP_FT), TA), 'FL180');
+  assert.equal(formatAssignedAltitude(shiftAltitude(parseAssignedAltitude('080'), 1, ALT_FINE_STEP_FT), TA), '081');
+});
+
+test('a limit stored without its text starts from its one end (U-ALT-LIMITS shape)', () => {
+  const pick = (a) => [a.prefix, a.lowFt, a.highFt];
+  assert.deepEqual(pick(altitudeStart({ value: '', parsed: null, block: { lowFt: null, highFt: 9000 } }, null, ALT_STEP_FT)), ['<', 9000, 9000]);
+  assert.deepEqual(pick(altitudeStart({ value: '', parsed: null, block: { lowFt: 25000, highFt: null } }, null, ALT_STEP_FT)), ['>', 25000, 25000]);
+  assert.deepEqual(pick(altitudeStart({ value: '>FL250', parsed: null, block: { lowFt: 25000, highFt: null } }, null, ALT_STEP_FT)), ['>', 25000, 25000]);
 });
 
 test('the strip\'s text: FL at and above the transition altitude, feet below, a block low-high', () => {
@@ -73,10 +87,10 @@ test('a move that leaves the strip\'s range is not made', () => {
 });
 
 test('the start: the assigned altitude, else the current altitude rounded to the step', () => {
-  assert.deepEqual(altitudeStart({ value: '080B120', parsed: null, block: { lowFt: 8000, highFt: 12000 } }, 15000, ALT_STEP_FT),
-    { prefix: '', lowFt: 8000, highFt: 12000 });
+  const pick = (a) => [a.prefix, a.lowFt, a.highFt];
+  assert.deepEqual(pick(altitudeStart({ value: '080B120', parsed: null, block: { lowFt: 8000, highFt: 12000 } }, 15000, ALT_STEP_FT)), ['', 8000, 12000]);
   // Not rounded: the wheel moves the assigned value by whole steps from where it is.
-  assert.deepEqual(altitudeStart({ value: '8550', parsed: 8550 }, 15000, ALT_STEP_FT), { prefix: '', lowFt: 8550, highFt: 8550 });
+  assert.deepEqual(pick(altitudeStart({ value: '8550', parsed: 8550 }, 15000, ALT_STEP_FT)), ['', 8550, 8550]);
   // The stored numbers when the text is not one this client reads.
   assert.deepEqual(altitudeStart({ value: '???', parsed: 7000 }, null, ALT_STEP_FT), { prefix: '', lowFt: 7000, highFt: 7000 });
   assert.deepEqual(altitudeStart(null, 12480, ALT_STEP_FT), { prefix: '', lowFt: 12000, highFt: 12000 });
