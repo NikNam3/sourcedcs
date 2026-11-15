@@ -1872,6 +1872,10 @@
   "radio/playout-schedule.js": [
    "createPlayoutSchedule"
   ],
+  "radio/ptt-key-button.js": [
+   "buildPttKeyButton",
+   "keyLabel"
+  ],
   "radio/radio-audio-constants.js": [
    "BLOCK_MS",
    "BLOCK_SAMPLES",
@@ -1979,14 +1983,20 @@
    "updateRadioPrefs",
    "withAudioOptions",
    "withDevices",
+   "withGlobalIntercomBinding",
    "withGlobalPtt",
    "withGroups",
+   "withIntercomPttKey",
    "withIntercomUnit",
    "withMaxTx",
    "withMembership",
    "withPttKey",
    "withPttTarget",
    "withRadioAudio"
+  ],
+  "radio/radio-ptt-arbiter.js": [
+   "CHANNELS",
+   "createPttArbiter"
   ],
   "radio/radio-ptt.js": [
    "createRadioPtt",

@@ -1,19 +1,19 @@
 'use strict';
 
 // The radio panel's SETUP section, ported from the old panel's SRS settings tab (S-RADIO-2 RQ18, everything but
-// intercom): microphone and speaker (with TEST), input and output gain, the PTT key and its maximum transmit time, the
-// TX sound set and the background noise. Built once per mount and kept (the rows above it are rebuilt, this is not),
+// intercom): microphone and speaker (with TEST), input and output gain, the PTT key, the intercom PTT key (none until
+// set, docs/adr/0166 §1) and the maximum transmit time, the TX sound set and the background noise. Built once per mount and kept (the rows above it are rebuilt, this is not),
 // so a select being used is never redrawn under the pointer. The device list is refreshed on `devicechange`.
 
 import { el } from './radio-dom.js';
 import { devicesByKind, deviceSelection, resolveDevice } from './device-choice.js';
 import {
-  GAIN_MAX, GAIN_MIN, SOUND_SETS, getRadioPrefs, updateRadioPrefs, withAudioOptions, withDevices, withMaxTx, withPttKey,
+  GAIN_MAX, GAIN_MIN, SOUND_SETS, getRadioPrefs, onRadioPrefsChanged, updateRadioPrefs, withAudioOptions, withDevices,
+  withIntercomPttKey, withMaxTx, withPttKey,
 } from './radio-prefs.js';
 import { buildGlobalPttSetup } from './global-ptt-setup.js';
+import { buildPttKeyButton } from './ptt-key-button.js';
 import { PTT_MAX_TX_DEFAULT_S, PTT_MAX_TX_MAX_S, PTT_MAX_TX_MIN_S, clampMaxTxSeconds } from '../ptt-controller.js';
-
-function keyLabel(code) { return code === 'Space' ? 'Space' : String(code).replace(/^Key/, '').replace(/^Digit/, ''); }
 
 function settingRow(label, ...controls) {
   const row = el('div', 'radio-setup-row');
@@ -77,19 +77,22 @@ export function buildRadioSetup(engine) {
   const [inGain, inLbl] = gainControl(prefs.inputGain, v => updateRadioPrefs(p => withAudioOptions(p, { inputGain: v })));
   const [outGain, outLbl] = gainControl(prefs.outputGain, v => updateRadioPrefs(p => withAudioOptions(p, { outputGain: v })));
 
-  // The PTT key: click, then press the key (capture phase, before any PTT handler sees it).
-  const pttKey = el('button', 'radio-small-btn radio-ptt-key', keyLabel(prefs.pttKey), { type: 'button', title: 'Click, then press the PTT key' });
-  let listening = false;
-  const onKey = (e) => {
-    if (!listening) return;
-    e.preventDefault(); e.stopPropagation();
-    listening = false;
-    pttKey.classList.remove('radio-listening');
-    if (e.code !== 'Escape') updateRadioPrefs(p => withPttKey(p, e.code));
-    pttKey.textContent = keyLabel(getRadioPrefs().pttKey);
-  };
-  pttKey.addEventListener('click', () => { listening = true; pttKey.textContent = 'press a key'; pttKey.classList.add('radio-listening'); });
-  document.addEventListener('keydown', onKey, true);
+  // The PTT key keys the PTT target; the intercom PTT key only the intercom. One key is never both: the main key taking
+  // the intercom's clears the intercom's (radio-prefs.js), the intercom key is refused the main one.
+  const pttKey = buildPttKeyButton({
+    current: () => getRadioPrefs().pttKey, title: 'Click, then press the PTT key',
+    choose: (code) => { updateRadioPrefs(p => withPttKey(p, code)); return true; },
+  });
+  const icKey = buildPttKeyButton({
+    current: () => getRadioPrefs().intercomPttKey, clearable: true, title: 'Click, then press the key that keys only the intercom',
+    refusedText: 'That is the PTT key. Choose another for the intercom.',
+    choose: (code) => {
+      if (code && code === getRadioPrefs().pttKey) return false;
+      updateRadioPrefs(p => withIntercomPttKey(p, code));
+      return true;
+    },
+  });
+  const offKeys = onRadioPrefsChanged(() => { pttKey.refresh(); icKey.refresh(); });
 
   const maxTx = el('input', 'radio-number', null, {
     type: 'number', min: PTT_MAX_TX_MIN_S, max: PTT_MAX_TX_MAX_S, step: 1, value: clampMaxTxSeconds(prefs.maxTxS ?? PTT_MAX_TX_DEFAULT_S),
@@ -117,7 +120,9 @@ export function buildRadioSetup(engine) {
     settingRow('Speaker', spk),
     settingRow('Output gain', outGain, outLbl),
     notes,
-    settingRow('PTT key', pttKey),
+    settingRow('PTT key', ...pttKey.controls),
+    settingRow('Intercom PTT', ...icKey.controls),
+    icKey.note,
     globalPtt.element,
     settingRow('Max transmit (s)', maxTx),
     settingRow('TX sound', sound),
@@ -128,7 +133,7 @@ export function buildRadioSetup(engine) {
   return {
     element: root,
     dispose() {
-      document.removeEventListener('keydown', onKey, true);
+      pttKey.dispose(); icKey.dispose(); offKeys();
       globalPtt.dispose();
       if (media && media.removeEventListener) media.removeEventListener('devicechange', refresh);
     },
