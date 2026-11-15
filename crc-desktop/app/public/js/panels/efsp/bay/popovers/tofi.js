@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../../../force-caps.js';
 import { TOFI_ELIGIBLE_STATES } from '../../efsp-nla.js';
 import { getActingPositions, sendEfspMutation } from '../../efsp-ws.js';
 import { getEfspFlightData, getEfspStrip } from '../../efsp-state.js';
@@ -152,7 +153,7 @@ export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
   }
   popover.appendChild(select);
 
-  const note = document.createElement('textarea');
+  const note = forceCaps(document.createElement('textarea'));
   note.className = 'efsp-coordinate-note';
   note.placeholder = degraded ? 'Verbal coordination note (required)' : 'Note (optional)';
   popover.appendChild(note);

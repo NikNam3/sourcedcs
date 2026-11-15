@@ -4,7 +4,7 @@ import { clearEfspArrival, consumeEfspArrivalFlash, efspArrivalFlashElapsed, efs
 import { blockLabelFor, blockTitleFor } from './strip-template.js';
 import { nlaButtonLabel } from './efsp-nla.js';
 import { isMarsaHighlighted, marsaBadgeFor } from './marsa-badge.js';
-import { compactBlocksFor, fieldSpanFor, isCarrierStrip } from './strip-fields.js';
+import { faceLayoutFor, fieldSpanFor, isCarrierStrip } from './strip-fields.js';
 import { carrierDecorateNlaButton, carrierExtraNlaButtons } from './carrier-panel.js';
 import { finalHandoffButtons, parCallButtons } from './bay-views.js';
 import { _invokeNla, _resolveActingPositionId } from './bay/dispatch.js';
@@ -109,25 +109,31 @@ function _buildStripTab(strip, arrival) {
 
 // ── Fields ─────────────────────────────────────────────────────────────────
 
+function _buildFieldChip(strip, id, className) {
+  const chip = _stripEl('span', className);
+  const label = blockLabelFor(id, strip.stripType);
+  const labelEl = _stripEl('span', 'efsp-block-label', label || '');
+  const title = blockTitleFor(id, getEfspFlightData(strip.flightDataId), null, strip.stripType); if (title) labelEl.title = title; // docs/adr/0062, T8
+  // §3.7 rule 2's "in the same Block": the current value keeps the field; the
+  // latest superseded value sits small and struck beside the label, with a
+  // count of the rest. The whole chain is in the expanded view.
+  _appendAnnotationHistory(labelEl, strip, id, CHIP_HISTORY_LIMIT);
+  chip.appendChild(labelEl);
+  chip.appendChild(_buildBlockCell(strip, id));
+  return chip;
+}
+
+/** The grid and the bottom rows (U-STRIP-FACE: the route, whole and wrapped, the Strip's last row). */
 function _buildStripFields(strip) {
   const grid = _stripEl('div', 'efsp-strip-fields');
   const flightData = getEfspFlightData(strip.flightDataId);
   const sideLeads = isCarrierStrip(strip); // H122, crc-sync docs/adr/0156: a carrier Strip leads with its side number
-  for (const id of compactBlocksFor(strip.stripType, strip.ownerPositionId, flightData, strip)) {
+  const { fields, rows } = faceLayoutFor(strip.stripType, strip.ownerPositionId, flightData, strip);
+  for (const id of fields) {
     const span = fieldSpanFor(id, sideLeads);
-    const chip = _stripEl('span', `efsp-block-chip efsp-field${span > 1 ? ' efsp-field-w' + span : ''}`);
-    const label = blockLabelFor(id, strip.stripType);
-    const labelEl = _stripEl('span', 'efsp-block-label', label || '');
-    const title = blockTitleFor(id, getEfspFlightData(strip.flightDataId), null, strip.stripType); if (title) labelEl.title = title; // docs/adr/0062, T8
-    // §3.7 rule 2's "in the same Block": the current value keeps the field; the
-    // latest superseded value sits small and struck beside the label, with a
-    // count of the rest. The whole chain is in the expanded view.
-    _appendAnnotationHistory(labelEl, strip, id, CHIP_HISTORY_LIMIT);
-    chip.appendChild(labelEl);
-    chip.appendChild(_buildBlockCell(strip, id));
-    grid.appendChild(chip);
+    grid.appendChild(_buildFieldChip(strip, id, `efsp-block-chip efsp-field${span > 1 ? ' efsp-field-w' + span : ''}`));
   }
-  return grid;
+  return { grid, rows: rows.map(id => _buildFieldChip(strip, id, 'efsp-block-chip efsp-field efsp-strip-route')) };
 }
 
 // ── Indicators ─────────────────────────────────────────────────────────────
@@ -228,12 +234,14 @@ export function _buildStripLayout(el, strip, obligation) {
   else if (alerts.length) el.classList.add('efsp-strip-alert-attn');
 
   const main = _stripEl('div', 'efsp-strip-main');
-  main.appendChild(_buildStripFields(strip));
+  const fields = _buildStripFields(strip);
+  main.appendChild(fields.grid);
   const slots = _buildIndicatorSlots(strip, el, obligation, alerts);
   if (slots) main.appendChild(slots);
   for (const line of _buildReasonLines(strip, inhibited, alerts)) main.appendChild(line);
   const remarks = _buildRemarksRow(strip); // H138 U2: the bottom row, only when there are remarks
   if (remarks) main.appendChild(remarks);
+  for (const row of fields.rows) main.appendChild(row); // SF-Q3 a: the route is the last row, under the remarks
   _appendExpandedView(main, strip);
 
   // The grid is one level down because the Strip itself is the size container

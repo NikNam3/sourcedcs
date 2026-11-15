@@ -1414,7 +1414,6 @@
 }
 .efsp-strip .efsp-field { display: flex; flex-direction: column; min-width: 0; align-self: stretch; }
 .efsp-field-w2 { grid-column: span 2; }
-.efsp-field-w3 { grid-column: span 3; }
 /* §9.4 (crc-sync's docs/adr/0062): the MTR group starts its own row, so it
    lines up Strip to Strip. Every group begins with 9G-MTR (strip-fields.js). */
 .efsp-strip-fields > .efsp-field:has(> .efsp-block-9G-MTR) { grid-column-start: 1; }
@@ -1592,7 +1591,6 @@
     background: var(--efsp-tab);
   }
   .efsp-strip-main { grid-column: 1 / -1; grid-row: 2; }
-  .efsp-field-w3 { grid-column: span 2; }
 }
 
 /* Below 320px nothing squeezes further; the Bay scrolls sideways instead. */
@@ -1915,7 +1913,7 @@
 .efsp-strip .efsp-expanded-value { flex: 0 1 auto; min-width: 0; max-width: 100%; }
 .efsp-strip .efsp-expanded-value > .efsp-block { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-/* U2: the remarks row, the last row of the Strip's main column and only when there are remarks. One line, never taller:
+/* U2: the remarks row, the row above the route (U-STRIP-FACE) and only when there are remarks. One line, never taller:
    strip-remarks.js cuts it at a word boundary, and the ellipsis here is the fallback for one word longer than the row. */
 .efsp-strip .efsp-strip-remarks { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .efsp-strip .efsp-strip-remarks-label { flex: none; }
@@ -1932,6 +1930,33 @@
   cursor: pointer;
 }
 .efsp-strip .efsp-strip-remarks-text:hover, .efsp-strip .efsp-strip-remarks-text:focus { background: var(--efsp-strip-2); outline: none; }
+
+/* U-STRIP-FACE (SF-Q2 a, SF-Q3 a): the route is the Strip's last row, under the remarks, full width, the whole text wrapped
+   over as many lines as it needs and never cut (route-row.js). The Strip grows with it. The same Block in the expanded
+   view wraps the same way, and its editor is a box that grows with its text. */
+.efsp-strip .efsp-strip-route { width: 100%; }
+.efsp-strip .efsp-field .efsp-block.efsp-block-wrap,
+.efsp-strip .efsp-expanded-value > .efsp-block.efsp-block-wrap {
+  white-space: pre-wrap;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  line-height: 16px;
+}
+.efsp-strip .efsp-expanded-value:has(> .efsp-block-wrap, > .efsp-block-input-wrap) { flex: 1 1 auto; }
+.efsp-block-input.efsp-block-input-wrap {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 24px;
+  margin: -2px 0;
+  resize: none;
+  overflow: hidden;
+  field-sizing: content;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 16px;
+}
 
 /* H139: the text-box window. Portalled to <body>, so nothing here may lean on .efsp-strip. */
 .efsp-remarks-popover { width: min(440px, calc(100vw - 16px)); box-sizing: border-box; min-width: 0; }

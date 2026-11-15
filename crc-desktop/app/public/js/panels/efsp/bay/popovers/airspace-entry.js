@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../../../force-caps.js';
 import { getActingPositions, sendEfspMutation } from '../../efsp-ws.js';
 import { getAllEfspAirspaces, getEfspStrip } from '../../efsp-state.js';
 import { AIRSPACE_ENTRY_POSITIONS, CONVERT_TO_ARRIVAL_POSITIONS } from '../authority-mirror.js';
@@ -130,6 +131,7 @@ function _blockInputs(current) {
     const input = document.createElement('input');
     input.type = 'text';
     input.className = `efsp-entry-block-input ${cls}`;
+    forceCaps(input);
     input.placeholder = placeholder;
     input.value = value;
     input.addEventListener('click', (e) => e.stopPropagation());

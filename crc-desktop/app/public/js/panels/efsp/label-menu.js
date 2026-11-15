@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../force-caps.js';
 import { conflictAlertsForTrack, conflictTag, getEfspFlightData, getEfspStrip, stripIdsForTrackId } from './efsp-state.js';
 import { conflictSuppressTargets, suppressConflict } from './conflict-suppress.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
@@ -135,6 +136,7 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo, carrier 
     input.className = 'label-menu-input';
     input.dataset.field = cell.field;
     input.dataset.blockId = cell.blockId;
+    forceCaps(input); // SF-Q1
     input.value = before;
     input.autocomplete = 'off';
     input.spellcheck = false;
@@ -194,6 +196,7 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo, carrier 
       input.className = 'label-menu-input';
       input.dataset.field = field;
       input.maxLength = max;
+      forceCaps(input);
       input.autocomplete = 'off';
       input.spellcheck = false;
       row.append(name, input);
@@ -220,6 +223,7 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo, carrier 
     sideInput.className = 'label-menu-input';
     sideInput.dataset.field = 'checkin-side';
     sideInput.maxLength = 8;
+    forceCaps(sideInput);
     sideInput.autocomplete = 'off';
     sideInput.spellcheck = false;
     row.append(name, sideInput);

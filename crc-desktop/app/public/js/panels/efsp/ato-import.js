@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../force-caps.js';
 import { _sendEfsp, getActingPositions, sendEfsp } from './efsp-ws.js';
 import { facilityOfPosition } from './facility-topology.js';
 import { _showMutationError } from './panel/refusal.js';
@@ -334,6 +335,7 @@ function _atoLineRow(l) {
     const input = _atoEl('input', 'efsp-ato-callsign');
     input.placeholder = `callsign for ${l.callsignRaw || l.lineId}`;
     input.maxLength = 7;
+    forceCaps(input);
     input.value = choice.callsignOverride || '';
     input.addEventListener('input', () => {
       _atoChoices.set(l.lineId, { action: 'CREATE', callsignOverride: String(input.value || '').toUpperCase().trim() });

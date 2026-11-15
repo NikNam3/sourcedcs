@@ -4,6 +4,7 @@
 // (strip-template.js remarksBlockFor), Cancel or Esc (the portal's own handler) closes it, Ctrl+Enter saves. Same rights
 // as every Block edit: the Position that holds the Strip edits it; anyone else reads it, and a refusal lands in the usual
 // banner with the window left open (DESK-ACKS, _sendFromPopover).
+import { forceCaps } from '../../../../force-caps.js';
 import { getEfspFlightData, getEfspStrip } from '../../efsp-state.js';
 import { getActingPositions, sendEfspMutation } from '../../efsp-ws.js';
 import { blockLabelFor, isBlockEditable, remarksBlockFor } from '../../strip-template.js';
@@ -49,6 +50,7 @@ export function openRemarksPopover(strip, anchorEl) {
   popover.appendChild(head);
 
   const box = _el('textarea', 'efsp-remarks-textarea');
+  forceCaps(box); // SF-Q1: remarks too
   box.value = current;
   box.rows = 6;
   box.maxLength = REMARKS_MAX_LENGTH;

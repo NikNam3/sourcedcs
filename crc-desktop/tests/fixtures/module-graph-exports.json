@@ -163,6 +163,10 @@
    "initElevationContours",
    "updateElevationContours"
   ],
+  "force-caps.js": [
+   "forceCaps",
+   "upperKeepingCaret"
+  ],
   "format.js": [
    "formatZuluHhmm"
   ],
@@ -1495,6 +1499,11 @@
    "patternConversionsFor",
    "stateDisplayLabel"
   ],
+  "panels/efsp/route-row.js": [
+   "FULL_ROW_BLOCKS",
+   "isFullRowBlock",
+   "oneLine"
+  ],
   "panels/efsp/runway-status-panel.js": [
    "initRunwayStatusPanel",
    "renderRunwayStatusPanel"
@@ -1599,6 +1608,7 @@
    "ORDNANCE_WHEN_SET",
    "VFR_RUNWAY_BLOCK",
    "compactBlocksFor",
+   "faceLayoutFor",
    "fieldSpanFor",
    "isCarrierStrip",
    "isOrdnanceSet",

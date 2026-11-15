@@ -1,4 +1,5 @@
 'use strict';
+import { forceCaps } from '../../../../force-caps.js';
 import { COORDINATION_ELIGIBLE_STATES } from '../../efsp-nla.js';
 import { getEfspFlightData, getEfspStrip, isAitAuthorizedFor } from '../../efsp-state.js';
 import { sendEfspMutation } from '../../efsp-ws.js';
@@ -212,7 +213,7 @@ export function _openCoordinatePopover(strip, anchorEl) {
   syncReleased();
   popover.appendChild(releasedLabel);
 
-  const note = document.createElement('textarea');
+  const note = forceCaps(document.createElement('textarea'));
   note.className = 'efsp-coordinate-note';
   note.placeholder = degraded ? 'Verbal coordination note (required)' : 'Note (optional)';
   popover.appendChild(note);

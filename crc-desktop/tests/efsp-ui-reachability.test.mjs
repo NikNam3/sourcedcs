@@ -1891,7 +1891,8 @@ function fire(el, type, ev) {
 
 /** Every open free-text input on a rendered Strip. */
 function openInputs(el) {
-  return descendants(el).filter(c => (c.className || '').split(/\s+/).includes('efsp-block-input') && c.tagName === 'input');
+  // The route (9) edits in a <textarea> (U-STRIP-FACE); every other free-text Block in an <input>.
+  return descendants(el).filter(c => (c.className || '').split(/\s+/).includes('efsp-block-input') && (c.tagName === 'input' || c.tagName === 'textarea'));
 }
 
 test('starting a second Block edit closes the first — one open input on the Board, not several', async () => {
@@ -2995,4 +2996,61 @@ test('the render signature changes when a hint appears, so the Strip is rebuilt 
   assert.notEqual(sig(), none);
   sandbox.applyEfspAlerts({ surveillance: [] });
   assert.equal(sig(), none);
+});
+
+// ── U-STRIP-FACE (SF-Q2 a, SF-Q3 a): the route is the Strip's last row ─────────────────────────────────────────────────
+//
+// Not a grid field: a full-width row at the bottom of the main column, under the remarks, the whole text (CSS wraps it).
+// Its editor is a wrapping box: Enter commits, a pasted newline is folded to a space, and it types in capitals.
+
+const LONG_RTE = 'DCT KEMER DCT ERGEP/D1+00 ERGEP DCT KEMER DCT DAN DCT MANAZ DCT MUT DCT TARSU DCT ADANA DCT LTAG';
+const mainOf = (el) => descendants(el).find(c => (c.className || '').split(/\s+/).includes('efsp-strip-main'));
+
+test('the route (9) is the last row of the face, under the remarks, never a grid field, on every face that shows it', async () => {
+  const flightData = { ...FDR, filed: { route: LONG_RTE, remarks: 'EXPECT FL210' } };
+  for (const [stripType, positionId, state] of [['DEPARTURE', 'OPS', 'PROPOSED'], ['DEPARTURE', 'CD', 'HANDED_OFF'], ['DEPARTURE', 'AP', 'HANDED_OFF'],
+    ['DEPARTURE', 'CTR', 'HANDED_OFF'], ['OVERFLIGHT', 'AP', 'IN_SECTOR'], ['OVERFLIGHT', 'CTR', 'IN_SECTOR']]) {
+    const { el } = await renderStrip({ strip: stripAt({ stripType, state, ownerPositionId: positionId }), flightData, signedOn: [positionId] });
+    const where = `${stripType} at ${positionId}`;
+    assert.equal(inFields(el, '9'), false, `${where}: the route is still a grid field`);
+    const rows = mainOf(el).children;
+    const last = rows[rows.length - 1];
+    assert.ok((last.className || '').includes('efsp-strip-route'), `${where}: the last row is ${last.className}`);
+    const cell = descendants(last).find(c => c.dataset && c.dataset.block === '9');
+    assert.equal(cell.textContent, LONG_RTE, `${where}: the whole route`);
+    assert.ok(cell.classList.contains('efsp-block-wrap'), `${where}: drawn to wrap`);
+    const remarks = rows.findIndex(c => (c.className || '').includes('efsp-strip-remarks'));
+    assert.equal(remarks, rows.length - 2, `${where}: the remarks row sits right above the route`);
+  }
+});
+
+test('a face without the route (GC, LC, VFR) draws no route row', async () => {
+  const flightData = { ...FDR, filed: { route: LONG_RTE } };
+  for (const [stripType, positionId] of [['DEPARTURE', 'GC'], ['DEPARTURE', 'LC']]) {
+    const { el } = await renderStrip({ strip: stripAt({ stripType, ownerPositionId: positionId }), flightData, signedOn: [positionId] });
+    assert.equal(descendants(el).some(c => (c.className || '').includes('efsp-strip-route')), false, `${stripType} at ${positionId}`);
+  }
+});
+
+test('the route edits in a wrapping box: capitals as typed, a pasted newline folded, Enter sends one line', async () => {
+  const { el, sent } = await renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), flightData: { ...FDR, filed: { route: 'DCT' } }, signedOn: ['OPS'] });
+  click(blockCell(el, '9'));
+  const box = descendants(el).find(c => (c.className || '').includes('efsp-block-input'));
+  assert.equal(box.tagName, 'textarea');
+  assert.ok(box.className.split(/\s+/).includes('efsp-block-input-wrap'));
+  box.value = 'ltag dct\nergep';
+  for (const fn of box._listeners.input || []) fn({});
+  assert.equal(box.value, 'LTAG DCT ERGEP');
+  for (const fn of box._listeners.keydown || []) fn({ key: 'Enter', preventDefault() {} });
+  assert.deepEqual(sent.map(s => s.op), [{ kind: 'SetBlock', blockId: '9', value: 'LTAG DCT ERGEP' }]);
+});
+
+test('every other free-text cell still edits in a one-line input, in capitals', async () => {
+  const { el } = await renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), flightData: FDR, signedOn: ['OPS'] });
+  click(blockCell(el, '7'));
+  const input = descendants(el).find(c => (c.className || '').includes('efsp-block-input'));
+  assert.equal(input.tagName, 'input');
+  input.value = 'fl350';
+  for (const fn of input._listeners.input || []) fn({});
+  assert.equal(input.value, 'FL350');
 });
