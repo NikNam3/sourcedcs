@@ -228,7 +228,9 @@ export function atcSpeed(speedKt) {
 export function atcAssignedText(assigned, currentFt) {
   if (!assigned) return '';
   const parts = [];
-  if (assigned.altBlock) {
+  // docs/adr/0164: an Alt+wheel preview, not sent yet: marked `?`, no trend arrow (nothing was issued).
+  if (assigned.altPreview) parts.push(assignedPreviewText(assigned));
+  else if (assigned.altBlock) {
     const { lowFt, highFt } = assigned.altBlock;
     let trend = '';
     if (Number.isFinite(currentFt)) {
@@ -243,6 +245,13 @@ export function atcAssignedText(assigned, currentFt) {
   }
   if (Number.isFinite(assigned.hdg)) parts.push('H' + String(Math.round(assigned.hdg) % 360).padStart(3, '0'));
   return parts.join(' ');
+}
+
+/** An Alt+wheel preview (docs/adr/0164) as a data block writes an assigned altitude, marked `?`: 'A090?', 'A080B120?'. */
+export function assignedPreviewText(assigned) {
+  const h = (ft) => String(Math.round(ft / 100)).padStart(3, '0');
+  const b = assigned.altBlock;
+  return `${b ? `A${h(b.lowFt)}B${h(b.highFt)}` : `A${h(assigned.altFt)}`}?`;
 }
 
 /** The type as a STARS block writes it: the flight plan's own designator (`F16`), never a display label. */

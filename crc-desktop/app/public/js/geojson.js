@@ -2,8 +2,9 @@
 import { NM_M, haversineM, kinematics, projectPos, verticalFpm } from './geo.js';
 import { getIff, iffColor } from './iff.js';
 import {
-  emergencyColor, infoLine, isAir, shouldLabel, trackCodeTag, trackEmergency, trackIsIdent, trackName
+  assignedPreviewText, emergencyColor, infoLine, isAir, shouldLabel, trackCodeTag, trackEmergency, trackIsIdent, trackName
 } from './track-label.js';
+import { withAltPreview } from './scope-gestures/alt-preview.js';
 import { atcDisplay, atcPalette } from './atc-scope.js';
 import { losVisibleRangeM } from './los.js';
 import {
@@ -60,14 +61,16 @@ export function _flightDataForTrack(trackId) {
 }
 
 /** "A180 H050": the flight's assigned altitude (hundreds of feet) and heading, when it has them. */
-function buildAssignedLine(flightData) {
+function buildAssignedLine(flightData, trackId) {
   if (!flightData || !flightData.clearance) return '';
   const active = (cell) => cell && cell.entries.find(e => e.status === 'ACTIVE');
   const alt = active(flightData.clearance.altitude);
   const hdg = active(flightData.clearance.heading);
   const parts = [];
   const h = (ft) => String(Math.round(ft / 100)).padStart(3, '0');
-  if (alt && alt.block) parts.push(`A${h(alt.block.lowFt)}B${h(alt.block.highFt)}`);
+  const preview = withAltPreview(trackId, null); // docs/adr/0164: an Alt+wheel preview stands in for the altitude
+  if (preview) parts.push(assignedPreviewText(preview));
+  else if (alt && alt.block) parts.push(`A${h(alt.block.lowFt)}B${h(alt.block.highFt)}`);
   else if (alt && Number.isFinite(alt.parsed)) parts.push('A' + h(alt.parsed));
   if (hdg && Number.isFinite(hdg.parsed)) parts.push('H' + String(hdg.parsed).padStart(3, '0'));
   return parts.join(' ');
@@ -444,7 +447,7 @@ export function buildLabels() {
     const flightData = air ? _flightDataForTrack(id) : null;
     const code     = trackCodeTag(t, flightData && flightData.identity ? flightData.identity.beaconAssigned : null);
     const { tag: alertTag, color: alertColor } = buildAlertTag(id, flightData);
-    const asgnLine = csOnly ? '' : buildAssignedLine(flightData);
+    const asgnLine = csOnly ? '' : buildAssignedLine(flightData, id);
 
     features.push({
       type: 'Feature',

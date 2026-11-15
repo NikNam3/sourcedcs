@@ -243,6 +243,11 @@
   "map-interactions.js": [
    "wireMapInteractions"
   ],
+  "map-layers-gestures.js": [
+   "GESTURE_SOURCE",
+   "addGestureLayers",
+   "setGestureDrawing"
+  ],
   "map-layers-overlays.js": [
    "addOverlayLayers"
   ],
@@ -2083,6 +2088,44 @@
    "getScale",
    "getTextSizePx"
   ],
+  "scope-gestures/alt-preview.js": [
+   "altPreviewFor",
+   "altPreviewTrackId",
+   "clearAltPreview",
+   "setAltPreview",
+   "withAltPreview"
+  ],
+  "scope-gestures/alt-wheel.js": [
+   "altWheelState",
+   "wireAltWheel"
+  ],
+  "scope-gestures/assign-send.js": [
+   "assignTargetFor",
+   "sendAssignment"
+  ],
+  "scope-gestures/contact-hit.js": [
+   "CONTACT_LAYERS",
+   "canvasPoint",
+   "contactIdAt"
+  ],
+  "scope-gestures/gesture-values.js": [
+   "ALT_FINE_STEP_FT",
+   "ALT_MAX_FT",
+   "ALT_STEP_FT",
+   "HDG_STEP_DEG",
+   "altitudeEndText",
+   "altitudeStart",
+   "formatAssignedAltitude",
+   "headingText",
+   "parseAssignedAltitude",
+   "roundHeading",
+   "shiftAltitude",
+   "wheelNotches"
+  ],
+  "scope-gestures/hdg-drag.js": [
+   "hdgDragState",
+   "startHdgDrag"
+  ],
   "settings-registry.js": [
    "getSetting",
    "onSettingsTabsChanged",
@@ -2133,6 +2176,7 @@
    "altitudeText",
    "assignedAltText",
    "assignedBlockText",
+   "assignedPreviewText",
    "atcAltitude",
    "atcAssignedText",
    "atcBlockLines",
